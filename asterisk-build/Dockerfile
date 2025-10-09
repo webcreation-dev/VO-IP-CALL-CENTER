@@ -29,18 +29,32 @@ WORKDIR /usr/src
 RUN git clone -b ${ASTERISK_VERSION} https://github.com/asterisk/asterisk.git asterisk
 WORKDIR /usr/src/asterisk
 
-# Téléchargement des sons de base pour Asterisk (optionnel mais recommandé)
+# Téléchargement des sons de base pour Asterisk
 RUN contrib/scripts/get_mp3_source.sh
 
 # Prépare la compilation
 RUN ./configure
 
-# Active le module res_config_pgsql
+# Active les modules nécessaires
 RUN make menuselect.makeopts
 RUN menuselect/menuselect --enable res_config_pgsql menuselect.makeopts
+RUN menuselect/menuselect --enable res_pgsql menuselect.makeopts
 
 # Compile et installe Asterisk
 RUN make -j$(nproc) && make install && make samples && make config
+
+# Crée les répertoires nécessaires
+RUN mkdir -p /var/run/asterisk \
+    /var/log/asterisk \
+    /var/lib/asterisk \
+    /var/spool/asterisk
+
+# Donne les permissions appropriées
+RUN chown -R asterisk:asterisk /var/run/asterisk \
+    /var/log/asterisk \
+    /var/lib/asterisk \
+    /var/spool/asterisk \
+    /etc/asterisk
 
 # Nettoyage
 RUN rm -rf /usr/src/asterisk
@@ -51,5 +65,9 @@ EXPOSE 5060/udp
 EXPOSE 5060/tcp
 EXPOSE 10000-20000/udp
 
-# Lance Asterisk en mode foreground
+# Script de démarrage
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/usr/sbin/asterisk", "-f", "-vvv"]
