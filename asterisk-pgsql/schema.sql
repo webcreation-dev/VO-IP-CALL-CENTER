@@ -5,6 +5,13 @@ CREATE TABLE alembic_version (
     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
 );
 
+-- Table pour les clients (tenants) - Multi-tenant support
+CREATE TABLE tenants (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Running upgrade  -> 4da0c5f79a9c
 
 CREATE TYPE type_values AS ENUM ('friend', 'user', 'peer');
@@ -300,6 +307,7 @@ CREATE TYPE pjsip_dtls_setup_values AS ENUM ('active', 'passive', 'actpass');
 
 CREATE TABLE ps_endpoints (
     id VARCHAR(40) NOT NULL, 
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
     transport VARCHAR(40), 
     aors VARCHAR(200), 
     auth VARCHAR(40), 
@@ -382,11 +390,13 @@ CREATE TABLE ps_endpoints (
 );
 
 CREATE INDEX ps_endpoints_id ON ps_endpoints (id);
+CREATE INDEX ps_endpoints_tenant_id ON ps_endpoints (tenant_id);
 
 CREATE TYPE pjsip_auth_type_values AS ENUM ('md5', 'userpass');
 
 CREATE TABLE ps_auths (
     id VARCHAR(40) NOT NULL, 
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
     auth_type pjsip_auth_type_values, 
     nonce_lifetime INTEGER, 
     md5_cred VARCHAR(40), 
@@ -397,9 +407,11 @@ CREATE TABLE ps_auths (
 );
 
 CREATE INDEX ps_auths_id ON ps_auths (id);
+CREATE INDEX ps_auths_tenant_id ON ps_auths (tenant_id);
 
 CREATE TABLE ps_aors (
     id VARCHAR(40) NOT NULL, 
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
     contact VARCHAR(40), 
     default_expiration INTEGER, 
     mailboxes VARCHAR(80), 
@@ -412,6 +424,7 @@ CREATE TABLE ps_aors (
 );
 
 CREATE INDEX ps_aors_id ON ps_aors (id);
+CREATE INDEX ps_aors_tenant_id ON ps_aors (tenant_id);
 
 CREATE TABLE ps_contacts (
     id VARCHAR(40) NOT NULL, 
@@ -446,15 +459,18 @@ UPDATE alembic_version SET version_num='43956d550a44' WHERE alembic_version.vers
 
 CREATE TABLE extensions (
     id BIGSERIAL NOT NULL, 
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
     context VARCHAR(40) NOT NULL, 
     exten VARCHAR(40) NOT NULL, 
     priority INTEGER NOT NULL, 
     app VARCHAR(40) NOT NULL, 
     appdata VARCHAR(256) NOT NULL, 
     PRIMARY KEY (id), 
-    UNIQUE (context, exten, priority), 
+    UNIQUE (tenant_id, context, exten, priority), 
     UNIQUE (id)
 );
+
+CREATE INDEX extensions_tenant_id ON extensions (tenant_id);
 
 UPDATE alembic_version SET version_num='581a4264e537' WHERE alembic_version.version_num = '43956d550a44';
 
