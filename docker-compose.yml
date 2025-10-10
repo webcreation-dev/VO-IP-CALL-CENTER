@@ -1,7 +1,7 @@
 services:
-  asterisk-kamgoko:
+  asterisk-omniqa:
     build: ./asterisk-build
-    container_name: asterisk-kamgoko
+    container_name: asterisk-omniqa
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"
@@ -41,7 +41,9 @@ services:
     restart: unless-stopped
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: node-api
     ports:
       - "3000:3000"
@@ -51,7 +53,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      asterisk-kamgoko:
+      asterisk-omniqa:
         condition: service_started
     networks:
       - asterisk_network

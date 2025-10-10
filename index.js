@@ -6,12 +6,12 @@ const port = 3000;
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('Hello, API World!');
+  res.send('API de gestion Asterisk');
 });
 
 app.get('/tenants', async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM tenants');
+    const { rows } = await db.query('SELECT * FROM tenants ORDER BY id');
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -20,5 +20,5 @@ app.get('/tenants', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  console.log(`Serveur API démarré sur le port ${port}`);
 });
