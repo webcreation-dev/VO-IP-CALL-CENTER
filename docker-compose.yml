@@ -1,64 +1,39 @@
+version: "3.7"
+
 services:
-  asterisk-omniqa:
-    build: ./asterisk-build
-    container_name: asterisk-omniqa
-    ports:
-      - "5060:5060/udp"
-      - "5060:5060/tcp"
-      - "5038:5038/tcp"
-      - "10000-20000:10000-20000/udp"
-    environment:
-      - ASTERISK_USERNAME=admin # Nom d'utilisateur AMI
-      - ASTERISK_PASSWORD=your_password # Mot de passe AMI
+  asterisk:
+    image: andrius/asterisk
     volumes:
-      - ./asterisk-config:/etc/asterisk # Monter les fichiers de configuration locaux dans le conteneur
+      - "./etc/asterisk/:/etc/asterisk:rw"
+      - "./odbc.ini:/etc/odbc.ini"
+      - "./odbcinst.ini:/etc/odbcinst.ini"
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5038:5038"
+      - "8088:8088"
+      - "10000-11000:10000-11000/udp"
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     networks:
-      - asterisk_network
-    restart: unless-stopped
+      - asterisk-net
 
   db:
-    image: postgres:13
-    container_name: postgres-db
+    image: postgres:12
     environment:
       POSTGRES_DB: asterisk
       POSTGRES_USER: asterisk
-      POSTGRES_PASSWORD: asterisk
+      POSTGRES_PASSWORD: your_strong_password
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5433:5432" # Exposer le port pour le développement local
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U asterisk -d asterisk"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "pgdata:/var/lib/postgresql/data"
+      - "./init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+      - "./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro"
+    restart: always
     networks:
-      - asterisk_network
-    restart: unless-stopped
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: node-api
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    depends_on:
-      db:
-        condition: service_healthy
-      asterisk-omniqa:
-        condition: service_started
-    networks:
-      - asterisk_network
-    restart: unless-stopped
+      - asterisk-net
 
 networks:
-  asterisk_network:
-    driver: bridge
+  asterisk-net:
+ 
+volumes:
+  pgdata:
