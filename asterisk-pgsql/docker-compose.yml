@@ -27,4 +27,4 @@ services:
 
 networks:
   asterisk-network:
-    driver: bridge    
+    driver: bridge
