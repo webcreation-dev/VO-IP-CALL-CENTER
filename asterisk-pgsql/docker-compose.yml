@@ -23,7 +23,7 @@ services:
     environment:
       POSTGRES_DB: asterisk
       POSTGRES_USER: asterisk
-      POSTGRES_PASSWORD: your_strong_password
+      POSTGRES_PASSWORD: asterisk
     volumes:
       - "pgdata:/var/lib/postgresql/data"
       - "./init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
