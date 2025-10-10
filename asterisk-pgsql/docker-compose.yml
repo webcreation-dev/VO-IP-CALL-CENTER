@@ -1,36 +1,30 @@
-version: '3'
-
+version: "3"
 services:
   asterisk:
-    image: asterisk:latest
-    volumes:
-      - "${PWD}/etc/asterisk/:/etc/asterisk:rw"
-      - "${PWD}/log/asterisk:/var/log/asterisk"
-      - "${PWD}/odbc.ini:/etc/odbc.ini"
-      - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
-      - "${PWD}/.pgsocket:/var/run/postgresql"
-      - "${PWD}/log/supervisor:/var/log/supervisor"
+    image: dukh/asterisk:17-pjsip-pgsql-odbc
+    container_name: asterisk
     ports:
-      - "5060:5060/tcp"
       - "5060:5060/udp"
-      - "5061:5061/tcp"
-      - "5061:5061/udp"
-      - "5038:5038"
-      - "8088:8088"
-      - "10000-11000:10000-11000/udp"
-      - "1314"
-    network_mode: "host"
+    volumes:
+      - ./etc/asterisk:/etc/asterisk
+    depends_on:
+      - db
+    networks:
+      - asterisk-network
 
   db:
-    image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_IMAGE_VERSION:-12}
+    image: postgres:12
+    container_name: db
     environment:
-      POSTGRES_DB:  "${POSTGRES_DB:-postgres}"
-      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: asterisk
+      POSTGRES_USER: asterisk
+      POSTGRES_PASSWORD: your_strong_password
     volumes:
-      - "${PWD}/.pgdata:/var/lib/postgresql/data"
-      - "${PWD}/.pgsocket:/var/run/postgresql"
-      - "${PWD}/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
-    ports:
-      - "5432:5432"
-    restart: always    
+      - ./schema.sql:/docker-entrypoint-initdb.d/10-schema.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/20-init.sql
+    networks:
+      - asterisk-network
+
+networks:
+  asterisk-network:
+    driver: bridge    
