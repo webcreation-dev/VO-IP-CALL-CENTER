@@ -1,6 +1,6 @@
 services:
   asterisk-kamgoko:
-    build: ./asterisk-build
+    image: andrius/asterisk
     container_name: asterisk-kamgoko
     ports:
       - "5060:5060/udp"
@@ -13,8 +13,7 @@ services:
     volumes:
       - ./asterisk-config:/etc/asterisk # Monter les fichiers de configuration locaux dans le conteneur
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     networks:
       - asterisk_network
     restart: unless-stopped
