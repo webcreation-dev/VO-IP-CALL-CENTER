@@ -1,7 +1,7 @@
 services:
-  asterisk-kamgoko:
+  asterisk-omniqa:
     image: andrius/asterisk
-    container_name: asterisk-kamgoko
+    container_name: asterisk-omniqa
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"
@@ -50,7 +50,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      asterisk-kamgoko:
+      asterisk-omniqa:
         condition: service_started
     networks:
       - asterisk_network

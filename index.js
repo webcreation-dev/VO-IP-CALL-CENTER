@@ -10,7 +10,7 @@ const port = 3000;
 // Configuration AMI
 const ami = new AsteriskManager(
   5038,
-  'asterisk-kamgoko',
+  'asterisk-omniqa',
   'admin',
   'your_password',
   true
