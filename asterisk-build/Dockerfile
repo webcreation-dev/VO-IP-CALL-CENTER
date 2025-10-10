@@ -38,7 +38,6 @@ RUN ./configure
 # Active les modules nécessaires
 RUN make menuselect.makeopts
 RUN menuselect/menuselect --enable res_config_pgsql menuselect.makeopts
-RUN menuselect/menuselect --enable res_pgsql menuselect.makeopts
 
 # Compile et installe Asterisk
 RUN make -j$(nproc) && make install && make samples && make config
