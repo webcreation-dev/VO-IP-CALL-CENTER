@@ -30,7 +30,8 @@ services:
     volumes:
       - "${PWD}/.pgdata:/var/lib/postgresql/data"
       - "${PWD}/.pgsocket:/var/run/postgresql"
-      - "${PWD}/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+      - "${PWD}/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
+      - "${PWD}/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro"
     ports:
       - "5432:5432"
     restart: always
