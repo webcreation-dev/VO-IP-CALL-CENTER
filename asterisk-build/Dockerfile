@@ -42,6 +42,9 @@ RUN menuselect/menuselect --enable res_config_pgsql menuselect.makeopts
 # Compile et installe Asterisk
 RUN make -j$(nproc) && make install && make samples && make config
 
+# Crée l'utilisateur asterisk
+RUN useradd -r -s /bin/false asterisk
+
 # Crée les répertoires nécessaires
 RUN mkdir -p /var/run/asterisk \
     /var/log/asterisk \
