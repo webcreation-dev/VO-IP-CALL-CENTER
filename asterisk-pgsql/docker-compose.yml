@@ -8,7 +8,6 @@ services:
       - "${PWD}/log/asterisk:/var/log/asterisk"
       - "${PWD}/odbc.ini:/etc/odbc.ini"
       - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
-      - "${PWD}/.pgsocket:/var/run/postgresql"
       - "${PWD}/log/supervisor:/var/log/supervisor"
     ports:
       - "5060:5060/tcp"
@@ -19,7 +18,7 @@ services:
       - "8088:8088"
       - "10000-11000:10000-11000/udp"
       - "1314"
-    network_mode: "host"
+    #network_mode: host
 
   db:
     image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_IMAGE_VERSION:-12}
@@ -29,7 +28,6 @@ services:
       POSTGRES_PASSWORD: "Obelix"
     volumes:
       - "${PWD}/.pgdata:/var/lib/postgresql/data"
-      - "${PWD}/.pgsocket:/var/run/postgresql"
       - "${PWD}/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
       - "${PWD}/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro"
     ports:
