@@ -1394,5 +1394,43 @@ DROP TYPE moh_mode_values_tmp;
 
 UPDATE alembic_version SET version_num='fbb7766f17bc' WHERE alembic_version.version_num = '3a094a18e75b';
 
+-- Running upgrade fbb7766f17bc -> cdr_realtime_tenant
+
+-- Table CDR (Call Detail Records) avec support multi-tenant
+CREATE TABLE cdr (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+    accountcode VARCHAR(80),
+    src VARCHAR(80),
+    dst VARCHAR(80),
+    dcontext VARCHAR(80),
+    clid VARCHAR(80),
+    channel VARCHAR(80),
+    dstchannel VARCHAR(80),
+    lastapp VARCHAR(80),
+    lastdata VARCHAR(80),
+    calldate TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    answerdate TIMESTAMP WITH TIME ZONE,
+    enddate TIMESTAMP WITH TIME ZONE,
+    duration INTEGER DEFAULT 0,
+    billsec INTEGER DEFAULT 0,
+    disposition VARCHAR(45),
+    amaflags VARCHAR(45),
+    uniqueid VARCHAR(150),
+    userfield VARCHAR(255),
+    peeraccount VARCHAR(80),
+    linkedid VARCHAR(150),
+    sequence INTEGER
+);
+
+CREATE INDEX cdr_tenant_id ON cdr (tenant_id);
+CREATE INDEX cdr_calldate ON cdr (calldate);
+CREATE INDEX cdr_uniqueid ON cdr (uniqueid);
+CREATE INDEX cdr_linkedid ON cdr (linkedid);
+CREATE INDEX cdr_accountcode ON cdr (accountcode);
+CREATE INDEX cdr_tenant_calldate ON cdr (tenant_id, calldate);
+
+UPDATE alembic_version SET version_num='cdr_realtime_tenant' WHERE alembic_version.version_num = 'fbb7766f17bc';
+
 COMMIT;
 
