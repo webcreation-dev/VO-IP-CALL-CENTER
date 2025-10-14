@@ -2,7 +2,8 @@ services:
   asterisk:
     build: .
     volumes:
-      - "${PWD}/etc/asterisk/:/etc/asterisk:rw"
+      - "${PWD}/asterisk-pgsql/etc/asterisk:/etc/asterisk"
+      - "${PWD}/certs:/etc/asterisk/keys"
       - "${PWD}/log/asterisk:/var/log/asterisk"
       - "${PWD}/odbc.ini:/etc/odbc.ini"
       - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
