@@ -95,8 +95,8 @@
         />
       </div>
       <div class="input-group">
-        <label>Port WebSocket (ws):</label>
-        <input type="text" id="serverPort" value="8088" placeholder="8088" />
+        <label>Port WebSocket (wss):</label>
+        <input type="text" id="serverPort" value="8089" placeholder="8089" />
       </div>
       <div class="input-group">
         <label>Votre numéro SIP:</label>
@@ -186,7 +186,7 @@
 
         try {
           statusDiv.textContent = '🟡 Connexion en cours...';
-          const wsUrl = `ws://${server}:${port}/ws`;
+          const wsUrl = `wss://${server}:${port}/ws`;
           log(`Tentative de connexion à ${wsUrl}`);
 
           ws = new WebSocket(wsUrl);
