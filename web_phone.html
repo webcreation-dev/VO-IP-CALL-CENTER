@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebRTC Client Asterisk - Direct</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      .section {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin: 15px 0;
+        border-radius: 4px;
+      }
+      #status {
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-left: 4px solid #999;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .input-group {
+        margin: 10px 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input[type='text'],
+      input[type='password'] {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px 5px 5px 0;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      .error {
+        color: #d32f2f;
+        margin-top: 10px;
+      }
+      .success {
+        color: #388e3c;
+        margin-top: 10px;
+      }
+      .info-box {
+        background-color: #fff3e0;
+        border-left: 4px solid #ff9800;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      audio {
+        margin-top: 10px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎙️ Client SIP WebRTC pour Asterisk</h1>
+
+    <div class="section">
+      <h3>Configuration du serveur</h3>
+      <div class="input-group">
+        <label>Adresse du serveur Asterisk:</label>
+        <input
+          type="text"
+          id="serverAddr"
+          value="161.97.106.134"
+          placeholder="IP ou domaine"
+        />
+      </div>
+      <div class="input-group">
+        <label>Port WebSocket (ws):</label>
+        <input type="text" id="serverPort" value="8088" placeholder="8088" />
+      </div>
+      <div class="input-group">
+        <label>Votre numéro SIP:</label>
+        <input type="text" id="sipUser" value="101" placeholder="Ex: 101" />
+      </div>
+      <div class="input-group">
+        <label>Mot de passe:</label>
+        <input
+          type="password"
+          id="sipPass"
+          value="password101"
+          placeholder="Mot de passe"
+        />
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Connexion</h3>
+      <div id="status">🔴 Déconnecté</div>
+      <button id="connectBtn" onclick="connect()">Se connecter</button>
+      <button id="disconnectBtn" onclick="disconnect()" disabled>
+        Se déconnecter
+      </button>
+      <div id="errorMsg" class="error"></div>
+    </div>
+
+    <div class="section">
+      <h3>Appels</h3>
+      <div class="input-group">
+        <label>Numéro à appeler:</label>
+        <input type="text" id="callNumber" placeholder="Ex: 102" />
+      </div>
+      <button id="callBtn" onclick="makeCall()" disabled>Appeler</button>
+      <button id="hangupBtn" onclick="hangUp()" disabled>Raccrocher</button>
+      <div id="successMsg" class="success"></div>
+    </div>
+
+    <audio id="remoteAudio" autoplay></audio>
+
+    <div class="info-box">
+      <strong>ℹ️ Note:</strong> Cette application se connecte directement au
+      serveur Asterisk via WebSocket et WebRTC.<br />
+      Assurez-vous que Asterisk accepte les connexions WebSocket sur le port
+      8089.
+    </div>
+
+    <script>
+      const errorMsg = document.getElementById('errorMsg');
+      const successMsg = document.getElementById('successMsg');
+      const statusDiv = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      const disconnectBtn = document.getElementById('disconnectBtn');
+      const callBtn = document.getElementById('callBtn');
+      const hangupBtn = document.getElementById('hangupBtn');
+
+      let ws = null;
+      let peerConnection = null;
+      let callActive = false;
+
+      function log(msg) {
+        console.log('[SIP] ' + msg);
+      }
+
+      function showError(msg) {
+        errorMsg.textContent = '❌ ' + msg;
+        console.error(msg);
+      }
+
+      function showSuccess(msg) {
+        successMsg.textContent = '✅ ' + msg;
+        console.log(msg);
+      }
+
+      async function connect() {
+        errorMsg.textContent = '';
+        successMsg.textContent = '';
+
+        const server = document.getElementById('serverAddr').value;
+        const port = document.getElementById('serverPort').value;
+        const user = document.getElementById('sipUser').value;
+        const pass = document.getElementById('sipPass').value;
+
+        if (!server || !port || !user || !pass) {
+          showError('Remplissez tous les champs');
+          return;
+        }
+
+        try {
+          statusDiv.textContent = '🟡 Connexion en cours...';
+          const wsUrl = `ws://${server}:${port}/ws`;
+          log(`Tentative de connexion à ${wsUrl}`);
+
+          ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            log('WebSocket connecté');
+            statusDiv.textContent = '🟢 Connecté';
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            callBtn.disabled = false;
+            showSuccess('Connecté au serveur Asterisk');
+          };
+
+          ws.onmessage = event => {
+            log('Message reçu: ' + event.data);
+          };
+
+          ws.onerror = error => {
+            showError("Erreur WebSocket: Vérifiez l'adresse et le port");
+            log('WebSocket error: ' + error);
+          };
+
+          ws.onclose = () => {
+            log('WebSocket fermé');
+            statusDiv.textContent = '🔴 Déconnecté';
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            callBtn.disabled = true;
+            hangupBtn.disabled = true;
+          };
+        } catch (e) {
+          showError('Erreur: ' + e.message);
+        }
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+        statusDiv.textContent = '🔴 Déconnecté';
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+        callBtn.disabled = true;
+      }
+
+      async function makeCall() {
+        const target = document.getElementById('callNumber').value;
+        if (!target) {
+          showError('Entrez un numéro à appeler');
+          return;
+        }
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          showError('Non connecté au serveur');
+          return;
+        }
+
+        try {
+          errorMsg.textContent = '';
+          statusDiv.textContent = `📞 Appel vers ${target}...`;
+          log(`Appel vers ${target}`);
+
+          // Configuration WebRTC simple
+          const config = {
+            iceServers: [
+              { urls: ['stun:stun.l.google.com:19302'] },
+              { urls: ['stun:stun1.l.google.com:19302'] },
+            ],
+          };
+
+          peerConnection = new RTCPeerConnection(config);
+
+          peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+              log('ICE candidate: ' + event.candidate.candidate);
+            }
+          };
+
+          peerConnection.ontrack = event => {
+            log('Track reçu: ' + event.track.kind);
+            document.getElementById('remoteAudio').srcObject = event.streams[0];
+          };
+
+          // Ajouter un flux audio local
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: false,
+            });
+            stream.getTracks().forEach(track => {
+              peerConnection.addTrack(track, stream);
+            });
+            log('Microphone activé');
+          } catch (e) {
+            log('Microphone non disponible: ' + e.message);
+          }
+
+          callActive = true;
+          callBtn.disabled = true;
+          hangupBtn.disabled = false;
+          showSuccess(`Appel lancé vers ${target}`);
+          statusDiv.textContent = `📞 En appel avec ${target}`;
+        } catch (e) {
+          showError("Erreur lors de l'appel: " + e.message);
+          statusDiv.textContent = '🟢 Connecté';
+        }
+      }
+
+      function hangUp() {
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+        }
+        callActive = false;
+        callBtn.disabled = false;
+        hangupBtn.disabled = true;
+        statusDiv.textContent = '🟢 Connecté';
+        log('Appel raccroché');
+      }
+
+      // Déconnexion propre en fermant la page
+      window.onbeforeunload = () => {
+        if (ws) ws.close();
+        if (peerConnection) peerConnection.close();
+      };
+    </script>
+  </body>
+</html>
