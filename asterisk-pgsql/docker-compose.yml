@@ -8,14 +8,14 @@ services:
       - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
       - "${PWD}/log/supervisor:/var/log/supervisor"
     ports:
-      - "5060:5060/tcp"
+      - "5038:5038" # AMI
       - "5060:5060/udp"
-      - "5061:5061/tcp"
+      - "5060:5060/tcp"
       - "5061:5061/udp"
-      - "5038:5038"
-      - "8088:8088"
-      - "10000-10200:10000-10200/udp"
-      - "1314"
+      - "5061:5061/tcp"
+      - "8088:8088" # HTTP
+      - "8089:8089" # HTTPS / WSS
+      - "10000-10200:10000-10200/udp" # RTP
     restart: always
     #network_mode: host
 
