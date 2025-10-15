@@ -5,7 +5,7 @@ USER root
 
 # Install PostgreSQL ODBC driver and Opus codec translator
 RUN apt-get update && \
-    apt-get install -y odbc-postgresql asterisk-opus && \
+    apt-get install -y odbc-postgresql asterisk-modules && \
     rm -rf /var/lib/apt/lists/*
 
 # Switch back to the asterisk user (if the base image uses one)
