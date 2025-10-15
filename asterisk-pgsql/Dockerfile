@@ -5,7 +5,7 @@ USER root
 
 # Install PostgreSQL ODBC driver and build dependencies for codecs
 RUN apt-get update && \
-    apt-get install -y odbc-postgresql build-essential uuid-dev libjansson-dev libxml2-dev libsqlite3-dev wget
+    apt-get install -y odbc-postgresql build-essential uuid-dev libjansson-dev libxml2-dev libsqlite3-dev wget subversion
 
 # Download, compile, and install Asterisk codecs (including Opus)
 RUN cd /usr/src && \
