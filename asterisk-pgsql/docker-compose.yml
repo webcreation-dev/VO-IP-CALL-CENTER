@@ -1,9 +1,15 @@
 services:
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./letsencrypt/etc:/etc/letsencrypt
+      - ./letsencrypt/lib:/var/lib/letsencrypt
+
   asterisk:
     build: .
     volumes:
       - "${PWD}/etc/asterisk:/etc/asterisk"
-      - "${PWD}/certs:/etc/asterisk/keys"
+      - ./letsencrypt/etc:/etc/letsencrypt
       - "${PWD}/log/asterisk:/var/log/asterisk"
       - "${PWD}/odbc.ini:/etc/odbc.ini"
       - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
@@ -14,8 +20,8 @@ services:
       - "5060:5060/tcp"
       - "5061:5061/udp"
       - "5061:5061/tcp"
-      - "8088:8088" # HTTP
-      - "8089:8089" # HTTPS / WSS
+      - "80:8088" # HTTP
+      - "443:8089" # HTTPS / WSS
       - "10000-10200:10000-10200/udp" # RTP
     restart: always
     #network_mode: host
