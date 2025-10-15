@@ -136,6 +136,8 @@
 
     <audio id="remoteAudio" autoplay></audio>
 
+    <script src="./jssip-3.10.0.min.js"></script>
+
     <div class="info-box">
       <strong>ℹ️ Note:</strong> Cette application se connecte directement au
       serveur Asterisk via WebSocket et WebRTC.<br />
@@ -152,9 +154,8 @@
       const callBtn = document.getElementById('callBtn');
       const hangupBtn = document.getElementById('hangupBtn');
 
-      let ws = null;
-      let peerConnection = null;
-      let callActive = false;
+      let ua = null;
+      let currentSession = null;
 
       function log(msg) {
         console.log('[SIP] ' + msg);
@@ -170,7 +171,21 @@
         console.log(msg);
       }
 
-      async function connect() {
+      function updateUI() {
+        const isRegistered = ua && ua.isRegistered();
+        const isConnected = ua && ua.isConnected();
+
+        connectBtn.disabled = isConnected;
+        disconnectBtn.disabled = !isConnected;
+        callBtn.disabled = !isRegistered || currentSession;
+        hangupBtn.disabled = !isRegistered || !currentSession;
+
+        if (!isConnected) {
+          statusDiv.textContent = '🔴 Déconnecté';
+        }
+      }
+
+      function connect() {
         errorMsg.textContent = '';
         successMsg.textContent = '';
 
@@ -185,133 +200,186 @@
         }
 
         try {
-          statusDiv.textContent = '🟡 Connexion en cours...';
-          const wsUrl = `wss://${server}:${port}/ws`;
-          log(`Tentative de connexion à ${wsUrl}`);
+          const socket = new JsSIP.WebSocketInterface(
+            `wss://${server}:${port}/ws`
+          );
 
-          ws = new WebSocket(wsUrl);
-
-          ws.onopen = () => {
-            log('WebSocket connecté');
-            statusDiv.textContent = '🟢 Connecté';
-            connectBtn.disabled = true;
-            disconnectBtn.disabled = false;
-            callBtn.disabled = false;
-            showSuccess('Connecté au serveur Asterisk');
+          const configuration = {
+            sockets: [socket],
+            uri: `sip:${user}@${server}`,
+            password: pass,
+            register: true,
+            display_name: user,
+            pcConfig: {
+              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            },
           };
 
-          ws.onmessage = event => {
-            log('Message reçu: ' + event.data);
-          };
+          ua = new JsSIP.UA(configuration);
 
-          ws.onerror = error => {
-            showError("Erreur WebSocket: Vérifiez l'adresse et le port");
-            log('WebSocket error: ' + error);
-          };
+          ua.on('connecting', () => {
+            log('Connexion en cours...');
+            statusDiv.textContent = '🟡 Connexion en cours...';
+            updateUI();
+          });
 
-          ws.onclose = () => {
-            log('WebSocket fermé');
-            statusDiv.textContent = '🔴 Déconnecté';
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-            callBtn.disabled = true;
-            hangupBtn.disabled = true;
-          };
+          ua.on('connected', () => {
+            log('Connecté via WebSocket');
+            updateUI();
+          });
+
+          ua.on('disconnected', () => {
+            log('Déconnecté');
+            showError('Déconnecté du serveur');
+            ua = null;
+            updateUI();
+          });
+
+          ua.on('registered', () => {
+            log('Enregistré avec succès');
+            showSuccess('Enregistré auprès du serveur Asterisk');
+            statusDiv.textContent = '🟢 Enregistré';
+            updateUI();
+          });
+
+          ua.on('unregistered', () => {
+            log('Désenregistré');
+            showError('Désenregistré du serveur');
+            ua = null;
+            updateUI();
+          });
+
+          ua.on('registrationFailed', ev => {
+            log("Échec de l'enregistrement: " + ev.cause);
+            showError("Échec de l'enregistrement: " + ev.cause);
+            ua = null;
+            updateUI();
+          });
+
+          ua.on('newRTCSession', data => {
+            const session = data.session;
+            log(`Nouvelle session: ${session.direction}`);
+
+            if (currentSession) {
+              log('Session déjà en cours, rejet de la nouvelle session.');
+              session.terminate({
+                status_code: 486,
+                reason_phrase: 'Busy Here',
+              });
+              return;
+            }
+
+            currentSession = session;
+
+            if (session.direction === 'incoming') {
+              log(`Appel entrant de ${session.remote_identity.uri.user}`);
+              statusDiv.textContent = `📞 Appel entrant de ${session.remote_identity.uri.user}. Décrochez...`;
+              // Pour un test, on décroche automatiquement.
+              // Dans une vraie application, on demanderait à l'utilisateur.
+              session.answer({
+                mediaConstraints: { audio: true, video: false },
+              });
+            }
+
+            session.on('peerconnection', data => {
+              log('Événement peerconnection');
+              const peerconnection = data.peerconnection;
+              // Remplacer l'événement déprécié 'addstream' par le moderne 'track'
+              peerconnection.ontrack = event => {
+                log(`Track reçu: ${event.track.kind}`);
+                if (event.streams && event.streams[0]) {
+                  document.getElementById('remoteAudio').srcObject =
+                    event.streams[0];
+                }
+              };
+            });
+
+            session.on('ended', () => {
+              log('Session terminée');
+              statusDiv.textContent = '🟢 Enregistré';
+              currentSession = null;
+              updateUI();
+            });
+
+            session.on('failed', data => {
+              log('Session échouée: ' + data.cause);
+              showError("L'appel a échoué: " + data.cause);
+              statusDiv.textContent = '🟢 Enregistré';
+              currentSession = null;
+              updateUI();
+            });
+
+            session.on('accepted', () => {
+              log('Appel accepté');
+              statusDiv.textContent = `📞 En appel avec ${session.remote_identity.uri.user}`;
+              updateUI();
+            });
+
+            updateUI();
+          });
+
+          ua.start();
         } catch (e) {
-          showError('Erreur: ' + e.message);
+          showError('Erreur de configuration: ' + e.message);
+          ua = null;
+          updateUI();
         }
       }
 
       function disconnect() {
-        if (ws) {
-          ws.close();
-          ws = null;
+        if (ua) {
+          ua.stop();
         }
-        statusDiv.textContent = '🔴 Déconnecté';
-        connectBtn.disabled = false;
-        disconnectBtn.disabled = true;
-        callBtn.disabled = true;
       }
 
-      async function makeCall() {
+      function makeCall() {
         const target = document.getElementById('callNumber').value;
-        if (!target) {
-          showError('Entrez un numéro à appeler');
+        if (!target || !ua) {
+          showError("Entrez un numéro et assurez-vous d'être connecté.");
           return;
         }
 
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          showError('Non connecté au serveur');
-          return;
-        }
+        const eventHandlers = {
+          progress: function (e) {
+            log('Appel en cours...');
+          },
+          failed: function (e) {
+            showError("Échec de l'appel: " + e.cause);
+            currentSession = null;
+            updateUI();
+          },
+          ended: function (e) {
+            log('Appel terminé: ' + e.cause);
+            currentSession = null;
+            updateUI();
+          },
+          confirmed: function (e) {
+            log('Appel confirmé');
+          },
+        };
 
-        try {
-          errorMsg.textContent = '';
-          statusDiv.textContent = `📞 Appel vers ${target}...`;
-          log(`Appel vers ${target}`);
+        const options = {
+          eventHandlers: eventHandlers,
+          mediaConstraints: { audio: true, video: false },
+        };
 
-          // Configuration WebRTC simple
-          const config = {
-            iceServers: [
-              { urls: ['stun:stun.l.google.com:19302'] },
-              { urls: ['stun:stun1.l.google.com:19302'] },
-            ],
-          };
-
-          peerConnection = new RTCPeerConnection(config);
-
-          peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-              log('ICE candidate: ' + event.candidate.candidate);
-            }
-          };
-
-          peerConnection.ontrack = event => {
-            log('Track reçu: ' + event.track.kind);
-            document.getElementById('remoteAudio').srcObject = event.streams[0];
-          };
-
-          // Ajouter un flux audio local
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-              video: false,
-            });
-            stream.getTracks().forEach(track => {
-              peerConnection.addTrack(track, stream);
-            });
-            log('Microphone activé');
-          } catch (e) {
-            log('Microphone non disponible: ' + e.message);
-          }
-
-          callActive = true;
-          callBtn.disabled = true;
-          hangupBtn.disabled = false;
-          showSuccess(`Appel lancé vers ${target}`);
-          statusDiv.textContent = `📞 En appel avec ${target}`;
-        } catch (e) {
-          showError("Erreur lors de l'appel: " + e.message);
-          statusDiv.textContent = '🟢 Connecté';
-        }
+        const session = ua.call(
+          `sip:${target}@${ua.configuration.uri.host}`,
+          options
+        );
       }
 
       function hangUp() {
-        if (peerConnection) {
-          peerConnection.close();
-          peerConnection = null;
+        if (currentSession) {
+          currentSession.terminate();
         }
-        callActive = false;
-        callBtn.disabled = false;
-        hangupBtn.disabled = true;
-        statusDiv.textContent = '🟢 Connecté';
-        log('Appel raccroché');
       }
 
       // Déconnexion propre en fermant la page
       window.onbeforeunload = () => {
-        if (ws) ws.close();
-        if (peerConnection) peerConnection.close();
+        if (ua) {
+          ua.stop();
+        }
       };
     </script>
   </body>

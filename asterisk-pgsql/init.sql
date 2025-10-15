@@ -11,24 +11,24 @@ INSERT INTO tenants (id, name) VALUES (2, 'Client B - Société Beta');
 -- ========================================
 
 -- Téléphone 101 pour Client A
-INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact) 
-VALUES ('101', 1, 'transport-udp', '101', '101', 'client-a-context', 'all', 'ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes');
+INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc) 
+VALUES ('101', 1, NULL, '101', '101', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes');
 
 INSERT INTO ps_auths (id, tenant_id, auth_type, password, username) 
 VALUES ('101', 1, 'userpass', 'password101', '101');
 
 INSERT INTO ps_aors (id, tenant_id, max_contacts) 
-VALUES ('101', 1, 1);
+VALUES ('101', 1, 5);
 
 -- Téléphone 102 pour Client A
-INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact) 
-VALUES ('102', 1, 'transport-udp', '102', '102', 'client-a-context', 'all', 'ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes');
+INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc) 
+VALUES ('102', 1, NULL, '102', '102', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes');
 
 INSERT INTO ps_auths (id, tenant_id, auth_type, password, username) 
 VALUES ('102', 1, 'userpass', 'password102', '102');
 
 INSERT INTO ps_aors (id, tenant_id, max_contacts) 
-VALUES ('102', 1, 1);
+VALUES ('102', 1, 5);
 
 -- Dialplan pour Client A (permet aux utilisateurs de s'appeler entre eux)
 INSERT INTO extensions (tenant_id, context, exten, priority, app, appdata) 
