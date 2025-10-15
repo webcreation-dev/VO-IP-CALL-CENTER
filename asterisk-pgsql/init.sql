@@ -10,9 +10,9 @@ INSERT INTO tenants (id, name) VALUES (2, 'Client B - Société Beta');
 -- Configuration pour le Client A (Tenant 1)
 -- ========================================
 
--- Téléphone 101 pour Client A
-INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc) 
-VALUES ('101', 1, NULL, '101', '101', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes');
+-- Téléphone 101 pour Client A (WebRTC configuré)
+INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc, use_avpf, media_encryption, dtls_verify, dtls_cert_file, dtls_private_key, dtls_setup, ice_support) 
+VALUES ('101', 1, 'transport-wss', '101', '101', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes', 'yes', 'dtls', 'fingerprint', '/etc/asterisk/keys/fullchain.pem', '/etc/asterisk/keys/privkey.pem', 'actpass', 'yes');
 
 INSERT INTO ps_auths (id, tenant_id, auth_type, password, username) 
 VALUES ('101', 1, 'userpass', 'password101', '101');
@@ -20,9 +20,9 @@ VALUES ('101', 1, 'userpass', 'password101', '101');
 INSERT INTO ps_aors (id, tenant_id, max_contacts) 
 VALUES ('101', 1, 5);
 
--- Téléphone 102 pour Client A
-INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc) 
-VALUES ('102', 1, NULL, '102', '102', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes');
+-- Téléphone 102 pour Client A (WebRTC configuré)
+INSERT INTO ps_endpoints (id, tenant_id, transport, aors, auth, context, disallow, allow, direct_media, rtp_symmetric, force_rport, rewrite_contact, webrtc, use_avpf, media_encryption, dtls_verify, dtls_cert_file, dtls_private_key, dtls_setup, ice_support) 
+VALUES ('102', 1, 'transport-wss', '102', '102', 'client-a-context', 'all', 'opus,ulaw,alaw,g722', 'no', 'yes', 'yes', 'yes', 'yes', 'yes', 'dtls', 'fingerprint', '/etc/asterisk/keys/fullchain.pem', '/etc/asterisk/keys/privkey.pem', 'actpass', 'yes');
 
 INSERT INTO ps_auths (id, tenant_id, auth_type, password, username) 
 VALUES ('102', 1, 'userpass', 'password102', '102');
@@ -73,9 +73,12 @@ VALUES (2, 'client-b-context', '_2XX', 1, 'Dial', 'PJSIP/${EXTEN},20');
 -- car ils sont dans des contextes différents.
 
 -- ========================================
--- Configuration du transport PJSIP
+-- Configuration des transports PJSIP
 -- ========================================
--- On définit le transport UDP, en spécifiant l'IP publique et le réseau local
--- C'est crucial pour que l'audio (RTP) fonctionne correctement derrière un NAT.
-INSERT INTO ps_transports (id, protocol, bind, local_net) 
-VALUES ('transport-udp', 'udp', '0.0.0.0:5060', '172.18.0.0/16,192.168.1.0/24');
+-- Transport UDP pour les téléphones SIP classiques
+INSERT INTO ps_transports (id, protocol, bind, local_net, external_media_address, external_signaling_address) 
+VALUES ('transport-udp', 'udp', '0.0.0.0:5060', '172.18.0.0/16', '161.97.106.134', '161.97.106.134');
+
+-- Transport WSS (WebSocket Secure) pour WebRTC
+INSERT INTO ps_transports (id, protocol, bind, local_net, external_media_address, external_signaling_address) 
+VALUES ('transport-wss', 'wss', '0.0.0.0:8089', '172.18.0.0/16', '161.97.106.134', '161.97.106.134');
