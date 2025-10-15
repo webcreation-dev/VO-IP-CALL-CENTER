@@ -3,9 +3,9 @@ FROM andrius/asterisk
 # Switch to root to install packages
 USER root
 
-# Install PostgreSQL ODBC driver
+# Install PostgreSQL ODBC driver and Opus codec translator
 RUN apt-get update && \
-    apt-get install -y odbc-postgresql && \
+    apt-get install -y odbc-postgresql asterisk-opus && \
     rm -rf /var/lib/apt/lists/*
 
 # Switch back to the asterisk user (if the base image uses one)
