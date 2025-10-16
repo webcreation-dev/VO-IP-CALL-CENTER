@@ -39,8 +39,8 @@ git pull origin release-tenant
 sudo docker-compose build asterisk
 
 # Redémarrer tout
-sudo docker-compose down
-sudo docker-compose up -d
+sudo docker compose down
+sudo docker compose up -d
 
 # Attendre 15 secondes que tout démarre
 sleep 15
