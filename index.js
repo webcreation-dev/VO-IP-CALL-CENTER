@@ -5,6 +5,8 @@ const port = 3000;
 
 app.use(express.json());
 
+app.use(express.static(__dirname));
+
 app.get('/', (req, res) => {
   res.send('API de gestion Asterisk');
 });
