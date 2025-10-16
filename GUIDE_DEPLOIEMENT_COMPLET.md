@@ -36,7 +36,7 @@ git pull origin release-tenant
 
 ```bash
 # Rebuild le conteneur Asterisk avec les nouvelles configs
-sudo docker-compose build asterisk
+sudo docker compose build asterisk
 
 # Redémarrer tout
 sudo docker compose down
