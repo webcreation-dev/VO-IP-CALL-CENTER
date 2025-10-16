@@ -8,8 +8,22 @@ RUN apt-get update && \
     apt-get install -y odbc-postgresql && \
     rm -rf /var/lib/apt/lists/*
 
+# Copier le script d'initialisation
+COPY asterisk-init.sh /usr/local/bin/asterisk-init.sh
+RUN chmod +x /usr/local/bin/asterisk-init.sh
+
+# Créer les répertoires et définir les permissions
+RUN mkdir -p /var/lib/asterisk/moh \
+    /var/lib/asterisk/sounds/custom \
+    /var/spool/asterisk/monitor && \
+    chown -R asterisk:asterisk /var/lib/asterisk/moh \
+    /var/lib/asterisk/sounds/custom \
+    /var/spool/asterisk/monitor && \
+    chmod 755 /var/lib/asterisk/moh \
+    /var/lib/asterisk/sounds/custom \
+    /var/spool/asterisk/monitor
+
 # Switch back to the asterisk user (if the base image uses one)
 USER asterisk
 
 # The rest is inherited from the base image
-

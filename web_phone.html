@@ -534,21 +534,27 @@
 
         const eventHandlers = {
           progress: function (e) {
-            log('📞 Appel en cours...');
+            log('📞 Appel en cours... (sonnerie chez le destinataire)');
+            // IMPORTANT: Jouer la tonalité de retour pour l'APPELANT
+            playRingbackTone();
+            statusDiv.textContent = `📞 Appel de ${target} en cours...`;
           },
           failed: function (e) {
             log('❌ Échec appel: ' + e.cause);
             showError("Échec de l'appel: " + e.cause);
+            stopRingtone(); // Arrêter la tonalité
             currentSession = null;
             updateUI();
           },
           ended: function (e) {
             log('📞 Appel terminé: ' + e.cause);
+            stopRingtone(); // Arrêter la tonalité
             currentSession = null;
             updateUI();
           },
           confirmed: function (e) {
-            log('✅ Appel confirmé');
+            log('✅ Appel confirmé - Conversation établie');
+            stopRingtone(); // Arrêter la tonalité quand l'appel est décroché
           },
         };
 
@@ -587,45 +593,66 @@
         hideIncomingCallUI();
       }
 
-      // Fonction pour jouer une sonnerie
+      // Fonction pour jouer une sonnerie (appel ENTRANT)
       function playRingtone() {
         try {
-          // Créer un contexte audio pour générer une sonnerie
+          log('🔔 Démarrage sonnerie appel ENTRANT');
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
 
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-
-          oscillator.frequency.value = 440; // Note A (La)
-          gainNode.gain.value = 0.3; // Volume à 30%
-
-          oscillator.start();
-
-          // Arrêter après 2 secondes et répéter
           let ringtoneInterval = setInterval(() => {
+            // Sonnerie classique : 2 bips rapides
+            // Premier bip
+            const osc1 = audioContext.createOscillator();
+            const gain1 = audioContext.createGain();
+            osc1.connect(gain1);
+            gain1.connect(audioContext.destination);
+            osc1.frequency.value = 440; // La
+            gain1.gain.value = 0.3;
+            osc1.start();
+            setTimeout(() => osc1.stop(), 400); // 0.4 sec
+
+            // Pause de 200ms puis deuxième bip
+            setTimeout(() => {
+              const osc2 = audioContext.createOscillator();
+              const gain2 = audioContext.createGain();
+              osc2.connect(gain2);
+              gain2.connect(audioContext.destination);
+              osc2.frequency.value = 440;
+              gain2.gain.value = 0.3;
+              osc2.start();
+              setTimeout(() => osc2.stop(), 400);
+            }, 600);
+          }, 4000); // Répéter toutes les 4 secondes
+
+          ringtoneAudio = { audioContext, interval: ringtoneInterval };
+        } catch (err) {
+          log('⚠️ Impossible de jouer la sonnerie: ' + err.message);
+        }
+      }
+
+      // Fonction pour jouer une tonalité de retour (appel SORTANT)
+      function playRingbackTone() {
+        try {
+          log('📞 Démarrage tonalité de retour appel SORTANT');
+          const audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+
+          let ringbackInterval = setInterval(() => {
+            // Tonalité de retour : un seul bip long
             const osc = audioContext.createOscillator();
             const gain = audioContext.createGain();
             osc.connect(gain);
             gain.connect(audioContext.destination);
-            osc.frequency.value = 440;
-            gain.gain.value = 0.3;
+            osc.frequency.value = 440; // La
+            gain.gain.value = 0.2; // Plus faible
             osc.start();
-            setTimeout(() => osc.stop(), 1000);
-          }, 2000);
+            setTimeout(() => osc.stop(), 1500); // 1.5 sec
+          }, 4000); // Répéter toutes les 4 secondes
 
-          // Stocker pour pouvoir arrêter
-          ringtoneAudio = {
-            oscillator,
-            audioContext,
-            interval: ringtoneInterval,
-          };
-
-          setTimeout(() => oscillator.stop(), 1000);
+          ringtoneAudio = { audioContext, interval: ringbackInterval };
         } catch (err) {
-          log('⚠️ Impossible de jouer la sonnerie: ' + err.message);
+          log('⚠️ Impossible de jouer la tonalité: ' + err.message);
         }
       }
 
