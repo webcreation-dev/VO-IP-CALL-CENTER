@@ -178,6 +178,7 @@
 
       let ua = null;
       let currentSession = null;
+      let ringtoneAudio = null;
 
       // Fonction pour configurer les handlers sur la RTCPeerConnection
       function setupPeerConnectionHandlers(peerconnection) {
@@ -311,6 +312,8 @@
           log('Session terminée');
           statusDiv.textContent = '🟢 Enregistré';
           currentSession = null;
+          stopRingtone();
+          hideIncomingCallUI();
           updateUI();
         });
 
@@ -319,6 +322,8 @@
           showError("L'appel a échoué: " + data.cause);
           statusDiv.textContent = '🟢 Enregistré';
           currentSession = null;
+          stopRingtone();
+          hideIncomingCallUI();
           updateUI();
         });
 
@@ -476,12 +481,21 @@
 
             if (session.direction === 'incoming') {
               log(`📞 Appel entrant de ${session.remote_identity.uri.user}`);
-              statusDiv.textContent = `📞 Appel entrant de ${session.remote_identity.uri.user}. Décrochez...`;
-              // Pour un test, on décroche automatiquement.
-              // Dans une vraie application, on demanderait à l'utilisateur.
-              session.answer({
-                mediaConstraints: { audio: true, video: false },
-              });
+              const callerNumber = session.remote_identity.uri.user;
+
+              // Afficher une notification d'appel entrant
+              statusDiv.textContent = `📞 Appel entrant de ${callerNumber}`;
+              statusDiv.style.backgroundColor = '#fff3cd';
+              statusDiv.style.borderLeft = '4px solid #ffc107';
+
+              // Jouer un son de sonnerie (si le navigateur le permet)
+              playRingtone();
+
+              // Afficher les boutons Répondre/Rejeter
+              showIncomingCallUI(callerNumber, session);
+
+              // NE PAS RÉPONDRE AUTOMATIQUEMENT
+              // L'utilisateur doit cliquer sur "Répondre"
             }
 
             // Attacher les handlers média
@@ -568,6 +582,163 @@
       function hangUp() {
         if (currentSession) {
           currentSession.terminate();
+        }
+        stopRingtone();
+        hideIncomingCallUI();
+      }
+
+      // Fonction pour jouer une sonnerie
+      function playRingtone() {
+        try {
+          // Créer un contexte audio pour générer une sonnerie
+          const audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.frequency.value = 440; // Note A (La)
+          gainNode.gain.value = 0.3; // Volume à 30%
+
+          oscillator.start();
+
+          // Arrêter après 2 secondes et répéter
+          let ringtoneInterval = setInterval(() => {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.value = 440;
+            gain.gain.value = 0.3;
+            osc.start();
+            setTimeout(() => osc.stop(), 1000);
+          }, 2000);
+
+          // Stocker pour pouvoir arrêter
+          ringtoneAudio = {
+            oscillator,
+            audioContext,
+            interval: ringtoneInterval,
+          };
+
+          setTimeout(() => oscillator.stop(), 1000);
+        } catch (err) {
+          log('⚠️ Impossible de jouer la sonnerie: ' + err.message);
+        }
+      }
+
+      // Fonction pour arrêter la sonnerie
+      function stopRingtone() {
+        if (ringtoneAudio) {
+          try {
+            if (ringtoneAudio.oscillator) {
+              ringtoneAudio.oscillator.stop();
+            }
+            if (ringtoneAudio.interval) {
+              clearInterval(ringtoneAudio.interval);
+            }
+            if (ringtoneAudio.audioContext) {
+              ringtoneAudio.audioContext.close();
+            }
+          } catch (err) {
+            log("⚠️ Erreur lors de l'arrêt de la sonnerie: " + err.message);
+          }
+          ringtoneAudio = null;
+        }
+      }
+
+      // Fonction pour afficher l'interface d'appel entrant
+      function showIncomingCallUI(callerNumber, session) {
+        // Créer une div pour l'appel entrant si elle n'existe pas
+        let incomingDiv = document.getElementById('incomingCallDiv');
+        if (!incomingDiv) {
+          incomingDiv = document.createElement('div');
+          incomingDiv.id = 'incomingCallDiv';
+          incomingDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            text-align: center;
+            min-width: 300px;
+          `;
+          document.body.appendChild(incomingDiv);
+        }
+
+        incomingDiv.innerHTML = `
+          <h2 style="margin-top: 0; color: #007bff;">📞 Appel entrant</h2>
+          <p style="font-size: 24px; font-weight: bold; margin: 20px 0;">${callerNumber}</p>
+          <button onclick="answerCall()" style="
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+          ">✅ Répondre</button>
+          <button onclick="rejectCall()" style="
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+          ">❌ Rejeter</button>
+        `;
+
+        incomingDiv.style.display = 'block';
+      }
+
+      // Fonction pour cacher l'interface d'appel entrant
+      function hideIncomingCallUI() {
+        const incomingDiv = document.getElementById('incomingCallDiv');
+        if (incomingDiv) {
+          incomingDiv.style.display = 'none';
+        }
+        statusDiv.style.backgroundColor = '';
+        statusDiv.style.borderLeft = '';
+      }
+
+      // Fonction pour répondre à l'appel
+      function answerCall() {
+        log("✅ Réponse à l'appel");
+        stopRingtone();
+        hideIncomingCallUI();
+
+        if (currentSession) {
+          currentSession.answer({
+            mediaConstraints: { audio: true, video: false },
+          });
+          log('📞 Appel accepté et répondu');
+        }
+      }
+
+      // Fonction pour rejeter l'appel
+      function rejectCall() {
+        log("❌ Rejet de l'appel");
+        stopRingtone();
+        hideIncomingCallUI();
+
+        if (currentSession) {
+          currentSession.terminate({
+            status_code: 486,
+            reason_phrase: 'Busy Here',
+          });
+          currentSession = null;
+          updateUI();
         }
       }
 
