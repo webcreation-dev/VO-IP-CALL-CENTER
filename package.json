@@ -5,11 +5,14 @@
   "license": "MIT",
   "dependencies": {
     "asterisk-manager": "^0.2.0",
+    "cors": "^2.8.5",
     "express": "^4.19.2",
     "jssip": "^3.10.1",
     "pg": "^8.11.5"
   },
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
