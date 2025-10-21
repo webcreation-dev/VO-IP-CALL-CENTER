@@ -2,10 +2,10 @@ const AsteriskManager = require('asterisk-manager');
 
 // Configuration AMI basée sur manager.conf
 const amiConfig = {
-  port: 5038,
-  host: 'localhost',
-  username: 'admin',
-  password: 'Sp33Dd14L', // Tiré de manager.conf
+  port: process.env.AMI_PORT || 5038,
+  host: process.env.AMI_HOST || 'localhost',
+  username: process.env.AMI_USER || 'admin',
+  password: process.env.AMI_PASSWORD || 'Sp33Dd14L',
   events: true,
 };
 

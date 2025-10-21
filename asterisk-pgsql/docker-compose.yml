@@ -1,4 +1,26 @@
 services:
+  api:
+    build: ../ # Pointe vers le dossier asterisk (parent)
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=asterisk
+      - DB_PASSWORD=Obelix
+      - DB_NAME=asterisk
+      - AMI_HOST=asterisk
+      - AMI_PORT=5038
+      - AMI_USER=admin
+      - AMI_PASSWORD=Sp33Dd14L
+    depends_on:
+      - db
+      - asterisk
+    restart: always
+    volumes:
+      - ../:/app # En développement pour hot-reload
+      - /app/node_modules # Exclure node_modules du volume
   asterisk:
     build: .
     volumes:
