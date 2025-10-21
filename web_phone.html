@@ -1,7 +1,10 @@
+<script>
+  JsSIP.debug.enable('JsSIP:*');
+</script>
 <!DOCTYPE html>
 <html>
   <head>
-    <title>WebRTC Client Asterisk - Direct</title>
+    <title>WebRTC Client Asterisk - Corrigé</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -180,136 +183,73 @@
       let currentSession = null;
       let ringtoneAudio = null;
 
-      // Fonction pour configurer les handlers sur la RTCPeerConnection
       function setupPeerConnectionHandlers(peerconnection) {
         log('🔵 Configuration des handlers sur RTCPeerConnection');
-
-        // Log de la configuration ICE
-        log('🔵 ICE Gathering State: ' + peerconnection.iceGatheringState);
         log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
         log('🔵 Signaling State: ' + peerconnection.signalingState);
 
-        // Écouter les changements d'état ICE
         peerconnection.oniceconnectionstatechange = () => {
-          log(
-            '🔵 ICE Connection State changé: ' +
-              peerconnection.iceConnectionState
-          );
+          log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
         };
 
-        peerconnection.onicegatheringstatechange = () => {
-          log(
-            '🔵 ICE Gathering State changé: ' + peerconnection.iceGatheringState
-          );
-        };
-
-        // Remplacer l'événement déprécié 'addstream' par le moderne 'track'
         peerconnection.ontrack = event => {
           log(`🎵 Track reçu: ${event.track.kind}`);
-          log(`🎵 Track enabled: ${event.track.enabled}`);
-          log(`🎵 Track muted: ${event.track.muted}`);
           log(`🎵 Track readyState: ${event.track.readyState}`);
-          log(
-            `🎵 Nombre de streams: ${event.streams ? event.streams.length : 0}`
-          );
 
           if (event.streams && event.streams[0]) {
             const stream = event.streams[0];
-            log(`🎵 Stream ID: ${stream.id}`);
-            log(`🎵 Stream active: ${stream.active}`);
-            log(`🎵 Stream tracks: ${stream.getTracks().length}`);
+            log(`🎵 Stream actif: ${stream.active}`);
 
-            // IMPORTANT : Forcer le unmute du track si nécessaire
             event.track.enabled = true;
-            if (event.track.muted) {
-              log('⚠️ Track est muted, tentative de correction...');
-              // Le track peut être muted temporairement, on attend qu'il se unmute
-              event.track.onunmute = () => {
-                log('✅ Track unmuted !');
-              };
-            }
 
             const audioEl = document.getElementById('remoteAudio');
             audioEl.srcObject = stream;
+            audioEl.volume = 1.0;
+            audioEl.muted = false;
 
-            // Vérifier l'élément audio
-            log(`🔊 Audio element volume: ${audioEl.volume}`);
-            log(`🔊 Audio element muted: ${audioEl.muted}`);
-            log(`🔊 Audio element paused: ${audioEl.paused}`);
-
-            // Forcer le play
             audioEl
               .play()
               .then(() => {
-                log('✅ Audio.play() réussi');
+                log('✅ Audio play() réussi');
               })
               .catch(err => {
-                log('❌ Audio.play() échoué: ' + err.message);
+                log('❌ Audio play() échoué: ' + err.message);
               });
-
-            // Écouter les événements de l'audio
-            audioEl.onloadedmetadata = () => {
-              log('✅ Audio metadata chargées');
-            };
-
-            audioEl.onplaying = () => {
-              log('✅ Audio en cours de lecture');
-            };
-
-            audioEl.onerror = e => {
-              log('❌ Erreur audio: ' + e.message);
-            };
-
-            // Afficher les stats WebRTC toutes les 3 secondes
-            const statsInterval = setInterval(() => {
-              if (!currentSession) {
-                clearInterval(statsInterval);
-                return;
-              }
-
-              peerconnection.getStats(null).then(stats => {
-                stats.forEach(report => {
-                  if (
-                    report.type === 'inbound-rtp' &&
-                    report.kind === 'audio'
-                  ) {
-                    log(
-                      `📊 Stats Audio Entrant - Paquets: ${report.packetsReceived}, Perdus: ${report.packetsLost}, Jitter: ${report.jitter}`
-                    );
-                  }
-                });
-              });
-            }, 3000);
           }
         };
       }
 
-      // Fonction pour attacher les événements média à une session
       function attachMediaHandlers(session) {
-        log('🔧 Attachement des handlers média à la session');
+        log('🔧 Attachement des handlers média');
 
-        // Debug : voir ce qui est disponible sur la session
-        log('🔍 Session properties: ' + Object.keys(session).join(', '));
-        log(
-          '🔍 Session.connection: ' + (session.connection ? 'EXISTS' : 'NULL')
-        );
-
-        // Si la connection existe déjà, l'attacher directement
         if (session.connection) {
-          log(
-            '✨ Connection RTCPeerConnection déjà disponible, attachement direct'
-          );
+          log('✨ RTCPeerConnection disponible immédiatement');
           setupPeerConnectionHandlers(session.connection);
         }
 
         session.on('peerconnection', data => {
           log('🔵 Événement peerconnection déclenché');
-          const peerconnection = data.peerconnection;
-          setupPeerConnectionHandlers(peerconnection);
+          setupPeerConnectionHandlers(data.peerconnection);
+        });
+
+        session.on('progress', () => {
+          log('📞 Session en progression');
+        });
+
+        session.on('accepted', () => {
+          log('✅ Appel accepté et établi');
+          statusDiv.textContent = `📞 En appel`;
+          stopRingtone();
+          hideIncomingCallUI();
+        });
+
+        session.on('confirmed', () => {
+          log('✅ Appel confirmé');
+          stopRingtone();
         });
 
         session.on('ended', () => {
-          log('Session terminée');
+          log('📞 Session terminée');
           statusDiv.textContent = '🟢 Enregistré';
           currentSession = null;
           stopRingtone();
@@ -318,18 +258,12 @@
         });
 
         session.on('failed', data => {
-          log('Session échouée: ' + data.cause);
+          log('❌ Session échouée: ' + data.cause);
           showError("L'appel a échoué: " + data.cause);
           statusDiv.textContent = '🟢 Enregistré';
           currentSession = null;
           stopRingtone();
           hideIncomingCallUI();
-          updateUI();
-        });
-
-        session.on('accepted', () => {
-          log('Appel accepté');
-          statusDiv.textContent = `📞 En appel avec ${session.remote_identity.uri.user}`;
           updateUI();
         });
       }
@@ -339,13 +273,11 @@
         const fullMsg = `[${timestamp}] ${msg}`;
         console.log('[SIP] ' + fullMsg);
 
-        // Afficher aussi dans la zone de debug
         const debugDiv = document.getElementById('debugLogs');
         if (debugDiv) {
           const logLine = document.createElement('div');
           logLine.textContent = fullMsg;
           debugDiv.appendChild(logLine);
-          // Auto-scroll vers le bas
           debugDiv.scrollTop = debugDiv.scrollHeight;
         }
       }
@@ -392,19 +324,14 @@
         log('🚀 Serveur: ' + server + ':' + port);
         log('🚀 Utilisateur: ' + user);
 
-        // Vérifier les permissions média
         navigator.mediaDevices
           .getUserMedia({ audio: true, video: false })
           .then(stream => {
-            log('✅ Permissions microphone accordées');
-            log('✅ Nombre de tracks audio: ' + stream.getAudioTracks().length);
-            stream.getTracks().forEach(track => {
-              log('✅ Track: ' + track.kind + ' - ' + track.label);
-              track.stop(); // On arrête pour le moment, JsSIP le redémarrera
-            });
+            log('✅ Permissions microphone OK');
+            stream.getTracks().forEach(track => track.stop());
           })
           .catch(err => {
-            log('❌ Erreur permissions microphone: ' + err.message);
+            log('❌ Permissions microphone: ' + err.message);
           });
 
         try {
@@ -418,6 +345,7 @@
             password: pass,
             register: true,
             display_name: user,
+            session_timers: false,
             pcConfig: {
               iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
             },
@@ -427,49 +355,49 @@
 
           ua.on('connecting', () => {
             log('Connexion en cours...');
-            statusDiv.textContent = '🟡 Connexion en cours...';
+            statusDiv.textContent = '🟡 Connexion...';
             updateUI();
           });
 
           ua.on('connected', () => {
-            log('Connecté via WebSocket');
+            log('✅ WebSocket connecté');
             updateUI();
           });
 
           ua.on('disconnected', () => {
-            log('Déconnecté');
+            log('❌ Déconnecté');
             showError('Déconnecté du serveur');
             ua = null;
             updateUI();
           });
 
           ua.on('registered', () => {
-            log('Enregistré avec succès');
-            showSuccess('Enregistré auprès du serveur Asterisk');
+            log('✅ Enregistré avec succès');
+            showSuccess('Enregistré - Prêt à recevoir des appels');
             statusDiv.textContent = '🟢 Enregistré';
             updateUI();
           });
 
           ua.on('unregistered', () => {
             log('Désenregistré');
-            showError('Désenregistré du serveur');
+            showError('Désenregistré');
             ua = null;
             updateUI();
           });
 
           ua.on('registrationFailed', ev => {
-            log("Échec de l'enregistrement: " + ev.cause);
-            showError("Échec de l'enregistrement: " + ev.cause);
+            log('❌ Échec enregistrement: ' + ev.cause);
+            showError('Échec: ' + ev.cause);
             ua = null;
             updateUI();
           });
 
           ua.on('newRTCSession', data => {
             const session = data.session;
-            log(`📞 Nouvelle session: ${session.direction}`);
+            log(`📞 Nouvelle session RTC: ${session.direction}`);
 
             if (currentSession) {
-              log('⚠️ Session déjà en cours, rejet de la nouvelle session.');
+              log('⚠️ Session en cours, rejet');
               session.terminate({
                 status_code: 486,
                 reason_phrase: 'Busy Here',
@@ -480,33 +408,24 @@
             currentSession = session;
 
             if (session.direction === 'incoming') {
-              log(`📞 Appel entrant de ${session.remote_identity.uri.user}`);
               const callerNumber = session.remote_identity.uri.user;
+              log(`📞 APPEL ENTRANT de ${callerNumber}`);
 
-              // Afficher une notification d'appel entrant
-              statusDiv.textContent = `📞 Appel entrant de ${callerNumber}`;
+              statusDiv.textContent = `📞 Appel de ${callerNumber}`;
               statusDiv.style.backgroundColor = '#fff3cd';
               statusDiv.style.borderLeft = '4px solid #ffc107';
 
-              // Jouer un son de sonnerie (si le navigateur le permet)
               playRingtone();
-
-              // Afficher les boutons Répondre/Rejeter
-              showIncomingCallUI(callerNumber, session);
-
-              // NE PAS RÉPONDRE AUTOMATIQUEMENT
-              // L'utilisateur doit cliquer sur "Répondre"
+              showIncomingCallUI(callerNumber);
             }
 
-            // Attacher les handlers média
             attachMediaHandlers(session);
-
             updateUI();
           });
 
           ua.start();
         } catch (e) {
-          showError('Erreur de configuration: ' + e.message);
+          showError('Erreur: ' + e.message);
           ua = null;
           updateUI();
         }
@@ -521,40 +440,39 @@
       function makeCall() {
         const target = document.getElementById('callNumber').value;
         if (!target || !ua) {
-          showError("Entrez un numéro et assurez-vous d'être connecté.");
+          showError('Entrez un numéro');
           return;
         }
 
         if (currentSession) {
-          showError('Un appel est déjà en cours.');
+          showError('Appel déjà en cours');
           return;
         }
 
-        log('📞 Démarrage appel vers: ' + target);
+        log('📞 Appel sortant vers: ' + target);
 
         const eventHandlers = {
-          progress: function (e) {
-            log('📞 Appel en cours... (sonnerie chez le destinataire)');
-            // IMPORTANT: Jouer la tonalité de retour pour l'APPELANT
+          progress: function () {
+            log('📞 Sonnerie...');
             playRingbackTone();
-            statusDiv.textContent = `📞 Appel de ${target} en cours...`;
+            statusDiv.textContent = `📞 Appel de ${target}...`;
           },
           failed: function (e) {
-            log('❌ Échec appel: ' + e.cause);
-            showError("Échec de l'appel: " + e.cause);
-            stopRingtone(); // Arrêter la tonalité
+            log('❌ Échec: ' + e.cause);
+            showError('Échec: ' + e.cause);
+            stopRingtone();
             currentSession = null;
             updateUI();
           },
-          ended: function (e) {
-            log('📞 Appel terminé: ' + e.cause);
-            stopRingtone(); // Arrêter la tonalité
+          ended: function () {
+            log('📞 Terminé');
+            stopRingtone();
             currentSession = null;
             updateUI();
           },
-          confirmed: function (e) {
-            log('✅ Appel confirmé - Conversation établie');
-            stopRingtone(); // Arrêter la tonalité quand l'appel est décroché
+          confirmed: function () {
+            log('✅ Connecté');
+            stopRingtone();
           },
         };
 
@@ -570,17 +488,13 @@
           );
 
           if (session) {
-            log('📞 Session créée avec succès');
+            log('📞 Session créée');
             currentSession = session;
-
-            // IMPORTANT : Attacher les handlers IMMÉDIATEMENT
-            // pour les appels sortants, car l'événement peerconnection
-            // peut se déclencher AVANT newRTCSession
             attachMediaHandlers(session);
             updateUI();
           }
         } catch (err) {
-          log("❌ Erreur lors de la création de l'appel: " + err.message);
+          log('❌ Erreur: ' + err.message);
           showError('Erreur: ' + err.message);
         }
       }
@@ -593,26 +507,22 @@
         hideIncomingCallUI();
       }
 
-      // Fonction pour jouer une sonnerie (appel ENTRANT)
       function playRingtone() {
         try {
-          log('🔔 Démarrage sonnerie appel ENTRANT');
+          log('🔔 Sonnerie ENTRANT');
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
 
           let ringtoneInterval = setInterval(() => {
-            // Sonnerie classique : 2 bips rapides
-            // Premier bip
             const osc1 = audioContext.createOscillator();
             const gain1 = audioContext.createGain();
             osc1.connect(gain1);
             gain1.connect(audioContext.destination);
-            osc1.frequency.value = 440; // La
+            osc1.frequency.value = 440;
             gain1.gain.value = 0.3;
             osc1.start();
-            setTimeout(() => osc1.stop(), 400); // 0.4 sec
+            setTimeout(() => osc1.stop(), 400);
 
-            // Pause de 200ms puis deuxième bip
             setTimeout(() => {
               const osc2 = audioContext.createOscillator();
               const gain2 = audioContext.createGain();
@@ -623,40 +533,37 @@
               osc2.start();
               setTimeout(() => osc2.stop(), 400);
             }, 600);
-          }, 4000); // Répéter toutes les 4 secondes
+          }, 4000);
 
           ringtoneAudio = { audioContext, interval: ringtoneInterval };
         } catch (err) {
-          log('⚠️ Impossible de jouer la sonnerie: ' + err.message);
+          log('⚠️ Sonnerie impossible: ' + err.message);
         }
       }
 
-      // Fonction pour jouer une tonalité de retour (appel SORTANT)
       function playRingbackTone() {
         try {
-          log('📞 Démarrage tonalité de retour appel SORTANT');
+          log('📞 Tonalité SORTANT');
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
 
           let ringbackInterval = setInterval(() => {
-            // Tonalité de retour : un seul bip long
             const osc = audioContext.createOscillator();
             const gain = audioContext.createGain();
             osc.connect(gain);
             gain.connect(audioContext.destination);
-            osc.frequency.value = 440; // La
-            gain.gain.value = 0.2; // Plus faible
+            osc.frequency.value = 440;
+            gain.gain.value = 0.2;
             osc.start();
-            setTimeout(() => osc.stop(), 1500); // 1.5 sec
-          }, 4000); // Répéter toutes les 4 secondes
+            setTimeout(() => osc.stop(), 1500);
+          }, 4000);
 
           ringtoneAudio = { audioContext, interval: ringbackInterval };
         } catch (err) {
-          log('⚠️ Impossible de jouer la tonalité: ' + err.message);
+          log('⚠️ Tonalité impossible: ' + err.message);
         }
       }
 
-      // Fonction pour arrêter la sonnerie
       function stopRingtone() {
         if (ringtoneAudio) {
           try {
@@ -670,15 +577,13 @@
               ringtoneAudio.audioContext.close();
             }
           } catch (err) {
-            log("⚠️ Erreur lors de l'arrêt de la sonnerie: " + err.message);
+            log('⚠️ Arrêt sonnerie: ' + err.message);
           }
           ringtoneAudio = null;
         }
       }
 
-      // Fonction pour afficher l'interface d'appel entrant
-      function showIncomingCallUI(callerNumber, session) {
-        // Créer une div pour l'appel entrant si elle n'existe pas
+      function showIncomingCallUI(callerNumber) {
         let incomingDiv = document.getElementById('incomingCallDiv');
         if (!incomingDiv) {
           incomingDiv = document.createElement('div');
@@ -729,7 +634,6 @@
         incomingDiv.style.display = 'block';
       }
 
-      // Fonction pour cacher l'interface d'appel entrant
       function hideIncomingCallUI() {
         const incomingDiv = document.getElementById('incomingCallDiv');
         if (incomingDiv) {
@@ -739,9 +643,8 @@
         statusDiv.style.borderLeft = '';
       }
 
-      // Fonction pour répondre à l'appel
       function answerCall() {
-        log("✅ Réponse à l'appel");
+        log("✅ RÉPONSE à l'appel");
         stopRingtone();
         hideIncomingCallUI();
 
@@ -749,13 +652,13 @@
           currentSession.answer({
             mediaConstraints: { audio: true, video: false },
           });
-          log('📞 Appel accepté et répondu');
+          log('📞 Réponse envoyée à Asterisk');
+          statusDiv.textContent = '📞 En communication';
         }
       }
 
-      // Fonction pour rejeter l'appel
       function rejectCall() {
-        log("❌ Rejet de l'appel");
+        log("❌ REJET de l'appel");
         stopRingtone();
         hideIncomingCallUI();
 
@@ -765,11 +668,11 @@
             reason_phrase: 'Busy Here',
           });
           currentSession = null;
+          statusDiv.textContent = '🟢 Enregistré';
           updateUI();
         }
       }
 
-      // Déconnexion propre en fermant la page
       window.onbeforeunload = () => {
         if (ua) {
           ua.stop();
