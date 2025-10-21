@@ -26,12 +26,12 @@ services:
     environment:
       - AST_MODULE_LOAD_PRIORITY=1
     volumes:
-      - "${PWD}/etc/asterisk:/etc/asterisk"
+      - "./etc/asterisk:/etc/asterisk"
       - "/etc/asterisk/certs:/etc/asterisk/keys:ro"
-      - "${PWD}/log/asterisk:/var/log/asterisk"
-      - "${PWD}/odbc.ini:/etc/odbc.ini"
-      - "${PWD}/odbcinst.ini:/etc/odbcinst.ini"
-      - "${PWD}/log/supervisor:/var/log/supervisor"
+      - "./log/asterisk:/var/log/asterisk"
+      - "./odbc.ini:/etc/odbc.ini"
+      - "./odbcinst.ini:/etc/odbcinst.ini"
+      - "./log/supervisor:/var/log/supervisor"
     ports:
       - "5038:5038" # AMI
       - "5060:5060/udp"
@@ -51,9 +51,9 @@ services:
       POSTGRES_USER: "asterisk"
       POSTGRES_PASSWORD: "Obelix"
     volumes:
-      - "${PWD}/.pgdata:/var/lib/postgresql/data"
-      - "${PWD}/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
-      - "${PWD}/INIT_TOUT_EN_UN.sql:/docker-entrypoint-initdb.d/02-INIT_TOUT_EN_UN.sql:ro"
+      - "./.pgdata:/var/lib/postgresql/data"
+      - "./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
+      - "./INIT_TOUT_EN_UN.sql:/docker-entrypoint-initdb.d/02-INIT_TOUT_EN_UN.sql:ro"
     ports:
       - "5432:5432"
     restart: always
