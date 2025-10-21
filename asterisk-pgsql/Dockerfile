@@ -3,9 +3,10 @@ FROM andrius/asterisk
 # Switch to root to install packages
 USER root
 
-# Install PostgreSQL ODBC driver
+# Install PostgreSQL ODBC driver with specific version to avoid memory corruption
 RUN apt-get update && \
-    apt-get install -y odbc-postgresql && \
+    apt-get install -y odbc-postgresql unixodbc unixodbc-dev && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Copier le script d'initialisation
