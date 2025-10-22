@@ -190,11 +190,15 @@
 
         peerconnection.oniceconnectionstatechange = () => {
           log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
+          if (peerconnection.iceConnectionState === 'connected' || peerconnection.iceConnectionState === 'completed') {
+            log('✅ ICE Connected - Le flux devrait passer maintenant');
+          }
         };
 
         peerconnection.ontrack = event => {
           log(`🎵 Track reçu: ${event.track.kind}`);
           log(`🎵 Track readyState: ${event.track.readyState}`);
+          log(`🎵 Track ID: ${event.track.id}`);
 
           if (event.streams && event.streams[0]) {
             const stream = event.streams[0];
@@ -371,30 +375,46 @@
             updateUI();
           });
 
-          ua.on('registered', () => {
+          ua.on('registered', (e) => {
             log('✅ Enregistré avec succès');
+            log('   Response: ' + (e && e.response ? e.response.status_code : 'N/A'));
+            log('   URI: ' + ua.configuration.uri.toString());
+            log('   Contact: ' + (e && e.response ? e.response.getHeader('Contact') : 'N/A'));
             showSuccess('Enregistré - Prêt à recevoir des appels');
             statusDiv.textContent = '🟢 Enregistré';
             updateUI();
           });
 
-          ua.on('unregistered', () => {
-            log('Désenregistré');
+          ua.on('unregistered', (e) => {
+            log('❌ Désenregistré');
+            log('   Cause: ' + (e ? e.cause : 'N/A'));
             showError('Désenregistré');
             ua = null;
             updateUI();
           });
 
-          ua.on('registrationFailed', ev => {
-            log('❌ Échec enregistrement: ' + ev.cause);
-            showError('Échec: ' + ev.cause);
+          ua.on('registrationFailed', (e) => {
+            log('❌ Échec enregistrement');
+            log('   ===== DÉTAILS ÉCHEC REGISTRATION =====');
+            log('   Cause: ' + e.cause);
+            if (e.response) {
+              log('   Status code: ' + e.response.status_code);
+              log('   Reason phrase: ' + e.response.reason_phrase);
+              log('   Headers: ' + JSON.stringify(e.response.headers, null, 2));
+            }
+            log('   ======================================');
+            showError('Échec: ' + e.cause);
             ua = null;
             updateUI();
           });
 
           ua.on('newRTCSession', data => {
+            log('🔔 EVENT newRTCSession DÉCLENCHÉ !');
+
             const session = data.session;
             log(`📞 Nouvelle session RTC: ${session.direction}`);
+            log(`   Remote Identity: ${session.remote_identity.uri.user}`);
+            log(`   Session ID: ${session.id}`);
 
             if (currentSession) {
               log('⚠️ Session en cours, rejet');
@@ -410,13 +430,24 @@
             if (session.direction === 'incoming') {
               const callerNumber = session.remote_identity.uri.user;
               log(`📞 APPEL ENTRANT de ${callerNumber}`);
+              log(`   Affichage de l'UI d'appel entrant...`);
 
               statusDiv.textContent = `📞 Appel de ${callerNumber}`;
               statusDiv.style.backgroundColor = '#fff3cd';
               statusDiv.style.borderLeft = '4px solid #ffc107';
 
+              // AUTO-ANSWER DÉSACTIVÉ - Utilisez l'UI
+              // log(`🤖 AUTO-ANSWER activé pour test`);
+              // setTimeout(() => {
+              //   session.answer({
+              //     mediaConstraints: { audio: true, video: false }
+              //   });
+              //   log('✅ Appel répondu automatiquement');
+              // }, 1000);
+
               playRingtone();
               showIncomingCallUI(callerNumber);
+              log(`   ✅ UI d'appel entrant affichée`);
             }
 
             attachMediaHandlers(session);
@@ -439,40 +470,89 @@
 
       function makeCall() {
         const target = document.getElementById('callNumber').value;
+
+        log('═══════════════════════════════════════════');
+        log('🚀 DÉBUT makeCall()');
+        log('   Target brut: "' + target + '"');
+        log('   Target length: ' + target.length);
+        log('   UA existe: ' + !!ua);
+        log('   UA registered: ' + (ua ? ua.isRegistered() : 'N/A'));
+        log('   UA connected: ' + (ua ? ua.isConnected() : 'N/A'));
+
         if (!target || !ua) {
+          log('❌ VALIDATION ÉCHOUÉE');
+          log('   Target vide: ' + !target);
+          log('   UA manquant: ' + !ua);
           showError('Entrez un numéro');
           return;
         }
 
         if (currentSession) {
+          log('❌ Session déjà en cours');
           showError('Appel déjà en cours');
           return;
         }
 
-        log('📞 Appel sortant vers: ' + target);
+        // Construction de l'URI SIP
+        const sipUri = `sip:${target}@${ua.configuration.uri.host}`;
+        log('📞 URI SIP construit: ' + sipUri);
+        log('   Host depuis config: ' + ua.configuration.uri.host);
+        log('   User local: ' + ua.configuration.uri.user);
 
         const eventHandlers = {
-          progress: function () {
-            log('📞 Sonnerie...');
+          progress: function (e) {
+            log('📞 EVENT: progress');
+            log('   Cause: ' + (e ? e.cause : 'N/A'));
             playRingbackTone();
             statusDiv.textContent = `📞 Appel de ${target}...`;
           },
           failed: function (e) {
-            log('❌ Échec: ' + e.cause);
+            log('❌ EVENT: failed');
+            log('   ===== DÉTAILS ÉCHEC =====');
+            log('   Cause: ' + e.cause);
+            log('   Originator: ' + e.originator);
+            if (e.message) {
+              log('   Message status: ' + e.message.status_code);
+              log('   Message reason: ' + e.message.reason_phrase);
+              log('   Message complet: ' + JSON.stringify(e.message, null, 2));
+            }
+            log('   =========================');
             showError('Échec: ' + e.cause);
             stopRingtone();
             currentSession = null;
             updateUI();
           },
-          ended: function () {
-            log('📞 Terminé');
+          ended: function (e) {
+            log('📞 EVENT: ended');
+            log('   Cause: ' + (e ? e.cause : 'N/A'));
+            log('   Originator: ' + (e ? e.originator : 'N/A'));
             stopRingtone();
             currentSession = null;
             updateUI();
           },
           confirmed: function () {
-            log('✅ Connecté');
+            log('✅ EVENT: confirmed - Appel établi');
             stopRingtone();
+          },
+          accepted: function () {
+            log('✅ EVENT: accepted - Appel accepté');
+            stopRingtone();
+          },
+          peerconnection: function (e) {
+            log('🔵 EVENT: peerconnection');
+            log('   PeerConnection state: ' + e.peerconnection.connectionState);
+          },
+          sending: function (e) {
+            log('📤 EVENT: sending');
+            log('   Request: ' + e.request.method);
+          },
+          icecandidate: function (e) {
+            log('🧊 EVENT: icecandidate');
+            if (e.candidate) {
+              log('   Candidate: ' + e.candidate.candidate);
+            } else {
+              log('   Fin des candidats ICE');
+            }
           },
         };
 
@@ -481,22 +561,33 @@
           mediaConstraints: { audio: true, video: false },
         };
 
+        log('📞 Options d\'appel préparées');
+        log('   Media constraints: audio=true, video=false');
+
         try {
-          const session = ua.call(
-            `sip:${target}@${ua.configuration.uri.host}`,
-            options
-          );
+          log('🔄 Appel de ua.call()...');
+          const session = ua.call(sipUri, options);
 
           if (session) {
-            log('📞 Session créée');
+            log('✅ Session créée avec succès');
+            log('   Session ID: ' + session.id);
+            log('   Session direction: ' + session.direction);
+            log('   Session status: ' + session.status);
             currentSession = session;
             attachMediaHandlers(session);
             updateUI();
+          } else {
+            log('❌ ua.call() a retourné null/undefined');
           }
         } catch (err) {
-          log('❌ Erreur: ' + err.message);
+          log('❌ EXCEPTION dans makeCall()');
+          log('   Message: ' + err.message);
+          log('   Stack: ' + err.stack);
           showError('Erreur: ' + err.message);
         }
+
+        log('🏁 FIN makeCall()');
+        log('═══════════════════════════════════════════');
       }
 
       function hangUp() {
@@ -589,51 +680,58 @@
           incomingDiv = document.createElement('div');
           incomingDiv.id = 'incomingCallDiv';
           incomingDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            z-index: 1000;
-            text-align: center;
-            min-width: 300px;
-          `;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 1000;
+      text-align: center;
+      min-width: 300px;
+    `;
           document.body.appendChild(incomingDiv);
         }
 
         incomingDiv.innerHTML = `
-          <h2 style="margin-top: 0; color: #007bff;">📞 Appel entrant</h2>
-          <p style="font-size: 24px; font-weight: bold; margin: 20px 0;">${callerNumber}</p>
-          <button onclick="answerCall()" style="
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            margin: 10px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            font-weight: bold;
-          ">✅ Répondre</button>
-          <button onclick="rejectCall()" style="
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            margin: 10px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            font-weight: bold;
-          ">❌ Rejeter</button>
-        `;
+    <h2 style="margin-top: 0; color: #007bff;">📞 Appel entrant</h2>
+    <p style="font-size: 24px; font-weight: bold; margin: 20px 0;">${callerNumber}</p>
+    <button id="answerBtn" style="
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      margin: 10px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+    ">✅ Répondre</button>
+    <button id="rejectBtn" style="
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      margin: 10px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: bold;
+    ">❌ Rejeter</button>
+  `;
+
+        // Ajouter les event listeners APRÈS avoir créé les boutons
+        document
+          .getElementById('answerBtn')
+          .addEventListener('click', answerCall);
+        document
+          .getElementById('rejectBtn')
+          .addEventListener('click', rejectCall);
 
         incomingDiv.style.display = 'block';
       }
-
       function hideIncomingCallUI() {
         const incomingDiv = document.getElementById('incomingCallDiv');
         if (incomingDiv) {
