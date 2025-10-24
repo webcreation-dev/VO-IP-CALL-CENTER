@@ -104,6 +104,8 @@ class EndpointService {
       dtls_private_key = null,
       dtls_setup = null,
       ice_support = null,
+      from_domain = null,
+      from_user = null,
     } = data;
 
     // Validation
@@ -130,12 +132,12 @@ class EndpointService {
       // 1. Créer ps_endpoints
       const endpointQuery = `
         INSERT INTO ps_endpoints (
-          id, tenant_id, transport, aors, auth, context, 
-          disallow, allow, direct_media, rtp_symmetric, 
+          id, tenant_id, transport, aors, auth, context,
+          disallow, allow, direct_media, rtp_symmetric,
           force_rport, rewrite_contact, webrtc, use_avpf,
           media_encryption, dtls_verify, dtls_cert_file,
-          dtls_private_key, dtls_setup, ice_support
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+          dtls_private_key, dtls_setup, ice_support, from_domain, from_user
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
         RETURNING *
       `;
 
@@ -144,7 +146,7 @@ class EndpointService {
         disallow, allow, direct_media, rtp_symmetric,
         force_rport, rewrite_contact, webrtc, use_avpf,
         media_encryption, dtls_verify, dtls_cert_file,
-        dtls_private_key, dtls_setup, ice_support
+        dtls_private_key, dtls_setup, ice_support, from_domain, from_user
       ];
 
       await client.query(endpointQuery, endpointValues);
@@ -195,8 +197,9 @@ class EndpointService {
       await client.query('BEGIN');
 
       // Mise à jour ps_endpoints
-      if (data.transport || data.context || data.allow || data.disallow || 
-          data.direct_media || data.webrtc || data.use_avpf || data.media_encryption) {
+      if (data.transport || data.context || data.allow || data.disallow ||
+          data.direct_media || data.webrtc || data.use_avpf || data.media_encryption ||
+          data.from_domain !== undefined || data.from_user !== undefined) {
         const fields = [];
         const values = [];
         let paramIndex = 1;
@@ -232,6 +235,14 @@ class EndpointService {
         if (data.media_encryption) {
           fields.push(`media_encryption = $${paramIndex++}`);
           values.push(data.media_encryption);
+        }
+        if (data.from_domain !== undefined) {
+          fields.push(`from_domain = $${paramIndex++}`);
+          values.push(data.from_domain);
+        }
+        if (data.from_user !== undefined) {
+          fields.push(`from_user = $${paramIndex++}`);
+          values.push(data.from_user);
         }
 
         if (fields.length > 0) {
