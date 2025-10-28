@@ -944,8 +944,15 @@ const QueuesManager = () => {
                     <div className="flex items-center gap-4">
                       <div
                         className={`w-4 h-4 rounded-full shadow-lg ${
-                          member.paused ? 'bg-red-500' : 'bg-green-500'
+                          member.paused
+                            ? 'bg-yellow-500'
+                            : (member.available ? 'bg-green-500' : 'bg-red-500')
                         } animate-pulse`}
+                        title={
+                          member.paused
+                            ? 'En pause'
+                            : (member.available ? 'Disponible' : 'Déconnecté')
+                        }
                       ></div>
                       <div>
                         <div className="font-bold text-gray-900">
@@ -953,6 +960,7 @@ const QueuesManager = () => {
                         </div>
                         <div className="text-sm text-gray-600">
                           {member.interface} • Priorité: {member.penalty}
+                          {member.in_call > 0 && ' • 📞 En appel'}
                         </div>
                       </div>
                     </div>

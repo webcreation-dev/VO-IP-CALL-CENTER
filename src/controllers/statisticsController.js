@@ -27,7 +27,7 @@ class StatisticsController {
 
   /**
    * GET /api/statistics/calls
-   * Statistiques des appels
+   * Statistiques des appels enrichies avec données temps réel AMI
    */
   async getCallStatistics(req, res, next) {
     try {
@@ -37,8 +37,27 @@ class StatisticsController {
         end_date: req.query.end_date
       };
 
+      // Stats historiques depuis DB
       const stats = await statisticsService.getCallStatistics(filters);
-      return success(res, stats, 'Statistiques des appels');
+
+      // Enrichir avec appels actifs temps réel
+      let activeCalls = 0;
+      let activeChannels = [];
+
+      try {
+        activeChannels = await statisticsService.getActiveChannels();
+        // Compter les canaux actifs (chaque appel = 2 canaux généralement)
+        activeCalls = activeChannels.length > 0 ? Math.ceil(activeChannels.length / 2) : 0;
+      } catch (amiErr) {
+        console.warn('⚠️ Impossible de récupérer les canaux actifs AMI:', amiErr.message);
+      }
+
+      return success(res, {
+        ...stats,
+        active_calls_now: activeCalls,  // ✅ TEMPS RÉEL
+        active_channels: activeChannels.length,  // ✅ TEMPS RÉEL
+        data_source: activeCalls > 0 ? 'hybrid' : 'database'
+      }, 'Statistiques des appels');
     } catch (err) {
       console.error('❌ Erreur getCallStatistics:', err);
       next(err);
@@ -186,7 +205,7 @@ class StatisticsController {
 
   /**
    * GET /api/statistics/summary
-   * Résumé rapide (version light du dashboard)
+   * Résumé rapide (version light du dashboard) enrichi avec données temps réel AMI
    */
   async getSummary(req, res, next) {
     try {
@@ -196,23 +215,39 @@ class StatisticsController {
         end_date: req.query.end_date || new Date().toISOString().split('T')[0]
       };
 
-      // Statistiques essentielles uniquement
+      // Statistiques essentielles (historique DB)
       const callStats = await statisticsService.getCallStatistics(filters);
       const queueStats = await statisticsService.getQueueStatistics(filters);
       const endpointStats = await statisticsService.getEndpointStatistics({ tenant_id: filters.tenant_id });
+
+      // Données temps réel AMI
+      let activeChannels = [];
+      let activeCalls = 0;
+
+      try {
+        activeChannels = await statisticsService.getActiveChannels();
+        // Compter les canaux actifs (chaque appel = 2 canaux généralement)
+        activeCalls = activeChannels.length > 0 ? Math.ceil(activeChannels.length / 2) : 0;
+      } catch (amiErr) {
+        console.warn('⚠️ Impossible de récupérer les canaux actifs AMI:', amiErr.message);
+      }
 
       return success(res, {
         calls: {
           total: callStats.total_calls,
           answered: callStats.answered_calls,
-          answer_rate: callStats.answer_rate_percent
+          answer_rate: callStats.answer_rate_percent,
+          active_now: activeCalls,  // ✅ TEMPS RÉEL
+          data_source: 'hybrid'
         },
         queues: queueStats.length,
         endpoints: endpointStats.total_endpoints,
+        endpoints_registered: endpointStats.registered_endpoints || endpointStats.registered_endpoints_ami || 0,  // ✅ TEMPS RÉEL
         period: {
           start: filters.start_date,
           end: filters.end_date
-        }
+        },
+        data_source: endpointStats.data_source || 'database'
       }, 'Résumé des statistiques');
     } catch (err) {
       console.error('❌ Erreur getSummary:', err);
