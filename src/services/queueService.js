@@ -12,7 +12,7 @@ class QueueService {
     return new Promise((resolve, reject) => {
       const ami = amiConfig.ami;
       const queues = {};
-      const actionId = `QueueStatus_all_${Date.now()}`;
+      const actionId = `${Date.now()}`; // ActionID simplifié - AMI tronque les ActionID complexes
 
       // Écouter les événements avant d'envoyer l'action
       const eventHandler = (event) => {
@@ -173,7 +173,7 @@ class QueueService {
       const ami = amiConfig.ami;
       let queueData = null;
       const members = [];
-      const actionId = `QueueStatus_${queueName}_${Date.now()}`;
+      const actionId = `${Date.now()}`; // ActionID simplifié - AMI tronque les ActionID complexes
 
       // Debug: Logger TOUS les événements
       const debugHandler = (event) => {
