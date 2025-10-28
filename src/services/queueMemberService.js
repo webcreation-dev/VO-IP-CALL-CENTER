@@ -29,57 +29,79 @@ class QueueMemberService {
     const { rows } = await db.query(query, [queueName]);
 
     // Enrichir avec le statut temps réel depuis AMI
-    if (amiConfig.isConnected()) {
-      try {
-        const queueStatus = await new Promise((resolve, reject) => {
-          amiConfig.executeAction(
-            { Action: 'QueueStatus', Queue: queueName },
-            (err, response) => {
-              if (err) return reject(err);
-              resolve(response);
-              resolve(response);
-              console.log(
-                '🔍 DEBUG AMI QueueStatus:',
-                JSON.stringify(queueStatus, null, 2)
-              );
-            }
-          );
-        });
-
-        // Parser les événements AMI pour extraire le statut de chaque membre
-        const memberStatuses = {};
-        if (queueStatus && queueStatus.events) {
-          queueStatus.events.forEach(event => {
-            if (event.event === 'QueueMember') {
-              const memberInterface = event.location || event.interface;
-              memberStatuses[memberInterface] = {
-                status: event.status, // 1=Available, 2=In Use, 5=Unavailable
-                paused: parseInt(event.paused) === 1,
-                callstaken: event.callstaken,
-                lastcall: event.lastcall,
-              };
-            }
-          });
-        }
-
-        // Merge le statut AMI avec les données DB
-        rows.forEach(member => {
-          const amiStatus = memberStatuses[member.interface];
-          if (amiStatus) {
-            member.status = amiStatus.status;
-            member.available = amiStatus.status === '1'; // 1 = Available
-            member.paused = amiStatus.paused;
-          } else {
-            member.status = '5'; // Unavailable par défaut
-            member.available = false;
-          }
-        });
-      } catch (err) {
-        console.warn('⚠️ Impossible de récupérer le statut AMI:', err.message);
-      }
+    if (!amiConfig.isConnected()) {
+      console.warn('⚠️ AMI non connecté - retour des données DB uniquement');
+      return rows.map(row => ({
+        ...row,
+        status: '5', // Unavailable par défaut
+        available: false,
+        data_source: 'database',
+        warning: 'AMI non disponible - statuts non mis à jour',
+      }));
     }
 
-    return rows;
+    try {
+      const queueStatus = await new Promise((resolve, reject) => {
+        amiConfig.executeAction(
+          { Action: 'QueueStatus', Queue: queueName },
+          (err, response) => {
+            if (err) return reject(err);
+            resolve(response);
+          }
+        );
+      });
+
+      // Parser les événements AMI pour extraire le statut de chaque membre
+      const memberStatuses = {};
+      if (queueStatus && queueStatus.events) {
+        queueStatus.events.forEach(event => {
+          if (event.event === 'QueueMember') {
+            const memberInterface = event.location || event.interface;
+            memberStatuses[memberInterface] = {
+              status: event.status, // 1=Available, 2=In Use, 5=Unavailable
+              paused: parseInt(event.paused) === 1,
+              callstaken: event.callstaken,
+              lastcall: event.lastcall,
+              in_call: parseInt(event.incall || '0'),
+            };
+          }
+        });
+      }
+
+      // Merge le statut AMI avec les données DB
+      return rows.map(member => {
+        const amiStatus = memberStatuses[member.interface];
+        if (amiStatus) {
+          return {
+            ...member,
+            status: amiStatus.status,
+            available: amiStatus.status === '1', // 1 = Available
+            paused: amiStatus.paused,
+            calls_taken: amiStatus.callstaken,
+            last_call: amiStatus.lastcall,
+            in_call: amiStatus.in_call,
+            data_source: 'hybrid',
+          };
+        }
+        return {
+          ...member,
+          status: '5', // Unavailable par défaut
+          available: false,
+          data_source: 'database',
+          warning: 'Membre non trouvé dans Asterisk',
+        };
+      });
+
+    } catch (err) {
+      console.warn('⚠️ Erreur lors de la récupération du statut AMI:', err.message);
+      return rows.map(row => ({
+        ...row,
+        status: '5',
+        available: false,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${err.message}`,
+      }));
+    }
   }
 
   /**
@@ -187,19 +209,33 @@ class QueueMemberService {
       );
     }
 
+    // Vérifier la connexion AMI AVANT de modifier la DB
+    if (!amiConfig.isConnected()) {
+      throw new Error('AMI non connecté - impossible de mettre en pause le membre dans Asterisk');
+    }
+
+    // Mettre en pause via AMI en premier
+    try {
+      await this.pauseMemberViaAMI(queueName, memberInterface, true, reason);
+    } catch (amiErr) {
+      throw new Error(`Erreur AMI lors de la mise en pause: ${amiErr.message}`);
+    }
+
+    // Si AMI réussit, mettre à jour la DB
     const query = `
-      UPDATE queue_members 
-      SET paused = 1 
+      UPDATE queue_members
+      SET paused = 1
       WHERE queue_name = $1 AND interface = $2
       RETURNING *
     `;
 
     const { rows } = await db.query(query, [queueName, memberInterface]);
 
-    // Mettre en pause via AMI
-    this.pauseMemberViaAMI(queueName, memberInterface, true, reason);
-
-    return rows[0];
+    return {
+      ...rows[0],
+      data_source: 'hybrid',
+      ami_updated: true,
+    };
   }
 
   /**
@@ -212,19 +248,33 @@ class QueueMemberService {
       );
     }
 
+    // Vérifier la connexion AMI AVANT de modifier la DB
+    if (!amiConfig.isConnected()) {
+      throw new Error('AMI non connecté - impossible de reprendre le membre dans Asterisk');
+    }
+
+    // Reprendre via AMI en premier
+    try {
+      await this.pauseMemberViaAMI(queueName, memberInterface, false);
+    } catch (amiErr) {
+      throw new Error(`Erreur AMI lors de la reprise: ${amiErr.message}`);
+    }
+
+    // Si AMI réussit, mettre à jour la DB
     const query = `
-      UPDATE queue_members 
-      SET paused = 0 
+      UPDATE queue_members
+      SET paused = 0
       WHERE queue_name = $1 AND interface = $2
       RETURNING *
     `;
 
     const { rows } = await db.query(query, [queueName, memberInterface]);
 
-    // Reprendre via AMI
-    this.pauseMemberViaAMI(queueName, memberInterface, false);
-
-    return rows[0];
+    return {
+      ...rows[0],
+      data_source: 'hybrid',
+      ami_updated: true,
+    };
   }
 
   /**
@@ -237,9 +287,22 @@ class QueueMemberService {
       );
     }
 
+    // Vérifier la connexion AMI AVANT de modifier la DB
+    if (!amiConfig.isConnected()) {
+      throw new Error('AMI non connecté - impossible de modifier la priorité du membre dans Asterisk');
+    }
+
+    // Mettre à jour via AMI en premier
+    try {
+      await this.updateMemberPenaltyViaAMI(queueName, memberInterface, penalty);
+    } catch (amiErr) {
+      throw new Error(`Erreur AMI lors de la modification de la priorité: ${amiErr.message}`);
+    }
+
+    // Si AMI réussit, mettre à jour la DB
     const query = `
-      UPDATE queue_members 
-      SET penalty = $1 
+      UPDATE queue_members
+      SET penalty = $1
       WHERE queue_name = $2 AND interface = $3
       RETURNING *
     `;
@@ -250,10 +313,11 @@ class QueueMemberService {
       memberInterface,
     ]);
 
-    // Mettre à jour via AMI
-    this.updateMemberPenaltyViaAMI(queueName, memberInterface, penalty);
-
-    return rows[0];
+    return {
+      ...rows[0],
+      data_source: 'hybrid',
+      ami_updated: true,
+    };
   }
 
   // ==========================================
@@ -312,56 +376,60 @@ class QueueMemberService {
   }
 
   pauseMemberViaAMI(queueName, memberInterface, paused, reason = '') {
-    if (!amiConfig.isConnected()) {
-      console.warn('⚠️  AMI non connecté');
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
 
-    amiConfig.executeAction(
-      {
-        Action: 'QueuePause',
-        Queue: queueName,
-        Interface: memberInterface,
-        Paused: paused ? 'true' : 'false',
-        Reason: reason,
-      },
-      (err, res) => {
-        if (err) {
-          console.error('❌ Erreur AMI QueuePause:', err);
-        } else {
+      amiConfig.executeAction(
+        {
+          Action: 'QueuePause',
+          Queue: queueName,
+          Interface: memberInterface,
+          Paused: paused ? 'true' : 'false',
+          Reason: reason,
+        },
+        (err, res) => {
+          if (err) {
+            console.error('❌ Erreur AMI QueuePause:', err);
+            return reject(err);
+          }
           console.log(
             `✅ Membre ${memberInterface} ${
               paused ? 'mis en pause' : 'repris'
             } dans ${queueName} via AMI`
           );
+          resolve(res);
         }
-      }
-    );
+      );
+    });
   }
 
   updateMemberPenaltyViaAMI(queueName, memberInterface, penalty) {
-    if (!amiConfig.isConnected()) {
-      console.warn('⚠️  AMI non connecté');
-      return;
-    }
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
 
-    amiConfig.executeAction(
-      {
-        Action: 'QueuePenalty',
-        Queue: queueName,
-        Interface: memberInterface,
-        Penalty: penalty,
-      },
-      (err, res) => {
-        if (err) {
-          console.error('❌ Erreur AMI QueuePenalty:', err);
-        } else {
+      amiConfig.executeAction(
+        {
+          Action: 'QueuePenalty',
+          Queue: queueName,
+          Interface: memberInterface,
+          Penalty: penalty,
+        },
+        (err, res) => {
+          if (err) {
+            console.error('❌ Erreur AMI QueuePenalty:', err);
+            return reject(err);
+          }
           console.log(
             `✅ Priorité de ${memberInterface} modifiée à ${penalty} dans ${queueName} via AMI`
           );
+          resolve(res);
         }
-      }
-    );
+      );
+    });
   }
 }
 

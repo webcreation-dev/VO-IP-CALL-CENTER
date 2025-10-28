@@ -1,4 +1,5 @@
 const db = require('../../db');
+const amiConfig = require('../config/ami');
 
 /**
  * Service pour la gestion des endpoints PJSIP
@@ -6,11 +7,11 @@ const db = require('../../db');
  */
 class EndpointService {
   /**
-   * Récupérer tous les endpoints avec leurs informations complètes
+   * Récupérer tous les endpoints avec leurs informations complètes (enrichi avec AMI)
    */
   async getAllEndpoints(tenantId = null) {
     let query = `
-      SELECT 
+      SELECT
         e.id,
         e.tenant_id,
         t.name as tenant_name,
@@ -42,15 +43,57 @@ class EndpointService {
     query += ' ORDER BY e.id';
 
     const { rows } = await db.query(query, params);
-    return rows;
+
+    // Enrichir avec les données AMI si disponible
+    if (!amiConfig.isConnected()) {
+      console.warn('⚠️ AMI non connecté - retour des données DB uniquement');
+      return rows.map(row => ({
+        ...row,
+        data_source: 'database',
+        warning: 'AMI non disponible',
+      }));
+    }
+
+    try {
+      const amiEndpoints = await this.getAllEndpointsFromAMI();
+
+      // Fusionner les données DB avec AMI
+      return rows.map(row => {
+        const amiData = amiEndpoints[row.id];
+        if (amiData) {
+          return {
+            ...row,
+            device_state: amiData.device_state,
+            active_channels_ami: amiData.active_channels,
+            registered: amiData.device_state !== 'Unavailable' && amiData.device_state !== 'Unknown',
+            data_source: 'hybrid',
+          };
+        }
+        return {
+          ...row,
+          device_state: 'Unknown',
+          active_channels_ami: 0,
+          registered: false,
+          data_source: 'database',
+        };
+      });
+
+    } catch (amiErr) {
+      console.warn('⚠️ Erreur lors de la récupération AMI:', amiErr.message);
+      return rows.map(row => ({
+        ...row,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      }));
+    }
   }
 
   /**
-   * Récupérer un endpoint par ID
+   * Récupérer un endpoint par ID (enrichi avec AMI)
    */
   async getEndpointById(id) {
     const query = `
-      SELECT 
+      SELECT
         e.*,
         t.name as tenant_name,
         a.username,
@@ -67,7 +110,61 @@ class EndpointService {
     `;
 
     const { rows } = await db.query(query, [id]);
-    return rows[0] || null;
+    const endpoint = rows[0] || null;
+
+    if (!endpoint) {
+      return null;
+    }
+
+    // Enrichir avec AMI si disponible
+    if (!amiConfig.isConnected()) {
+      return {
+        ...endpoint,
+        data_source: 'database',
+        warning: 'AMI non disponible',
+      };
+    }
+
+    try {
+      const amiStatus = await this.getEndpointStatusFromAMI(id);
+
+      let deviceState = 'Unknown';
+      let activeChannels = 0;
+      let contacts = [];
+
+      if (amiStatus && amiStatus.events) {
+        amiStatus.events.forEach(event => {
+          if (event.event === 'EndpointDetail' || event.objecttype === 'endpoint') {
+            deviceState = event.devicestate || event.DeviceState || 'Unknown';
+            activeChannels = parseInt(event.activechannels || event.ActiveChannels || '0');
+          }
+          if (event.event === 'ContactStatusDetail' || event.objecttype === 'contact') {
+            contacts.push({
+              uri: event.uri || event.Uri,
+              status: event.status || event.Status,
+              roundtrip_usec: event.roundtripusec || event.RoundtripUsec || 'N/A',
+            });
+          }
+        });
+      }
+
+      return {
+        ...endpoint,
+        device_state: deviceState,
+        active_channels: activeChannels,
+        registered: contacts.length > 0,
+        contacts_ami: contacts,
+        data_source: 'hybrid',
+      };
+
+    } catch (amiErr) {
+      console.warn(`⚠️ Erreur AMI pour endpoint ${id}:`, amiErr.message);
+      return {
+        ...endpoint,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      };
+    }
   }
 
   /**
@@ -314,7 +411,64 @@ class EndpointService {
   }
 
   /**
-   * Obtenir le statut d'enregistrement d'un endpoint
+   * Récupérer le statut d'un endpoint depuis Asterisk via AMI
+   */
+  async getEndpointStatusFromAMI(endpointId) {
+    return new Promise((resolve, reject) => {
+      amiConfig.executeAction(
+        {
+          Action: 'PJSIPShowEndpoint',
+          Endpoint: endpointId,
+        },
+        (err, response) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(response);
+        }
+      );
+    });
+  }
+
+  /**
+   * Récupérer tous les endpoints depuis Asterisk via AMI
+   */
+  async getAllEndpointsFromAMI() {
+    return new Promise((resolve, reject) => {
+      amiConfig.executeAction(
+        {
+          Action: 'PJSIPShowEndpoints',
+        },
+        (err, response) => {
+          if (err) {
+            return reject(err);
+          }
+
+          // Parser les événements PJSIPShowEndpoint
+          const endpoints = {};
+          if (response && response.events) {
+            response.events.forEach(event => {
+              if (event.event === 'EndpointList' || event.objecttype === 'endpoint') {
+                const endpointId = event.objectname || event.endpoint;
+                if (endpointId) {
+                  endpoints[endpointId] = {
+                    id: endpointId,
+                    device_state: event.devicestate || event.DeviceState || 'Unknown',
+                    active_channels: parseInt(event.activechannels || event.ActiveChannels || '0'),
+                  };
+                }
+              }
+            });
+          }
+
+          resolve(endpoints);
+        }
+      );
+    });
+  }
+
+  /**
+   * Obtenir le statut d'enregistrement d'un endpoint (avec AMI)
    */
   async getEndpointStatus(id) {
     const endpoint = await this.getEndpointById(id);
@@ -322,21 +476,75 @@ class EndpointService {
       throw new Error(`Endpoint avec l'ID "${id}" introuvable`);
     }
 
-    // Récupérer les contacts actifs
+    // Récupérer les contacts depuis la DB (historique)
     const contactQuery = `
       SELECT id, uri, expiration_time, qualify_frequency
       FROM ps_contacts
       WHERE id = $1
     `;
 
-    const { rows } = await db.query(contactQuery, [id]);
+    const { rows: dbContacts } = await db.query(contactQuery, [id]);
 
-    return {
-      endpoint_id: id,
-      registered: rows.length > 0,
-      contacts: rows,
-      contact_count: rows.length,
-    };
+    // Vérifier si AMI est connecté
+    if (!amiConfig.isConnected()) {
+      return {
+        endpoint_id: id,
+        registered: dbContacts.length > 0,
+        contacts: dbContacts,
+        contact_count: dbContacts.length,
+        data_source: 'database',
+        warning: 'AMI non disponible - données potentiellement obsolètes',
+      };
+    }
+
+    // Récupérer le statut réel depuis Asterisk via AMI
+    try {
+      const amiStatus = await this.getEndpointStatusFromAMI(id);
+
+      // Parser la réponse AMI
+      let deviceState = 'Unknown';
+      let activeChannels = 0;
+      let contacts = [];
+
+      if (amiStatus && amiStatus.events) {
+        amiStatus.events.forEach(event => {
+          if (event.event === 'EndpointDetail' || event.objecttype === 'endpoint') {
+            deviceState = event.devicestate || event.DeviceState || 'Unknown';
+            activeChannels = parseInt(event.activechannels || event.ActiveChannels || '0');
+          }
+          if (event.event === 'ContactStatusDetail' || event.objecttype === 'contact') {
+            contacts.push({
+              uri: event.uri || event.Uri,
+              status: event.status || event.Status,
+              roundtrip_usec: event.roundtripusec || event.RoundtripUsec || 'N/A',
+            });
+          }
+        });
+      }
+
+      return {
+        endpoint_id: id,
+        registered: contacts.length > 0,
+        device_state: deviceState,
+        active_channels: activeChannels,
+        contacts: contacts.length > 0 ? contacts : dbContacts,
+        contact_count: contacts.length,
+        data_source: 'asterisk',
+        db_contacts: dbContacts,
+      };
+
+    } catch (amiErr) {
+      console.warn(`⚠️ Erreur AMI pour endpoint ${id}:`, amiErr.message);
+
+      return {
+        endpoint_id: id,
+        registered: dbContacts.length > 0,
+        contacts: dbContacts,
+        contact_count: dbContacts.length,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      };
+    }
   }
 }
 

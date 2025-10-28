@@ -156,11 +156,44 @@ class StatisticsService {
   }
 
   /**
-   * Statistiques des endpoints
+   * Compter les endpoints enregistrés depuis Asterisk via AMI
+   */
+  async getRegisteredEndpointsFromAMI() {
+    return new Promise((resolve, reject) => {
+      amiConfig.executeAction(
+        {
+          Action: 'PJSIPShowEndpoints',
+        },
+        (err, response) => {
+          if (err) {
+            return reject(err);
+          }
+
+          let registeredCount = 0;
+          if (response && response.events) {
+            response.events.forEach(event => {
+              if (event.event === 'EndpointList' || event.objecttype === 'endpoint') {
+                const deviceState = event.devicestate || event.DeviceState;
+                // Compter comme enregistré si le device state n'est pas Unavailable ou Unknown
+                if (deviceState && deviceState !== 'Unavailable' && deviceState !== 'Unknown') {
+                  registeredCount++;
+                }
+              }
+            });
+          }
+
+          resolve(registeredCount);
+        }
+      );
+    });
+  }
+
+  /**
+   * Statistiques des endpoints (enrichi avec AMI)
    */
   async getEndpointStatistics(filters = {}) {
     const { tenant_id } = filters;
-    
+
     const conditions = [];
     const params = [];
     let paramIndex = 1;
@@ -173,18 +206,48 @@ class StatisticsService {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const query = `
-      SELECT 
+      SELECT
         COUNT(*) as total_endpoints,
         COUNT(CASE WHEN webrtc = 'yes' THEN 1 END) as webrtc_endpoints,
         COUNT(CASE WHEN webrtc = 'no' THEN 1 END) as sip_endpoints,
-        (SELECT COUNT(*) FROM ps_contacts) as registered_endpoints,
+        (SELECT COUNT(*) FROM ps_contacts) as registered_endpoints_db,
         COUNT(DISTINCT context) as unique_contexts
       FROM ps_endpoints
       ${whereClause}
     `;
 
     const { rows } = await db.query(query, params);
-    return rows[0];
+    const dbStats = rows[0];
+
+    // Enrichir avec AMI si disponible
+    if (!amiConfig.isConnected()) {
+      return {
+        ...dbStats,
+        registered_endpoints: dbStats.registered_endpoints_db,
+        data_source: 'database',
+        warning: 'AMI non disponible - compteur d\'enregistrements potentiellement obsolète',
+      };
+    }
+
+    try {
+      const registeredCount = await this.getRegisteredEndpointsFromAMI();
+
+      return {
+        ...dbStats,
+        registered_endpoints: registeredCount,
+        registered_endpoints_ami: registeredCount,
+        data_source: 'hybrid',
+      };
+
+    } catch (amiErr) {
+      console.warn('⚠️ Erreur AMI pour les statistiques endpoints:', amiErr.message);
+      return {
+        ...dbStats,
+        registered_endpoints: dbStats.registered_endpoints_db,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      };
+    }
   }
 
   /**

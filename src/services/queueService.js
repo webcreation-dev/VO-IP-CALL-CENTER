@@ -6,11 +6,70 @@ const amiConfig = require('../config/ami');
  */
 class QueueService {
   /**
-   * Récupérer toutes les queues avec leurs membres
+   * Récupérer toutes les queues depuis Asterisk via AMI
+   */
+  async getAllQueuesFromAMI() {
+    return new Promise((resolve, reject) => {
+      amiConfig.executeAction(
+        {
+          Action: 'QueueStatus',
+        },
+        (err, response) => {
+          if (err) {
+            return reject(err);
+          }
+
+          const queues = {};
+          if (response && response.events) {
+            response.events.forEach(event => {
+              if (event.event === 'QueueParams') {
+                const queueName = event.queue;
+                if (queueName) {
+                  queues[queueName] = {
+                    name: queueName,
+                    max: event.max || 0,
+                    strategy: event.strategy || 'unknown',
+                    calls: parseInt(event.calls || '0'),
+                    holdtime: parseInt(event.holdtime || '0'),
+                    talktime: parseInt(event.talktime || '0'),
+                    completed: parseInt(event.completed || '0'),
+                    abandoned: parseInt(event.abandoned || '0'),
+                    service_level: parseInt(event.servicelevel || '0'),
+                    service_level_perf: parseFloat(event.servicelevelperf || '0'),
+                    weight: parseInt(event.weight || '0'),
+                    members: [],
+                  };
+                }
+              } else if (event.event === 'QueueMember') {
+                const queueName = event.queue;
+                if (queueName && queues[queueName]) {
+                  queues[queueName].members.push({
+                    interface: event.location || event.interface,
+                    name: event.name || event.membername,
+                    status: event.status,
+                    paused: parseInt(event.paused) === 1,
+                    calls_taken: parseInt(event.callstaken || '0'),
+                    last_call: parseInt(event.lastcall || '0'),
+                    penalty: parseInt(event.penalty || '0'),
+                    in_call: parseInt(event.incall || '0'),
+                  });
+                }
+              }
+            });
+          }
+
+          resolve(queues);
+        }
+      );
+    });
+  }
+
+  /**
+   * Récupérer toutes les queues avec leurs membres (enrichi avec AMI)
    */
   async getAllQueues(tenantId = null) {
     let query = `
-      SELECT 
+      SELECT
         q.name,
         q.musiconhold,
         q.strategy,
@@ -38,15 +97,119 @@ class QueueService {
     query += ' ORDER BY q.name';
 
     const { rows } = await db.query(query, params);
-    return rows;
+
+    // Enrichir avec AMI si disponible
+    if (!amiConfig.isConnected()) {
+      console.warn('⚠️ AMI non connecté - retour des données DB uniquement');
+      return rows.map(row => ({
+        ...row,
+        data_source: 'database',
+        warning: 'AMI non disponible',
+      }));
+    }
+
+    try {
+      const amiQueues = await this.getAllQueuesFromAMI();
+
+      // Fusionner les données
+      return rows.map(row => {
+        const amiData = amiQueues[row.name];
+        if (amiData) {
+          return {
+            ...row,
+            member_count_ami: amiData.members.length,
+            calls: amiData.calls,
+            completed: amiData.completed,
+            abandoned: amiData.abandoned,
+            holdtime: amiData.holdtime,
+            talktime: amiData.talktime,
+            service_level_perf: amiData.service_level_perf,
+            data_source: 'hybrid',
+          };
+        }
+        return {
+          ...row,
+          data_source: 'database',
+          warning: 'Queue non trouvée dans Asterisk',
+        };
+      });
+
+    } catch (amiErr) {
+      console.warn('⚠️ Erreur lors de la récupération AMI des queues:', amiErr.message);
+      return rows.map(row => ({
+        ...row,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      }));
+    }
   }
 
   /**
-   * Récupérer une queue par nom
+   * Récupérer le statut d'une queue depuis Asterisk via AMI
+   */
+  async getQueueStatusFromAMI(queueName) {
+    return new Promise((resolve, reject) => {
+      amiConfig.executeAction(
+        {
+          Action: 'QueueStatus',
+          Queue: queueName,
+        },
+        (err, response) => {
+          if (err) {
+            return reject(err);
+          }
+
+          let queueData = null;
+          const members = [];
+
+          if (response && response.events) {
+            response.events.forEach(event => {
+              if (event.event === 'QueueParams') {
+                queueData = {
+                  name: event.queue,
+                  max: event.max || 0,
+                  strategy: event.strategy || 'unknown',
+                  calls: parseInt(event.calls || '0'),
+                  holdtime: parseInt(event.holdtime || '0'),
+                  talktime: parseInt(event.talktime || '0'),
+                  completed: parseInt(event.completed || '0'),
+                  abandoned: parseInt(event.abandoned || '0'),
+                  service_level: parseInt(event.servicelevel || '0'),
+                  service_level_perf: parseFloat(event.servicelevelperf || '0'),
+                  weight: parseInt(event.weight || '0'),
+                };
+              } else if (event.event === 'QueueMember') {
+                members.push({
+                  interface: event.location || event.interface,
+                  name: event.name || event.membername,
+                  status: event.status,
+                  paused: parseInt(event.paused) === 1,
+                  calls_taken: parseInt(event.callstaken || '0'),
+                  last_call: parseInt(event.lastcall || '0'),
+                  penalty: parseInt(event.penalty || '0'),
+                  in_call: parseInt(event.incall || '0'),
+                });
+              }
+            });
+          }
+
+          if (queueData) {
+            queueData.members = members;
+            resolve(queueData);
+          } else {
+            resolve(null);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Récupérer une queue par nom (enrichi avec AMI)
    */
   async getQueueByName(name) {
     const query = `
-      SELECT 
+      SELECT
         q.*,
         (
           SELECT json_agg(
@@ -67,7 +230,53 @@ class QueueService {
     `;
 
     const { rows } = await db.query(query, [name]);
-    return rows[0] || null;
+    const queue = rows[0] || null;
+
+    if (!queue) {
+      return null;
+    }
+
+    // Enrichir avec AMI si disponible
+    if (!amiConfig.isConnected()) {
+      return {
+        ...queue,
+        data_source: 'database',
+        warning: 'AMI non disponible',
+      };
+    }
+
+    try {
+      const amiData = await this.getQueueStatusFromAMI(name);
+
+      if (amiData) {
+        return {
+          ...queue,
+          members_ami: amiData.members,
+          member_count_ami: amiData.members.length,
+          calls: amiData.calls,
+          completed: amiData.completed,
+          abandoned: amiData.abandoned,
+          holdtime: amiData.holdtime,
+          talktime: amiData.talktime,
+          service_level_perf: amiData.service_level_perf,
+          data_source: 'hybrid',
+        };
+      }
+
+      return {
+        ...queue,
+        data_source: 'database',
+        warning: 'Queue non trouvée dans Asterisk',
+      };
+
+    } catch (amiErr) {
+      console.warn(`⚠️ Erreur AMI pour queue ${name}:`, amiErr.message);
+      return {
+        ...queue,
+        data_source: 'database_fallback',
+        warning: `Erreur AMI: ${amiErr.message}`,
+      };
+    }
   }
 
   /**
