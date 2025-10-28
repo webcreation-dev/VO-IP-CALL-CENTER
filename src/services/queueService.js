@@ -175,6 +175,12 @@ class QueueService {
       const members = [];
       const actionId = `QueueStatus_${queueName}_${Date.now()}`;
 
+      // Debug: Logger TOUS les événements
+      const debugHandler = (event) => {
+        console.log('🐛 DEBUG Event:', event.event, 'ActionID:', event.actionid, 'Expected:', actionId);
+      };
+      ami.on('managerevent', debugHandler);
+
       // Écouter les événements avant d'envoyer l'action
       const eventHandler = (event) => {
         if (event.actionid !== actionId) return;
@@ -209,6 +215,7 @@ class QueueService {
         } else if (event.event === 'QueueStatusComplete') {
           // Fin des événements
           ami.removeListener('managerevent', eventHandler);
+          ami.removeListener('managerevent', debugHandler);
 
           if (queueData) {
             queueData.members = members;
@@ -234,15 +241,18 @@ class QueueService {
         (err, response) => {
           if (err) {
             ami.removeListener('managerevent', eventHandler);
+            ami.removeListener('managerevent', debugHandler);
             console.log('❌ Erreur AMI QueueStatus pour', queueName, ':', err);
             return reject(err);
           }
+          console.log('📤 Action AMI envoyée pour', queueName, '- ActionID:', actionId);
         }
       );
 
       // Timeout de sécurité
       setTimeout(() => {
         ami.removeListener('managerevent', eventHandler);
+        ami.removeListener('managerevent', debugHandler);
         if (!queueData) {
           console.log('⏱️ Timeout AMI pour queue:', queueName);
           resolve(null);
