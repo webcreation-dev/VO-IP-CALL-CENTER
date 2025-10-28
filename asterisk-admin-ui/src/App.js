@@ -141,6 +141,66 @@ const Modal = ({ children, onClose, title }) => {
   );
 };
 
+// Login Component
+const LoginPage = ({ onLogin }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = e => {
+    e.preventDefault();
+    if (username === 'kamgoko' && password === 'password') {
+      localStorage.setItem('isAuthenticated', 'true');
+      onLogin();
+    } else {
+      setError('Identifiants incorrects');
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700">
+      <div className="bg-white p-8 rounded-3xl shadow-2xl w-96">
+        <h1 className="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          🎙️ Asterisk Admin
+        </h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Login
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Mot de passe
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500"
+              required
+            />
+          </div>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <button
+            type="submit"
+            className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold"
+          >
+            Se connecter
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // Dashboard Component
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -1780,6 +1840,9 @@ const AsteriskAdmin = () => {
 const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('isAuthenticated') === 'true';
+  });
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -1817,6 +1880,9 @@ const App = () => {
         return <Dashboard />;
     }
   };
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -1866,6 +1932,16 @@ const App = () => {
               )}
             </button>
           ))}
+          <button
+            onClick={() => {
+              localStorage.removeItem('isAuthenticated');
+              setIsAuthenticated(false);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
+          >
+            <Power className="w-5 h-5 flex-shrink-0" />
+            {sidebarOpen && <span className="font-semibold">Déconnexion</span>}
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-700">
