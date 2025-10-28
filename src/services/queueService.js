@@ -16,8 +16,11 @@ class QueueService {
         },
         (err, response) => {
           if (err) {
+            console.log('❌ Erreur AMI QueueStatus (all queues):', err);
             return reject(err);
           }
+
+          console.log('🔍 Réponse AMI QueueStatus (all queues):', JSON.stringify(response, null, 2));
 
           const queues = {};
           if (response && response.events) {
@@ -58,6 +61,7 @@ class QueueService {
             });
           }
 
+          console.log('✅ Queues trouvées dans AMI:', Object.keys(queues).length, Object.keys(queues));
           resolve(queues);
         }
       );
@@ -156,8 +160,11 @@ class QueueService {
         },
         (err, response) => {
           if (err) {
+            console.log('❌ Erreur AMI QueueStatus pour', queueName, ':', err);
             return reject(err);
           }
+
+          console.log('🔍 Réponse AMI QueueStatus pour', queueName, ':', JSON.stringify(response, null, 2));
 
           let queueData = null;
           const members = [];
@@ -195,8 +202,10 @@ class QueueService {
 
           if (queueData) {
             queueData.members = members;
+            console.log('✅ Queue trouvée dans AMI:', queueName, '- Membres:', members.length);
             resolve(queueData);
           } else {
+            console.log('⚠️ Queue NON trouvée dans AMI:', queueName);
             resolve(null);
           }
         }
