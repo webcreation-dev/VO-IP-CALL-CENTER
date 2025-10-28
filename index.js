@@ -3,7 +3,7 @@ const db = require('./db'); // Garde l'ancien pour compatibilité
 const corsMiddleware = require('./src/middlewares/cors');
 const { errorHandler, notFound } = require('./src/middlewares/errorHandler');
 const { success } = require('./src/utils/response');
-
+const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(corsMiddleware);
 app.use(express.static(__dirname));
-
+app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 // Route de base
 app.get('/', (req, res) => {
   res.json({

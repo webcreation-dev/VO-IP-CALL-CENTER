@@ -27,6 +27,58 @@ class QueueMemberService {
     `;
 
     const { rows } = await db.query(query, [queueName]);
+
+    // Enrichir avec le statut temps réel depuis AMI
+    if (amiConfig.isConnected()) {
+      try {
+        const queueStatus = await new Promise((resolve, reject) => {
+          amiConfig.executeAction(
+            { Action: 'QueueStatus', Queue: queueName },
+            (err, response) => {
+              if (err) return reject(err);
+              resolve(response);
+              resolve(response);
+              console.log(
+                '🔍 DEBUG AMI QueueStatus:',
+                JSON.stringify(queueStatus, null, 2)
+              );
+            }
+          );
+        });
+
+        // Parser les événements AMI pour extraire le statut de chaque membre
+        const memberStatuses = {};
+        if (queueStatus && queueStatus.events) {
+          queueStatus.events.forEach(event => {
+            if (event.event === 'QueueMember') {
+              const memberInterface = event.location || event.interface;
+              memberStatuses[memberInterface] = {
+                status: event.status, // 1=Available, 2=In Use, 5=Unavailable
+                paused: parseInt(event.paused) === 1,
+                callstaken: event.callstaken,
+                lastcall: event.lastcall,
+              };
+            }
+          });
+        }
+
+        // Merge le statut AMI avec les données DB
+        rows.forEach(member => {
+          const amiStatus = memberStatuses[member.interface];
+          if (amiStatus) {
+            member.status = amiStatus.status;
+            member.available = amiStatus.status === '1'; // 1 = Available
+            member.paused = amiStatus.paused;
+          } else {
+            member.status = '5'; // Unavailable par défaut
+            member.available = false;
+          }
+        });
+      } catch (err) {
+        console.warn('⚠️ Impossible de récupérer le statut AMI:', err.message);
+      }
+    }
+
     return rows;
   }
 
