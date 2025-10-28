@@ -165,6 +165,9 @@ class QueueService {
           }
 
           console.log('🔍 Réponse AMI QueueStatus pour', queueName, ':', JSON.stringify(response, null, 2));
+          console.log('🔍 Type de response:', typeof response);
+          console.log('🔍 Keys de response:', Object.keys(response || {}));
+          console.log('🔍 response.events:', response?.events);
 
           let queueData = null;
           const members = [];
