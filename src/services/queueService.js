@@ -10,61 +10,78 @@ class QueueService {
    */
   async getAllQueuesFromAMI() {
     return new Promise((resolve, reject) => {
-      amiConfig.executeAction(
-        {
-          Action: 'QueueStatus',
-        },
-        (err, response) => {
-          if (err) {
-            console.log('❌ Erreur AMI QueueStatus (all queues):', err);
-            return reject(err);
+      const ami = amiConfig.ami;
+      const queues = {};
+      const actionId = `QueueStatus_all_${Date.now()}`;
+
+      // Écouter les événements avant d'envoyer l'action
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        if (event.event === 'QueueParams') {
+          const queueName = event.queue;
+          if (queueName) {
+            queues[queueName] = {
+              name: queueName,
+              max: event.max || 0,
+              strategy: event.strategy || 'unknown',
+              calls: parseInt(event.calls || '0'),
+              holdtime: parseInt(event.holdtime || '0'),
+              talktime: parseInt(event.talktime || '0'),
+              completed: parseInt(event.completed || '0'),
+              abandoned: parseInt(event.abandoned || '0'),
+              service_level: parseInt(event.servicelevel || '0'),
+              service_level_perf: parseFloat(event.servicelevelperf || '0'),
+              weight: parseInt(event.weight || '0'),
+              members: [],
+            };
           }
-
-          console.log('🔍 Réponse AMI QueueStatus (all queues):', JSON.stringify(response, null, 2));
-
-          const queues = {};
-          if (response && response.events) {
-            response.events.forEach(event => {
-              if (event.event === 'QueueParams') {
-                const queueName = event.queue;
-                if (queueName) {
-                  queues[queueName] = {
-                    name: queueName,
-                    max: event.max || 0,
-                    strategy: event.strategy || 'unknown',
-                    calls: parseInt(event.calls || '0'),
-                    holdtime: parseInt(event.holdtime || '0'),
-                    talktime: parseInt(event.talktime || '0'),
-                    completed: parseInt(event.completed || '0'),
-                    abandoned: parseInt(event.abandoned || '0'),
-                    service_level: parseInt(event.servicelevel || '0'),
-                    service_level_perf: parseFloat(event.servicelevelperf || '0'),
-                    weight: parseInt(event.weight || '0'),
-                    members: [],
-                  };
-                }
-              } else if (event.event === 'QueueMember') {
-                const queueName = event.queue;
-                if (queueName && queues[queueName]) {
-                  queues[queueName].members.push({
-                    interface: event.location || event.interface,
-                    name: event.name || event.membername,
-                    status: event.status,
-                    paused: parseInt(event.paused) === 1,
-                    calls_taken: parseInt(event.callstaken || '0'),
-                    last_call: parseInt(event.lastcall || '0'),
-                    penalty: parseInt(event.penalty || '0'),
-                    in_call: parseInt(event.incall || '0'),
-                  });
-                }
-              }
+        } else if (event.event === 'QueueMember') {
+          const queueName = event.queue;
+          if (queueName && queues[queueName]) {
+            queues[queueName].members.push({
+              interface: event.location || event.interface,
+              name: event.membername || event.name,
+              status: event.status,
+              paused: parseInt(event.paused) === 1,
+              calls_taken: parseInt(event.callstaken || '0'),
+              last_call: parseInt(event.lastcall || '0'),
+              penalty: parseInt(event.penalty || '0'),
+              in_call: parseInt(event.incall || '0'),
             });
           }
-
+        } else if (event.event === 'QueueStatusComplete') {
+          // Fin des événements
+          ami.removeListener('managerevent', eventHandler);
           console.log('✅ Queues trouvées dans AMI:', Object.keys(queues).length, Object.keys(queues));
           resolve(queues);
         }
+      };
+
+      // Attacher le listener
+      ami.on('managerevent', eventHandler);
+
+      // Envoyer l'action
+      amiConfig.executeAction(
+        {
+          Action: 'QueueStatus',
+          ActionID: actionId,
+        },
+        (err, response) => {
+          if (err) {
+            ami.removeListener('managerevent', eventHandler);
+            console.log('❌ Erreur AMI QueueStatus (all queues):', err);
+            return reject(err);
+          }
+        }
       );
+
+      // Timeout de sécurité
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        console.log('⏱️ Timeout AMI pour toutes les queues');
+        resolve(queues);
+      }, 5000);
     });
   }
 
@@ -153,55 +170,45 @@ class QueueService {
    */
   async getQueueStatusFromAMI(queueName) {
     return new Promise((resolve, reject) => {
-      amiConfig.executeAction(
-        {
-          Action: 'QueueStatus',
-          Queue: queueName,
-        },
-        (err, response) => {
-          if (err) {
-            console.log('❌ Erreur AMI QueueStatus pour', queueName, ':', err);
-            return reject(err);
-          }
+      const ami = amiConfig.ami;
+      let queueData = null;
+      const members = [];
+      const actionId = `QueueStatus_${queueName}_${Date.now()}`;
 
-          console.log('🔍 Réponse AMI QueueStatus pour', queueName, ':', JSON.stringify(response, null, 2));
-          console.log('🔍 Type de response:', typeof response);
-          console.log('🔍 Keys de response:', Object.keys(response || {}));
-          console.log('🔍 response.events:', response?.events);
+      // Écouter les événements avant d'envoyer l'action
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
 
-          let queueData = null;
-          const members = [];
+        console.log('🔍 Événement AMI reçu:', event.event, 'pour', queueName);
 
-          if (response && response.events) {
-            response.events.forEach(event => {
-              if (event.event === 'QueueParams') {
-                queueData = {
-                  name: event.queue,
-                  max: event.max || 0,
-                  strategy: event.strategy || 'unknown',
-                  calls: parseInt(event.calls || '0'),
-                  holdtime: parseInt(event.holdtime || '0'),
-                  talktime: parseInt(event.talktime || '0'),
-                  completed: parseInt(event.completed || '0'),
-                  abandoned: parseInt(event.abandoned || '0'),
-                  service_level: parseInt(event.servicelevel || '0'),
-                  service_level_perf: parseFloat(event.servicelevelperf || '0'),
-                  weight: parseInt(event.weight || '0'),
-                };
-              } else if (event.event === 'QueueMember') {
-                members.push({
-                  interface: event.location || event.interface,
-                  name: event.name || event.membername,
-                  status: event.status,
-                  paused: parseInt(event.paused) === 1,
-                  calls_taken: parseInt(event.callstaken || '0'),
-                  last_call: parseInt(event.lastcall || '0'),
-                  penalty: parseInt(event.penalty || '0'),
-                  in_call: parseInt(event.incall || '0'),
-                });
-              }
-            });
-          }
+        if (event.event === 'QueueParams') {
+          queueData = {
+            name: event.queue,
+            max: event.max || 0,
+            strategy: event.strategy || 'unknown',
+            calls: parseInt(event.calls || '0'),
+            holdtime: parseInt(event.holdtime || '0'),
+            talktime: parseInt(event.talktime || '0'),
+            completed: parseInt(event.completed || '0'),
+            abandoned: parseInt(event.abandoned || '0'),
+            service_level: parseInt(event.servicelevel || '0'),
+            service_level_perf: parseFloat(event.servicelevelperf || '0'),
+            weight: parseInt(event.weight || '0'),
+          };
+        } else if (event.event === 'QueueMember') {
+          members.push({
+            interface: event.location || event.interface,
+            name: event.membername || event.name,
+            status: event.status,
+            paused: parseInt(event.paused) === 1,
+            calls_taken: parseInt(event.callstaken || '0'),
+            last_call: parseInt(event.lastcall || '0'),
+            penalty: parseInt(event.penalty || '0'),
+            in_call: parseInt(event.incall || '0'),
+          });
+        } else if (event.event === 'QueueStatusComplete') {
+          // Fin des événements
+          ami.removeListener('managerevent', eventHandler);
 
           if (queueData) {
             queueData.members = members;
@@ -212,7 +219,35 @@ class QueueService {
             resolve(null);
           }
         }
+      };
+
+      // Attacher le listener
+      ami.on('managerevent', eventHandler);
+
+      // Envoyer l'action
+      amiConfig.executeAction(
+        {
+          Action: 'QueueStatus',
+          Queue: queueName,
+          ActionID: actionId,
+        },
+        (err, response) => {
+          if (err) {
+            ami.removeListener('managerevent', eventHandler);
+            console.log('❌ Erreur AMI QueueStatus pour', queueName, ':', err);
+            return reject(err);
+          }
+        }
       );
+
+      // Timeout de sécurité
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        if (!queueData) {
+          console.log('⏱️ Timeout AMI pour queue:', queueName);
+          resolve(null);
+        }
+      }, 5000);
     });
   }
 
