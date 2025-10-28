@@ -41,20 +41,15 @@ class QueueMemberService {
     }
 
     try {
-      const queueStatus = await new Promise((resolve, reject) => {
-        amiConfig.executeAction(
-          { Action: 'QueueStatus', Queue: queueName },
-          (err, response) => {
-            if (err) return reject(err);
-            resolve(response);
-          }
-        );
-      });
-
-      // Parser les événements AMI pour extraire le statut de chaque membre
+      const ami = amiConfig.ami;
       const memberStatuses = {};
-      if (queueStatus && queueStatus.events) {
-        queueStatus.events.forEach(event => {
+      const actionId = `${Date.now()}`; // ActionID simplifié
+
+      // Attendre les événements AMI
+      const queueStatus = await new Promise((resolve, reject) => {
+        const eventHandler = (event) => {
+          if (event.actionid !== actionId) return;
+
           if (event.event === 'QueueMember') {
             const memberInterface = event.location || event.interface;
             memberStatuses[memberInterface] = {
@@ -64,9 +59,33 @@ class QueueMemberService {
               lastcall: event.lastcall,
               in_call: parseInt(event.incall || '0'),
             };
+          } else if (event.event === 'QueueStatusComplete') {
+            // Fin des événements
+            ami.removeListener('managerevent', eventHandler);
+            resolve(memberStatuses);
           }
-        });
-      }
+        };
+
+        // Attacher le listener
+        ami.on('managerevent', eventHandler);
+
+        // Envoyer l'action
+        amiConfig.executeAction(
+          { Action: 'QueueStatus', Queue: queueName, ActionID: actionId },
+          (err, response) => {
+            if (err) {
+              ami.removeListener('managerevent', eventHandler);
+              return reject(err);
+            }
+          }
+        );
+
+        // Timeout de sécurité
+        setTimeout(() => {
+          ami.removeListener('managerevent', eventHandler);
+          resolve(memberStatuses);
+        }, 5000);
+      });
 
       // Merge le statut AMI avec les données DB
       return rows.map(member => {
