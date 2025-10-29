@@ -128,31 +128,18 @@ class EndpointService {
     try {
       const amiStatus = await this.getEndpointStatusFromAMI(id);
 
-      let deviceState = 'Unknown';
-      let activeChannels = 0;
-      let contacts = [];
+      const deviceState = amiStatus.device_state || 'Unknown';
+      const activeChannels = amiStatus.active_channels || 0;
+      const contacts = amiStatus.contacts || [];
 
-      if (amiStatus && amiStatus.events) {
-        amiStatus.events.forEach(event => {
-          if (event.event === 'EndpointDetail' || event.objecttype === 'endpoint') {
-            deviceState = event.devicestate || event.DeviceState || 'Unknown';
-            activeChannels = parseInt(event.activechannels || event.ActiveChannels || '0');
-          }
-          if (event.event === 'ContactStatusDetail' || event.objecttype === 'contact') {
-            contacts.push({
-              uri: event.uri || event.Uri,
-              status: event.status || event.Status,
-              roundtrip_usec: event.roundtripusec || event.RoundtripUsec || 'N/A',
-            });
-          }
-        });
-      }
+      // Déterminer si l'endpoint est enregistré
+      const registered = contacts.length > 0 || deviceState === 'Not in use' || deviceState === 'Ringing' || deviceState === 'InUse';
 
       return {
         ...endpoint,
         device_state: deviceState,
         active_channels: activeChannels,
-        registered: contacts.length > 0,
+        registered: registered,
         contacts_ami: contacts,
         data_source: 'hybrid',
       };
@@ -177,48 +164,118 @@ class EndpointService {
   }
 
   /**
+   * Générer automatiquement la prochaine extension disponible pour un tenant
+   * Format: tenant_id * 100 + numéro (ex: Tenant 1 → 101-199, Tenant 2 → 201-299)
+   */
+  async generateNextExtension(tenantId) {
+    // Calculer la plage basée sur tenant_id
+    const rangeStart = tenantId * 100 + 1;   // Ex: Tenant 1 → 101
+    const rangeEnd = tenantId * 100 + 99;     // Ex: Tenant 1 → 199
+
+    // Trouver les extensions existantes dans cette plage
+    const query = `
+      SELECT id FROM ps_endpoints
+      WHERE tenant_id = $1
+      AND id ~ '^[0-9]{3}$'
+      AND CAST(id AS INTEGER) BETWEEN $2 AND $3
+      ORDER BY CAST(id AS INTEGER) ASC
+    `;
+
+    const { rows } = await db.query(query, [tenantId, rangeStart, rangeEnd]);
+
+    // Trouver le premier numéro disponible
+    const usedExtensions = rows.map(r => parseInt(r.id));
+
+    for (let ext = rangeStart; ext <= rangeEnd; ext++) {
+      if (!usedExtensions.includes(ext)) {
+        return ext.toString();
+      }
+    }
+
+    throw new Error(`Plus d'extensions disponibles pour le tenant ${tenantId} (plage ${rangeStart}-${rangeEnd} complète)`);
+  }
+
+  /**
    * Créer un endpoint complet (endpoint + auth + aor) en une transaction
+   * Génération automatique de l'extension et récupération du context depuis le tenant
    */
   async createEndpoint(data) {
-    const {
+    let {
       id,
       tenant_id,
       password,
       transport = 'transport-udp',
       context,
-      allow = 'ulaw,alaw,g722',
+      allow,
       disallow = 'all',
       direct_media = 'no',
       rtp_symmetric = 'yes',
       force_rport = 'yes',
       rewrite_contact = 'yes',
       max_contacts = 1,
-      webrtc = 'no',
-      use_avpf = null,
-      media_encryption = null,
-      dtls_verify = null,
-      dtls_cert_file = null,
-      dtls_private_key = null,
-      dtls_setup = null,
-      ice_support = null,
-      from_domain = null,
-      from_user = null,
+      webrtc,
+      use_avpf,
+      media_encryption,
+      dtls_verify,
+      dtls_cert_file,
+      dtls_private_key,
+      dtls_setup,
+      ice_support,
+      from_domain,
+      from_user,
     } = data;
 
-    // Validation
-    if (!id || !tenant_id || !password || !context) {
-      throw new Error('Les champs id, tenant_id, password et context sont requis');
+    // Validation minimale
+    if (!tenant_id || !password) {
+      throw new Error('Les champs tenant_id et password sont requis');
     }
 
-    // Vérifier si l'endpoint existe déjà
-    if (await this.endpointExists(id)) {
-      throw new Error(`Un endpoint avec l'ID "${id}" existe déjà`);
-    }
-
-    // Vérifier si le tenant existe
-    const tenantCheck = await db.query('SELECT id FROM tenants WHERE id = $1', [tenant_id]);
+    // Vérifier si le tenant existe et récupérer son context
+    const tenantCheck = await db.query('SELECT id, context FROM tenants WHERE id = $1', [tenant_id]);
     if (tenantCheck.rows.length === 0) {
       throw new Error(`Le tenant avec l'ID ${tenant_id} n'existe pas`);
+    }
+
+    const tenant = tenantCheck.rows[0];
+
+    // Si context n'est pas fourni, utiliser celui du tenant
+    if (!context) {
+      context = tenant.context;
+      if (!context) {
+        throw new Error(`Le tenant ${tenant_id} n'a pas de context défini. Veuillez le configurer d'abord.`);
+      }
+    }
+
+    // Si id (extension) n'est pas fourni, générer automatiquement
+    if (!id) {
+      id = await this.generateNextExtension(tenant_id);
+      console.log(`✅ Extension générée automatiquement: ${id} pour tenant ${tenant_id}`);
+    } else {
+      // Vérifier si l'endpoint existe déjà
+      if (await this.endpointExists(id)) {
+        throw new Error(`Un endpoint avec l'ID "${id}" existe déjà`);
+      }
+    }
+
+    // Configuration automatique selon le transport
+    const isWebRTC = transport === 'transport-wss';
+
+    if (webrtc === undefined) {
+      webrtc = isWebRTC ? 'yes' : 'no';
+    }
+
+    if (!allow) {
+      allow = isWebRTC ? 'opus,ulaw,alaw' : 'ulaw,alaw,g722';
+    }
+
+    if (isWebRTC) {
+      // Configuration WebRTC par défaut
+      use_avpf = use_avpf || 'yes';
+      media_encryption = media_encryption || 'dtls';
+      dtls_verify = dtls_verify || 'fingerprint';
+      dtls_cert_file = dtls_cert_file || '/etc/asterisk/keys/asterisk.pem';
+      dtls_setup = dtls_setup || 'actpass';
+      ice_support = ice_support || 'yes';
     }
 
     // Transaction pour créer les 3 entrées

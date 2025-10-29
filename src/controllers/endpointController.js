@@ -44,22 +44,28 @@ class EndpointController {
   /**
    * POST /api/endpoints
    * Créer un nouveau endpoint
+   * Champs requis: tenant_id, password
+   * Champs optionnels: id (généré auto si absent), transport, context (récupéré du tenant si absent)
    */
   async createEndpoint(req, res, next) {
     try {
       const data = req.body;
 
-      // Validation basique
-      if (!data.id || !data.tenant_id || !data.password || !data.context) {
+      // Validation minimale (id et context sont maintenant optionnels)
+      if (!data.tenant_id || !data.password) {
         return error(
           res,
-          'Les champs id, tenant_id, password et context sont requis',
+          'Les champs tenant_id et password sont requis',
           400
         );
       }
 
       const endpoint = await endpointService.createEndpoint(data);
-      return created(res, endpoint, `Endpoint "${endpoint.id}" créé avec succès`);
+      return created(
+        res,
+        endpoint,
+        `Endpoint "${endpoint.id}" créé avec succès${!data.id ? ' (extension générée automatiquement)' : ''}`
+      );
     } catch (err) {
       console.error('❌ Erreur createEndpoint:', err);
 
@@ -67,8 +73,12 @@ class EndpointController {
         return error(res, err.message, 409);
       }
 
-      if (err.message.includes("n'existe pas")) {
+      if (err.message.includes("n'existe pas") || err.message.includes("n'a pas de context")) {
         return error(res, err.message, 404);
+      }
+
+      if (err.message.includes('Plus d\'extensions disponibles')) {
+        return error(res, err.message, 507); // Insufficient Storage
       }
 
       next(err);
