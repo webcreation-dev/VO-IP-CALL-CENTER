@@ -48,9 +48,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-
-
-const API_BASE_URL = 'http://161.97.106.134:3000';
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000';
 
 // Utility function for API calls
 const apiCall = async (endpoint, method = 'GET', body = null) => {
@@ -151,7 +150,7 @@ const LoginPage = ({ onLogin }) => {
 
   const handleSubmit = e => {
     e.preventDefault();
-    if (username === 'kamgoko' && password === 'password') {
+    if (username === 'kamgoko' && password === 'fIxSRtVP9q0ajtkc') {
       localStorage.setItem('isAuthenticated', 'true');
       onLogin();
     } else {
@@ -643,9 +642,13 @@ const EndpointsManager = () => {
                         } animate-pulse`}
                         title={endpoint.registered ? 'Connecté' : 'Déconnecté'}
                       ></div>
-                      <span className={`text-xs font-semibold ${
-                        endpoint.registered ? 'text-green-700' : 'text-red-700'
-                      }`}>
+                      <span
+                        className={`text-xs font-semibold ${
+                          endpoint.registered
+                            ? 'text-green-700'
+                            : 'text-red-700'
+                        }`}
+                      >
                         {endpoint.registered ? 'En ligne' : 'Hors ligne'}
                       </span>
                     </div>
@@ -912,12 +915,16 @@ const QueuesManager = () => {
                         className={`w-4 h-4 rounded-full shadow-lg ${
                           member.paused
                             ? 'bg-yellow-500'
-                            : (member.available ? 'bg-green-500' : 'bg-red-500')
+                            : member.available
+                            ? 'bg-green-500'
+                            : 'bg-red-500'
                         } animate-pulse`}
                         title={
                           member.paused
                             ? 'En pause'
-                            : (member.available ? 'Disponible' : 'Déconnecté')
+                            : member.available
+                            ? 'Disponible'
+                            : 'Déconnecté'
                         }
                       ></div>
                       <div>
