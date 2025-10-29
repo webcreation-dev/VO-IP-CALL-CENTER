@@ -1,4 +1,5 @@
 const AsteriskManager = require('asterisk-manager');
+const fs = require('fs');
 
 // Configuration AMI basée sur manager.conf
 const amiConfig = {
@@ -107,22 +108,30 @@ const getQueueStatus = (queueName, callback) => {
   );
 };
 
-// Fonction pour ajouter un context au dialplan via une commande shell
+// Fonction pour ajouter un context au dialplan en écrivant directement dans le fichier partagé
 const addDialplanContext = (context, callback) => {
-  const commands = [
-    `echo '' >> /etc/asterisk/extensions.conf`,
-    `echo '[${context}]' >> /etc/asterisk/extensions.conf`,
-    `echo '; Dialplan pour ${context} - chargé depuis PostgreSQL via Realtime' >> /etc/asterisk/extensions.conf`,
-    `echo 'switch => Realtime' >> /etc/asterisk/extensions.conf`
-  ].join(' && ');
+  const extensionsConfPath = '/etc/asterisk/extensions.conf';
 
-  executeAction(
-    {
-      Action: 'Command',
-      Command: `! ${commands}`,
-    },
-    callback
-  );
+  try {
+    // Vérifier si le context existe déjà dans le fichier
+    const fileContent = fs.readFileSync(extensionsConfPath, 'utf8');
+
+    if (fileContent.includes(`[${context}]`)) {
+      console.log(`ℹ️  Context [${context}] existe déjà dans extensions.conf`);
+      return callback(null, { message: 'Context already exists' });
+    }
+
+    // Ajouter le context au fichier
+    const contextBlock = `\n[${context}]\n; Dialplan pour ${context} - chargé depuis PostgreSQL via Realtime\nswitch => Realtime\n`;
+
+    fs.appendFileSync(extensionsConfPath, contextBlock, 'utf8');
+    console.log(`✅ Context [${context}] ajouté à extensions.conf`);
+
+    callback(null, { message: 'Context added successfully' });
+  } catch (err) {
+    console.error(`❌ Erreur lors de l'ajout du context au fichier:`, err);
+    callback(err, null);
+  }
 };
 
 module.exports = {

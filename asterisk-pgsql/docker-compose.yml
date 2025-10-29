@@ -21,6 +21,7 @@ services:
     volumes:
       - ../:/app # En développement pour hot-reload
       - /app/node_modules # Exclure node_modules du volume
+      - ./etc/asterisk/extensions.conf:/etc/asterisk/extensions.conf # Partager extensions.conf avec Asterisk
   asterisk:
     build: .
     environment:
