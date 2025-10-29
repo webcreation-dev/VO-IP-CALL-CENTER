@@ -48,6 +48,18 @@ const executeAction = (action, callback) => {
       console.error(`❌ Erreur action AMI ${action.Action}:`, err);
       return callback(err, null);
     }
+
+    // Vérifier si la réponse indique une erreur (ex: endpoint non trouvé)
+    if (res && res.response === 'Error') {
+      // Pour les endpoints non enregistrés, c'est normal, on log juste en warning
+      if (action.Action === 'PJSIPShowEndpoint' && res.message && res.message.includes('Unable to retrieve')) {
+        console.warn(`⚠️ Erreur AMI pour endpoint ${action.Endpoint}: ${res.message}`);
+      } else {
+        console.error(`❌ Erreur action AMI ${action.Action}:`, res);
+      }
+      return callback(new Error(res.message || 'Erreur AMI'), res);
+    }
+
     callback(null, res);
   });
 };
