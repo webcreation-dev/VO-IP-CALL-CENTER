@@ -264,15 +264,15 @@ class EndpointService {
     }
 
     if (!allow) {
-      allow = isWebRTC ? 'opus,ulaw,alaw' : 'ulaw,alaw,g722';
+      allow = 'alaw,ulaw,opus,g722';
     }
 
     if (isWebRTC) {
       // Configuration WebRTC par défaut
       use_avpf = use_avpf || 'yes';
-      media_encryption = media_encryption || 'dtls';
+      media_encryption = media_encryption || 'no';
       dtls_verify = dtls_verify || 'fingerprint';
-      dtls_cert_file = dtls_cert_file || '/etc/asterisk/keys/asterisk.pem';
+      dtls_cert_file = dtls_cert_file || '/etc/asterisk/keys/fullchain.pem';
       dtls_setup = dtls_setup || 'actpass';
       ice_support = ice_support || 'yes';
     }

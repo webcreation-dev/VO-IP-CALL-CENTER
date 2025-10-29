@@ -115,11 +115,11 @@ class TenantService {
       const tenantId = rows[0].id;
 
       // Créer les extensions de base pour ce tenant dans PostgreSQL
-      // Pattern _1XX pour permettre les appels entre extensions 100-199
+      // Pattern _1XXX pour permettre les appels entre extensions 1000-1999
       const extensions = [
-        // Appels internes entre extensions (100-199)
-        { exten: '_1XX', priority: 1, app: 'Dial', appdata: 'PJSIP/${EXTEN},20' },
-        { exten: '_1XX', priority: 2, app: 'Hangup', appdata: '' },
+        // Appels internes entre extensions (1000-1999)
+        { exten: '_1XXX', priority: 1, app: 'Dial', appdata: 'PJSIP/${EXTEN},20' },
+        { exten: '_1XXX', priority: 2, app: 'Hangup', appdata: '' },
 
         // Extension de test 999 (hello world)
         { exten: '999', priority: 1, app: 'Answer', appdata: '' },
