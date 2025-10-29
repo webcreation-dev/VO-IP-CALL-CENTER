@@ -1,4 +1,7 @@
 const db = require('../../db');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 /**
  * Service pour la gestion des tenants
@@ -83,7 +86,43 @@ class TenantService {
     `;
 
     const { rows } = await db.query(query, [name, context]);
-    return rows[0];
+    const tenant = rows[0];
+
+    // Créer automatiquement le dialplan pour ce tenant dans Asterisk
+    try {
+      await this.createDialplanForTenant(context);
+      console.log(`✅ Dialplan créé automatiquement pour le tenant "${name}" (context: ${context})`);
+    } catch (err) {
+      console.error(`⚠️ Erreur lors de la création du dialplan pour ${context}:`, err.message);
+      // Ne pas bloquer la création du tenant si le dialplan échoue
+    }
+
+    return tenant;
+  }
+
+  /**
+   * Créer le dialplan dans Asterisk pour un context de tenant
+   */
+  async createDialplanForTenant(context) {
+    const containerName = process.env.ASTERISK_CONTAINER_NAME || 'asterisk-pgsql_asterisk_1';
+
+    // Commande pour ajouter le context au fichier extensions.conf
+    const addContextCommand = `docker exec ${containerName} bash -c "echo '' >> /etc/asterisk/extensions.conf && echo '[${context}](template-tenant)' >> /etc/asterisk/extensions.conf && echo '; Context pour tenant ${context}' >> /etc/asterisk/extensions.conf"`;
+
+    // Commande pour recharger le dialplan
+    const reloadCommand = `docker exec ${containerName} asterisk -rx "dialplan reload"`;
+
+    try {
+      // Ajouter le context
+      await execPromise(addContextCommand);
+      console.log(`✅ Context [${context}] ajouté à extensions.conf`);
+
+      // Recharger le dialplan
+      const { stdout } = await execPromise(reloadCommand);
+      console.log(`✅ Dialplan rechargé:`, stdout.trim());
+    } catch (err) {
+      throw new Error(`Erreur lors de la configuration du dialplan: ${err.message}`);
+    }
   }
 
   /**
