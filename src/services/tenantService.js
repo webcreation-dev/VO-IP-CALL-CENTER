@@ -1,7 +1,5 @@
 const db = require('../../db');
-const { exec } = require('child_process');
-const util = require('util');
-const execPromise = util.promisify(exec);
+const { addDialplanContext, reloadDialplan } = require('../config/ami');
 
 /**
  * Service pour la gestion des tenants
@@ -104,25 +102,26 @@ class TenantService {
    * Créer le dialplan dans Asterisk pour un context de tenant
    */
   async createDialplanForTenant(context) {
-    const containerName = process.env.ASTERISK_CONTAINER_NAME || 'asterisk-pgsql_asterisk_1';
+    return new Promise((resolve, reject) => {
+      // Ajouter le context au fichier extensions.conf via AMI
+      addDialplanContext(context, (err, res) => {
+        if (err) {
+          return reject(new Error(`Erreur lors de l'ajout du context: ${err.message}`));
+        }
 
-    // Commande pour ajouter le context au fichier extensions.conf
-    const addContextCommand = `docker exec ${containerName} bash -c "echo '' >> /etc/asterisk/extensions.conf && echo '[${context}](template-tenant)' >> /etc/asterisk/extensions.conf && echo '; Context pour tenant ${context}' >> /etc/asterisk/extensions.conf"`;
+        console.log(`✅ Context [${context}] ajouté à extensions.conf`);
 
-    // Commande pour recharger le dialplan
-    const reloadCommand = `docker exec ${containerName} asterisk -rx "dialplan reload"`;
+        // Recharger le dialplan via AMI
+        reloadDialplan((err, res) => {
+          if (err) {
+            return reject(new Error(`Erreur lors du rechargement du dialplan: ${err.message}`));
+          }
 
-    try {
-      // Ajouter le context
-      await execPromise(addContextCommand);
-      console.log(`✅ Context [${context}] ajouté à extensions.conf`);
-
-      // Recharger le dialplan
-      const { stdout } = await execPromise(reloadCommand);
-      console.log(`✅ Dialplan rechargé:`, stdout.trim());
-    } catch (err) {
-      throw new Error(`Erreur lors de la configuration du dialplan: ${err.message}`);
-    }
+          console.log(`✅ Dialplan rechargé avec succès`);
+          resolve();
+        });
+      });
+    });
   }
 
   /**

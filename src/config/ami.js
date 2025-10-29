@@ -107,6 +107,23 @@ const getQueueStatus = (queueName, callback) => {
   );
 };
 
+// Fonction pour ajouter un context au dialplan via une commande shell
+const addDialplanContext = (context, callback) => {
+  const commands = [
+    `echo '' >> /etc/asterisk/extensions.conf`,
+    `echo '[${context}](template-tenant)' >> /etc/asterisk/extensions.conf`,
+    `echo '; Context pour tenant ${context}' >> /etc/asterisk/extensions.conf`
+  ].join(' && ');
+
+  executeAction(
+    {
+      Action: 'Command',
+      Command: `! ${commands}`,
+    },
+    callback
+  );
+};
+
 module.exports = {
   ami,
   isConnected: () => isConnected,
@@ -115,4 +132,5 @@ module.exports = {
   reloadDialplan,
   reloadPJSIP,
   getQueueStatus,
+  addDialplanContext,
 };
