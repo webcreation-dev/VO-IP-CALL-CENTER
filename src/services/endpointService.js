@@ -169,14 +169,15 @@ class EndpointService {
    */
   async generateNextExtension(tenantId) {
     // Calculer la plage basée sur tenant_id
-    const rangeStart = tenantId * 100 + 1;   // Ex: Tenant 1 → 101
-    const rangeEnd = tenantId * 100 + 99;     // Ex: Tenant 1 → 199
+    const rangeStart = tenantId * 100 + 1;   // Ex: Tenant 1 → 101, Tenant 13 → 1301
+    const rangeEnd = tenantId * 100 + 99;     // Ex: Tenant 1 → 199, Tenant 13 → 1399
 
     // Trouver les extensions existantes dans cette plage
+    // On accepte les IDs numériques de n'importe quelle longueur
     const query = `
       SELECT id FROM ps_endpoints
       WHERE tenant_id = $1
-      AND id ~ '^[0-9]{3}$'
+      AND id ~ '^[0-9]+$'
       AND CAST(id AS INTEGER) BETWEEN $2 AND $3
       ORDER BY CAST(id AS INTEGER) ASC
     `;
