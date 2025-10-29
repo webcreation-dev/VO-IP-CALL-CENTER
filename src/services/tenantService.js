@@ -9,11 +9,12 @@ class TenantService {
    */
   async getAllTenants() {
     const query = `
-      SELECT 
-        id, 
-        name, 
+      SELECT
+        id,
+        name,
+        context,
         created_at
-      FROM tenants 
+      FROM tenants
       ORDER BY id DESC
     `;
 
@@ -26,11 +27,12 @@ class TenantService {
    */
   async getTenantById(id) {
     const query = `
-      SELECT 
-        id, 
-        name, 
+      SELECT
+        id,
+        name,
+        context,
         created_at
-      FROM tenants 
+      FROM tenants
       WHERE id = $1
     `;
 
@@ -50,20 +52,37 @@ class TenantService {
   /**
    * Créer un nouveau tenant
    */
-  async createTenant(name) {
+  async createTenant(data) {
+    const { name } = data;
+
+    // Validation
+    if (!name) {
+      throw new Error('Le champ name est requis');
+    }
+
     // Vérifier si le tenant existe déjà
     const existing = await this.getTenantByName(name);
     if (existing) {
       throw new Error(`Un tenant avec le nom "${name}" existe déjà`);
     }
 
+    // Générer le context automatiquement à partir du nom
+    // Convertir en minuscules, remplacer espaces par underscores, et retirer caractères spéciaux
+    const context = name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Retirer les accents
+      .replace(/[^a-z0-9]/g, '_') // Remplacer caractères non-alphanumériques par underscore
+      .replace(/_+/g, '_') // Remplacer multiples underscores par un seul
+      .replace(/^_|_$/g, ''); // Retirer underscores au début et à la fin
+
     const query = `
-      INSERT INTO tenants (name) 
-      VALUES ($1) 
-      RETURNING id, name, created_at
+      INSERT INTO tenants (name, context)
+      VALUES ($1, $2)
+      RETURNING id, name, context, created_at
     `;
 
-    const { rows } = await db.query(query, [name]);
+    const { rows } = await db.query(query, [name, context]);
     return rows[0];
   }
 

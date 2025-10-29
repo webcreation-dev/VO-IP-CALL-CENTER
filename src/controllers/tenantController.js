@@ -51,15 +51,15 @@ class TenantController {
         return error(res, 'Le nom du tenant est requis', 400);
       }
 
-      const tenant = await tenantService.createTenant(name.trim());
+      const tenant = await tenantService.createTenant({ name: name.trim() });
       return created(res, tenant, `Tenant "${tenant.name}" créé avec succès`);
     } catch (err) {
       console.error('❌ Erreur createTenant:', err);
-      
+
       if (err.message.includes('existe déjà')) {
         return error(res, err.message, 409);
       }
-      
+
       next(err);
     }
   }
