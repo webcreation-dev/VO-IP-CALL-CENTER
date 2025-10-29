@@ -172,17 +172,15 @@ class EndpointService {
     const rangeStart = tenantId * 100 + 1;   // Ex: Tenant 1 → 101, Tenant 13 → 1301
     const rangeEnd = tenantId * 100 + 99;     // Ex: Tenant 1 → 199, Tenant 13 → 1399
 
-    // Trouver les extensions existantes dans cette plage
-    // On accepte les IDs numériques de n'importe quelle longueur
+    // Trouver les extensions existantes dans cette plage avec FOR UPDATE pour éviter les race conditions
     const query = `
       SELECT id FROM ps_endpoints
-      WHERE tenant_id = $1
-      AND id ~ '^[0-9]+$'
-      AND CAST(id AS INTEGER) BETWEEN $2 AND $3
+      WHERE id ~ '^[0-9]+$'
+      AND CAST(id AS INTEGER) BETWEEN $1 AND $2
       ORDER BY CAST(id AS INTEGER) ASC
     `;
 
-    const { rows } = await db.query(query, [tenantId, rangeStart, rangeEnd]);
+    const { rows } = await db.query(query, [rangeStart, rangeEnd]);
 
     // Trouver le premier numéro disponible
     const usedExtensions = rows.map(r => parseInt(r.id));
@@ -279,63 +277,100 @@ class EndpointService {
       ice_support = ice_support || 'yes';
     }
 
-    // Transaction pour créer les 3 entrées
+    // Transaction pour créer les 3 entrées avec retry en cas de conflit
     const client = await db.pool.connect();
-    try {
-      await client.query('BEGIN');
+    let attempts = 0;
+    const maxAttempts = 3;
 
-      // 1. Créer ps_endpoints
-      const endpointQuery = `
-        INSERT INTO ps_endpoints (
-          id, tenant_id, transport, aors, auth, context,
+    while (attempts < maxAttempts) {
+      try {
+        await client.query('BEGIN');
+
+        // Vérifier une dernière fois si l'ID n'existe pas déjà (race condition protection)
+        const checkQuery = 'SELECT id FROM ps_endpoints WHERE id = $1';
+        const checkResult = await client.query(checkQuery, [id]);
+
+        if (checkResult.rows.length > 0) {
+          console.warn(`⚠️ L'ID ${id} existe déjà, génération d'un nouveau numéro...`);
+          await client.query('ROLLBACK');
+          id = await this.generateNextExtension(tenant_id);
+          console.log(`✅ Nouvel ID généré: ${id}`);
+          attempts++;
+          continue;
+        }
+
+        // 1. Créer ps_endpoints
+        const endpointQuery = `
+          INSERT INTO ps_endpoints (
+            id, tenant_id, transport, aors, auth, context,
+            disallow, allow, direct_media, rtp_symmetric,
+            force_rport, rewrite_contact, webrtc, use_avpf,
+            media_encryption, dtls_verify, dtls_cert_file,
+            dtls_private_key, dtls_setup, ice_support, from_domain, from_user
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+          RETURNING *
+        `;
+
+        const endpointValues = [
+          id, tenant_id, transport, id, id, context,
           disallow, allow, direct_media, rtp_symmetric,
           force_rport, rewrite_contact, webrtc, use_avpf,
           media_encryption, dtls_verify, dtls_cert_file,
           dtls_private_key, dtls_setup, ice_support, from_domain, from_user
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-        RETURNING *
-      `;
+        ];
 
-      const endpointValues = [
-        id, tenant_id, transport, id, id, context,
-        disallow, allow, direct_media, rtp_symmetric,
-        force_rport, rewrite_contact, webrtc, use_avpf,
-        media_encryption, dtls_verify, dtls_cert_file,
-        dtls_private_key, dtls_setup, ice_support, from_domain, from_user
-      ];
+        await client.query(endpointQuery, endpointValues);
 
-      await client.query(endpointQuery, endpointValues);
+        // 2. Créer ps_auths
+        const authQuery = `
+          INSERT INTO ps_auths (id, tenant_id, auth_type, password, username)
+          VALUES ($1, $2, 'userpass', $3, $4)
+          RETURNING *
+        `;
 
-      // 2. Créer ps_auths
-      const authQuery = `
-        INSERT INTO ps_auths (id, tenant_id, auth_type, password, username)
-        VALUES ($1, $2, 'userpass', $3, $4)
-        RETURNING *
-      `;
+        await client.query(authQuery, [id, tenant_id, password, id]);
 
-      await client.query(authQuery, [id, tenant_id, password, id]);
+        // 3. Créer ps_aors
+        const aorQuery = `
+          INSERT INTO ps_aors (id, tenant_id, max_contacts)
+          VALUES ($1, $2, $3)
+          RETURNING *
+        `;
 
-      // 3. Créer ps_aors
-      const aorQuery = `
-        INSERT INTO ps_aors (id, tenant_id, max_contacts)
-        VALUES ($1, $2, $3)
-        RETURNING *
-      `;
+        await client.query(aorQuery, [id, tenant_id, max_contacts]);
 
-      await client.query(aorQuery, [id, tenant_id, max_contacts]);
+        await client.query('COMMIT');
+        break; // Succès, sortir de la boucle
 
-      await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
 
-      // Récupérer l'endpoint complet créé
-      const created = await this.getEndpointById(id);
-      return created;
+        // Si c'est une erreur de contrainte d'unicité et qu'on n'a pas atteint le max de tentatives
+        if (err.code === '23505' && attempts < maxAttempts - 1) {
+          console.warn(`⚠️ Conflit d'ID détecté (tentative ${attempts + 1}/${maxAttempts}), nouvelle tentative...`);
+          id = await this.generateNextExtension(tenant_id);
+          console.log(`✅ Nouvel ID généré: ${id}`);
+          attempts++;
+          continue;
+        }
 
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+        // Sinon, propager l'erreur
+        client.release();
+        throw err;
+      }
     }
+
+    // Vérifier si on a réussi
+    if (attempts >= maxAttempts) {
+      client.release();
+      throw new Error(`Impossible de créer l'endpoint après ${maxAttempts} tentatives`);
+    }
+
+    client.release();
+
+    // Récupérer l'endpoint complet créé
+    const created = await this.getEndpointById(id);
+    return created;
   }
 
   /**
