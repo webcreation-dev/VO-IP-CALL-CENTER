@@ -411,59 +411,105 @@ class EndpointService {
   }
 
   /**
-   * Récupérer le statut d'un endpoint depuis Asterisk via AMI
+   * Récupérer le statut d'un endpoint depuis Asterisk via AMI (avec event listeners)
    */
   async getEndpointStatusFromAMI(endpointId) {
     return new Promise((resolve, reject) => {
+      const ami = amiConfig.ami;
+      let endpointData = null;
+      const contacts = [];
+      const actionId = `${Date.now()}`;
+
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        if (event.event === 'EndpointDetail') {
+          endpointData = {
+            device_state: event.devicestate || 'Unknown',
+            active_channels: parseInt(event.activechannels || '0'),
+          };
+        } else if (event.event === 'ContactStatusDetail') {
+          contacts.push({
+            uri: event.uri,
+            status: event.status,
+          });
+        } else if (event.event === 'EndpointDetailComplete') {
+          ami.removeListener('managerevent', eventHandler);
+          resolve({ ...endpointData, contacts });
+        }
+      };
+
+      ami.on('managerevent', eventHandler);
+
       amiConfig.executeAction(
         {
           Action: 'PJSIPShowEndpoint',
           Endpoint: endpointId,
+          ActionID: actionId,
         },
         (err, response) => {
           if (err) {
+            ami.removeListener('managerevent', eventHandler);
             return reject(err);
           }
-          resolve(response);
         }
       );
+
+      // Timeout de sécurité
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        resolve(endpointData || { device_state: 'Unknown', active_channels: 0, contacts: [] });
+      }, 5000);
     });
   }
 
   /**
-   * Récupérer tous les endpoints depuis Asterisk via AMI
+   * Récupérer tous les endpoints depuis Asterisk via AMI (avec event listeners)
    */
   async getAllEndpointsFromAMI() {
     return new Promise((resolve, reject) => {
+      const ami = amiConfig.ami;
+      const endpoints = {};
+      const actionId = `${Date.now()}`;
+
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        if (event.event === 'EndpointList') {
+          const endpointId = event.objectname;
+          if (endpointId) {
+            endpoints[endpointId] = {
+              id: endpointId,
+              device_state: event.devicestate || 'Unknown',
+              active_channels: parseInt(event.activechannels || '0'),
+            };
+          }
+        } else if (event.event === 'EndpointListComplete') {
+          ami.removeListener('managerevent', eventHandler);
+          resolve(endpoints);
+        }
+      };
+
+      ami.on('managerevent', eventHandler);
+
       amiConfig.executeAction(
         {
           Action: 'PJSIPShowEndpoints',
+          ActionID: actionId,
         },
         (err, response) => {
           if (err) {
+            ami.removeListener('managerevent', eventHandler);
             return reject(err);
           }
-
-          // Parser les événements PJSIPShowEndpoint
-          const endpoints = {};
-          if (response && response.events) {
-            response.events.forEach(event => {
-              if (event.event === 'EndpointList' || event.objecttype === 'endpoint') {
-                const endpointId = event.objectname || event.endpoint;
-                if (endpointId) {
-                  endpoints[endpointId] = {
-                    id: endpointId,
-                    device_state: event.devicestate || event.DeviceState || 'Unknown',
-                    active_channels: parseInt(event.activechannels || event.ActiveChannels || '0'),
-                  };
-                }
-              }
-            });
-          }
-
-          resolve(endpoints);
         }
       );
+
+      // Timeout de sécurité
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        resolve(endpoints);
+      }, 5000);
     });
   }
 
@@ -501,30 +547,16 @@ class EndpointService {
     try {
       const amiStatus = await this.getEndpointStatusFromAMI(id);
 
-      // Parser la réponse AMI
-      let deviceState = 'Unknown';
-      let activeChannels = 0;
-      let contacts = [];
+      const deviceState = amiStatus.device_state || 'Unknown';
+      const activeChannels = amiStatus.active_channels || 0;
+      const contacts = amiStatus.contacts || [];
 
-      if (amiStatus && amiStatus.events) {
-        amiStatus.events.forEach(event => {
-          if (event.event === 'EndpointDetail' || event.objecttype === 'endpoint') {
-            deviceState = event.devicestate || event.DeviceState || 'Unknown';
-            activeChannels = parseInt(event.activechannels || event.ActiveChannels || '0');
-          }
-          if (event.event === 'ContactStatusDetail' || event.objecttype === 'contact') {
-            contacts.push({
-              uri: event.uri || event.Uri,
-              status: event.status || event.Status,
-              roundtrip_usec: event.roundtripusec || event.RoundtripUsec || 'N/A',
-            });
-          }
-        });
-      }
+      // Déterminer si l'endpoint est enregistré
+      const registered = contacts.length > 0 || deviceState === 'Not in use' || deviceState === 'Ringing' || deviceState === 'InUse';
 
       return {
         endpoint_id: id,
-        registered: contacts.length > 0,
+        registered: registered,
         device_state: deviceState,
         active_channels: activeChannels,
         contacts: contacts.length > 0 ? contacts : dbContacts,

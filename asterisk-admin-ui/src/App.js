@@ -263,22 +263,21 @@ const Dashboard = () => {
           trend={12}
         />
         <StatCard
-          title="Appels Répondus"
-          value={stats?.calls?.answered || 0}
-          icon={<TrendingUp className="w-8 h-8" />}
+          title="Appels Actifs"
+          value={stats?.calls?.active_now || 0}
+          icon={<Activity className="w-8 h-8" />}
           color="green"
-          trend={8}
         />
         <StatCard
           title="Taux de Réponse"
           value={`${stats?.calls?.answer_rate || 0}%`}
-          icon={<Activity className="w-8 h-8" />}
+          icon={<TrendingUp className="w-8 h-8" />}
           color="yellow"
           trend={5}
         />
         <StatCard
-          title="Endpoints Actifs"
-          value={stats?.endpoints || 0}
+          title="Endpoints Connectés"
+          value={`${stats?.endpoints_registered || 0}/${stats?.endpoints || 0}`}
           icon={<Phone className="w-8 h-8" />}
           color="purple"
         />
@@ -616,6 +615,9 @@ const EndpointsManager = () => {
             <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Statut
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
@@ -641,6 +643,21 @@ const EndpointsManager = () => {
                   key={endpoint.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          endpoint.registered ? 'bg-green-500' : 'bg-red-500'
+                        } animate-pulse`}
+                        title={endpoint.registered ? 'Connecté' : 'Déconnecté'}
+                      ></div>
+                      <span className={`text-xs font-semibold ${
+                        endpoint.registered ? 'text-green-700' : 'text-red-700'
+                      }`}>
+                        {endpoint.registered ? 'En ligne' : 'Hors ligne'}
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
                     {endpoint.id}
                   </td>
