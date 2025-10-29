@@ -230,7 +230,14 @@ class StatisticsService {
     }
 
     try {
-      const registeredCount = await this.getRegisteredEndpointsFromAMI();
+      // Utiliser le service endpoint qui fonctionne bien
+      const endpointService = require('./endpointService');
+      const amiEndpoints = await endpointService.getAllEndpointsFromAMI();
+
+      // Compter combien sont enregistrés (device_state !== 'Unavailable')
+      const registeredCount = Object.values(amiEndpoints).filter(
+        ep => ep.device_state && ep.device_state !== 'Unavailable' && ep.device_state !== 'Unknown'
+      ).length;
 
       return {
         ...dbStats,
