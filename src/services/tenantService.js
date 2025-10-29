@@ -1,5 +1,5 @@
 const db = require('../../db');
-const { addDialplanContext, reloadDialplan } = require('../config/ami');
+const { reloadDialplan } = require('../config/ami');
 
 /**
  * Service pour la gestion des tenants
@@ -100,28 +100,70 @@ class TenantService {
 
   /**
    * Créer le dialplan dans Asterisk pour un context de tenant
+   * Insère directement dans PostgreSQL (Realtime) au lieu du fichier extensions.conf
    */
   async createDialplanForTenant(context) {
-    return new Promise((resolve, reject) => {
-      // Ajouter le context au fichier extensions.conf via AMI
-      addDialplanContext(context, (err, res) => {
-        if (err) {
-          return reject(new Error(`Erreur lors de l'ajout du context: ${err.message}`));
-        }
+    try {
+      // Récupérer le tenant_id depuis le context
+      const tenantQuery = 'SELECT id FROM tenants WHERE context = $1';
+      const { rows } = await db.query(tenantQuery, [context]);
 
-        console.log(`✅ Context [${context}] ajouté à extensions.conf`);
+      if (!rows.length) {
+        throw new Error(`Tenant avec context "${context}" introuvable`);
+      }
 
-        // Recharger le dialplan via AMI
+      const tenantId = rows[0].id;
+
+      // Créer les extensions de base pour ce tenant dans PostgreSQL
+      // Pattern _1XX pour permettre les appels entre extensions 100-199
+      const extensions = [
+        // Appels internes entre extensions (100-199)
+        { exten: '_1XX', priority: 1, app: 'Dial', appdata: 'PJSIP/${EXTEN},20' },
+        { exten: '_1XX', priority: 2, app: 'Hangup', appdata: '' },
+
+        // Extension de test 999 (hello world)
+        { exten: '999', priority: 1, app: 'Answer', appdata: '' },
+        { exten: '999', priority: 2, app: 'Playback', appdata: 'hello-world' },
+        { exten: '999', priority: 3, app: 'Hangup', appdata: '' },
+      ];
+
+      // Insérer toutes les extensions dans PostgreSQL
+      for (const ext of extensions) {
+        const insertQuery = `
+          INSERT INTO extensions (tenant_id, context, exten, priority, app, appdata)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (tenant_id, context, exten, priority) DO NOTHING
+        `;
+
+        await db.query(insertQuery, [
+          tenantId,
+          context,
+          ext.exten,
+          ext.priority,
+          ext.app,
+          ext.appdata
+        ]);
+      }
+
+      console.log(`✅ Extensions créées dans PostgreSQL pour context [${context}]`);
+
+      // Recharger le dialplan via AMI pour prendre en compte les changements
+      return new Promise((resolve, reject) => {
         reloadDialplan((err, res) => {
           if (err) {
-            return reject(new Error(`Erreur lors du rechargement du dialplan: ${err.message}`));
+            console.error('⚠️ Erreur lors du rechargement du dialplan:', err.message);
+            // Ne pas rejeter - le dialplan est dans la DB, Asterisk le prendra en compte
+            return resolve();
           }
 
-          console.log(`✅ Dialplan rechargé avec succès`);
+          console.log(`✅ Dialplan rechargé avec succès via AMI`);
           resolve();
         });
       });
-    });
+
+    } catch (err) {
+      throw new Error(`Erreur lors de la création du dialplan: ${err.message}`);
+    }
   }
 
   /**
