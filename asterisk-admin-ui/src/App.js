@@ -509,13 +509,9 @@ const EndpointsManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState('');
   const [formData, setFormData] = useState({
-    id: '',
     tenant_id: '',
     password: '',
-    context: 'client-a-context',
     transport: 'transport-udp',
-    allow: 'ulaw,alaw,g722',
-    max_contacts: 1,
   });
 
   useEffect(() => {
@@ -550,13 +546,9 @@ const EndpointsManager = () => {
       await apiCall('/api/endpoints', 'POST', formData);
       setShowModal(false);
       setFormData({
-        id: '',
         tenant_id: '',
         password: '',
-        context: 'client-a-context',
         transport: 'transport-udp',
-        allow: 'ulaw,alaw,g722',
-        max_contacts: 1,
       });
       loadEndpoints();
       alert('Endpoint créé avec succès');
@@ -701,22 +693,7 @@ const EndpointsManager = () => {
       {showModal && (
         <Modal onClose={() => setShowModal(false)} title="Nouvel Endpoint">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  ID (Extension)
-                </label>
-                <input
-                  type="text"
-                  value={formData.id}
-                  onChange={e =>
-                    setFormData({ ...formData, id: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  required
-                  placeholder="101"
-                />
-              </div>
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
                   Tenant
@@ -729,42 +706,13 @@ const EndpointsManager = () => {
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
                   required
                 >
-                  <option value="">Sélectionner...</option>
+                  <option value="">Sélectionner un tenant...</option>
                   {tenants.map(t => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Mot de passe
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={e =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  required
-                  placeholder="password123"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Contexte
-                </label>
-                <input
-                  type="text"
-                  value={formData.context}
-                  onChange={e =>
-                    setFormData({ ...formData, context: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  required
-                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -783,16 +731,17 @@ const EndpointsManager = () => {
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Codecs
+                  Mot de passe
                 </label>
                 <input
-                  type="text"
-                  value={formData.allow}
+                  type="password"
+                  value={formData.password}
                   onChange={e =>
-                    setFormData({ ...formData, allow: e.target.value })
+                    setFormData({ ...formData, password: e.target.value })
                   }
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                  placeholder="ulaw,alaw,g722"
+                  required
+                  placeholder="Entrez un mot de passe sécurisé"
                 />
               </div>
             </div>
