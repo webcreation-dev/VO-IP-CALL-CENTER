@@ -2,7 +2,10 @@
  * Middleware de gestion globale des erreurs
  */
 const errorHandler = (err, req, res, next) => {
-    console.error('❌ Erreur capturée:', err);
+    // Ne pas logger les erreurs 404 des bots si skipLog est défini
+    if (!err.skipLog) {
+      console.error('❌ Erreur capturée:', err);
+    }
   
     // Erreur de validation
     if (err.name === 'ValidationError') {
@@ -43,8 +46,25 @@ const errorHandler = (err, req, res, next) => {
    * Middleware pour les routes non trouvées (404)
    */
   const notFound = (req, res, next) => {
+    // Liste des patterns de bots/scanners à ignorer dans les logs
+    const ignoredPatterns = [
+      '/admin/',
+      '/assets',
+      '/api/v1/users',
+      '/_asterisk/',
+      '/remote/',
+      '/favicon.ico',
+      '/pdown',
+      '/.env',
+      '/config.php'
+    ];
+
+    // Ne pas logger les requêtes de bots
+    const shouldSkipLog = ignoredPatterns.some(pattern => req.originalUrl.includes(pattern));
+
     const error = new Error(`Route non trouvée - ${req.originalUrl}`);
     error.status = 404;
+    error.skipLog = shouldSkipLog; // Flag pour le errorHandler
     next(error);
   };
   
