@@ -111,8 +111,9 @@ const getQueueStatus = (queueName, callback) => {
 const addDialplanContext = (context, callback) => {
   const commands = [
     `echo '' >> /etc/asterisk/extensions.conf`,
-    `echo '[${context}](template-tenant)' >> /etc/asterisk/extensions.conf`,
-    `echo '; Context pour tenant ${context}' >> /etc/asterisk/extensions.conf`
+    `echo '[${context}]' >> /etc/asterisk/extensions.conf`,
+    `echo '; Dialplan pour ${context} - chargé depuis PostgreSQL via Realtime' >> /etc/asterisk/extensions.conf`,
+    `echo 'switch => Realtime' >> /etc/asterisk/extensions.conf`
   ].join(' && ');
 
   executeAction(

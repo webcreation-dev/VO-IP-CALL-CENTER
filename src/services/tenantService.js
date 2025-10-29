@@ -1,5 +1,5 @@
 const db = require('../../db');
-const { reloadDialplan } = require('../config/ami');
+const { reloadDialplan, addDialplanContext } = require('../config/ami');
 
 /**
  * Service pour la gestion des tenants
@@ -147,17 +147,27 @@ class TenantService {
 
       console.log(`✅ Extensions créées dans PostgreSQL pour context [${context}]`);
 
-      // Recharger le dialplan via AMI pour prendre en compte les changements
+      // Ajouter le context dans extensions.conf via AMI, puis recharger
       return new Promise((resolve, reject) => {
-        reloadDialplan((err, res) => {
+        addDialplanContext(context, (err, res) => {
           if (err) {
-            console.error('⚠️ Erreur lors du rechargement du dialplan:', err.message);
-            // Ne pas rejeter - le dialplan est dans la DB, Asterisk le prendra en compte
-            return resolve();
+            console.error('⚠️ Erreur lors de l\'ajout du context au fichier:', err.message);
+            // Continuer quand même pour essayer de recharger
+          } else {
+            console.log(`✅ Context [${context}] ajouté à extensions.conf`);
           }
 
-          console.log(`✅ Dialplan rechargé avec succès via AMI`);
-          resolve();
+          // Recharger le dialplan via AMI pour prendre en compte les changements
+          reloadDialplan((err, res) => {
+            if (err) {
+              console.error('⚠️ Erreur lors du rechargement du dialplan:', err.message);
+              // Ne pas rejeter - le dialplan est dans la DB, Asterisk le prendra en compte au prochain reload
+              return resolve();
+            }
+
+            console.log(`✅ Dialplan rechargé avec succès via AMI`);
+            resolve();
+          });
         });
       });
 
