@@ -529,9 +529,10 @@ const EndpointsManager = () => {
 
   const loadEndpoints = async () => {
     try {
+      // Utiliser l'API enrichie pour avoir IP, Status, etc.
       const url = selectedTenant
-        ? `/api/endpoints?tenant_id=${selectedTenant}`
-        : '/api/endpoints';
+        ? `/api/endpoints/enriched?tenant_id=${selectedTenant}`
+        : '/api/endpoints/enriched';
       const data = await apiCall(url);
       setEndpoints(data.data);
     } catch (error) {
@@ -600,6 +601,65 @@ const EndpointsManager = () => {
         </div>
       </div>
 
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border-2 border-green-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Disponibles</p>
+              <p className="text-3xl font-bold text-green-800 mt-2">
+                {endpoints.filter(e => e.registered && e.active_channels_ami === 0 && e.device_state === 'Not in use').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+              <div className="w-4 h-4 bg-white rounded-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border-2 border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">En appel</p>
+              <p className="text-3xl font-bold text-blue-800 mt-2">
+                {endpoints.filter(e => e.active_channels_ami > 0).length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+              <PhoneCall className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border-2 border-yellow-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-yellow-600 text-sm font-semibold uppercase tracking-wide">En ligne</p>
+              <p className="text-3xl font-bold text-yellow-800 mt-2">
+                {endpoints.filter(e => e.registered).length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
+              <Activity className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border-2 border-red-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-red-600 text-sm font-semibold uppercase tracking-wide">Hors ligne</p>
+              <p className="text-3xl font-bold text-red-800 mt-2">
+                {endpoints.filter(e => !e.registered).length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+              <div className="w-4 h-4 bg-white rounded-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -612,6 +672,9 @@ const EndpointsManager = () => {
                   ID
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Adresse IP
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                   Tenant
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
@@ -619,6 +682,9 @@ const EndpointsManager = () => {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                   Contexte
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Appels actifs
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                   Codecs
@@ -635,26 +701,47 @@ const EndpointsManager = () => {
                   className="hover:bg-gray-50 transition-colors"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          endpoint.registered ? 'bg-green-500' : 'bg-red-500'
-                        } animate-pulse`}
-                        title={endpoint.registered ? 'Connecté' : 'Déconnecté'}
-                      ></div>
-                      <span
-                        className={`text-xs font-semibold ${
-                          endpoint.registered
-                            ? 'text-green-700'
-                            : 'text-red-700'
-                        }`}
-                      >
-                        {endpoint.registered ? 'En ligne' : 'Hors ligne'}
-                      </span>
-                    </div>
+                    {(() => {
+                      // Déterminer l'état détaillé
+                      if (!endpoint.registered) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                            <span className="text-xs font-semibold text-red-700">Hors ligne</span>
+                          </div>
+                        );
+                      }
+                      if (endpoint.active_channels_ami > 0) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                            <span className="text-xs font-semibold text-blue-700">En appel</span>
+                          </div>
+                        );
+                      }
+                      if (endpoint.device_state === 'Not in use') {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                            <span className="text-xs font-semibold text-green-700">Disponible</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
+                          <span className="text-xs font-semibold text-yellow-700">En ligne</span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
                     {endpoint.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">
+                    {endpoint.ip_address || (
+                      <span className="text-gray-400 italic">Non connecté</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {endpoint.tenant_name || '-'}
@@ -674,6 +761,15 @@ const EndpointsManager = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {endpoint.context}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {endpoint.active_channels_ami > 0 ? (
+                      <span className="px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800">
+                        {endpoint.active_channels_ami} en cours
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
                     {endpoint.allow}
