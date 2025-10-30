@@ -776,11 +776,31 @@ const QueuesManager = () => {
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [members, setMembers] = useState([]);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [newMember, setNewMember] = useState({ interface: '', membername: '' });
+  const [selectedAgents, setSelectedAgents] = useState([]);
+  const [availableEndpoints, setAvailableEndpoints] = useState([]);
+  const [showCreateQueue, setShowCreateQueue] = useState(false);
+  const [showEditQueue, setShowEditQueue] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState(1);
+  const [tenants, setTenants] = useState([]);
+  const [queueForm, setQueueForm] = useState({
+    name: '',
+    strategy: 'ringall',
+    timeout: 20,
+    retry: 5,
+    wrapuptime: 15,
+    maxlen: 0,
+    tenant_id: 1
+  });
 
   useEffect(() => {
-    loadQueues();
+    loadTenants();
   }, []);
+
+  useEffect(() => {
+    if (selectedTenant) {
+      loadQueues();
+    }
+  }, [selectedTenant]);
 
   useEffect(() => {
     if (selectedQueue) {
@@ -788,12 +808,31 @@ const QueuesManager = () => {
     }
   }, [selectedQueue]);
 
+  const loadTenants = async () => {
+    try {
+      const data = await apiCall('/api/tenants');
+      setTenants(data.data || []);
+    } catch (error) {
+      console.error('Erreur chargement tenants');
+    }
+  };
+
   const loadQueues = async () => {
     try {
-      const data = await apiCall('/api/queues');
+      const data = await apiCall(`/api/queues?tenant_id=${selectedTenant}`);
       setQueues(data.data);
     } catch (error) {
       console.error('Erreur chargement queues');
+    }
+  };
+
+  const loadAvailableEndpoints = async () => {
+    try {
+      const data = await apiCall(`/api/endpoints?tenant_id=${selectedTenant}`);
+      setAvailableEndpoints(data.data || []);
+    } catch (error) {
+      console.error('Erreur chargement endpoints');
+      setAvailableEndpoints([]);
     }
   };
 
@@ -825,10 +864,20 @@ const QueuesManager = () => {
   const handleAddMember = async e => {
     e.preventDefault();
     try {
-      await apiCall(`/api/queues/${selectedQueue}/members`, 'POST', newMember);
+      // Ajouter chaque agent sélectionné
+      for (const endpointId of selectedAgents) {
+        const endpoint = availableEndpoints.find(ep => ep.id === endpointId);
+        if (endpoint) {
+          await apiCall(`/api/queues/${selectedQueue}/members`, 'POST', {
+            interface: `PJSIP/${endpoint.id}`,
+            membername: endpoint.id
+          });
+        }
+      }
       setShowAddMember(false);
-      setNewMember({ interface: '', membername: '' });
+      setSelectedAgents([]);
       loadMembers(selectedQueue);
+      alert(`${selectedAgents.length} agent(s) ajouté(s) avec succès !`);
     } catch (error) {
       alert('Erreur: ' + error.message);
     }
@@ -849,6 +898,70 @@ const QueuesManager = () => {
     }
   };
 
+  const handleCreateQueue = async e => {
+    e.preventDefault();
+    try {
+      const queueData = {
+        ...queueForm,
+        tenant_id: selectedTenant
+      };
+      await apiCall('/api/queues', 'POST', queueData);
+      setShowCreateQueue(false);
+      setQueueForm({
+        name: '',
+        strategy: 'ringall',
+        timeout: 20,
+        retry: 5,
+        wrapuptime: 15,
+        maxlen: 0,
+        tenant_id: selectedTenant
+      });
+      loadQueues();
+      alert('Queue créée avec succès !');
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleEditQueue = async e => {
+    e.preventDefault();
+    try {
+      await apiCall(`/api/queues/${queueForm.name}`, 'PUT', queueForm);
+      setShowEditQueue(false);
+      loadQueues();
+      alert('Queue modifiée avec succès !');
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleDeleteQueue = async queueName => {
+    if (!window.confirm(`Supprimer définitivement la queue "${queueName}" ?`)) return;
+    try {
+      await apiCall(`/api/queues/${queueName}`, 'DELETE');
+      if (selectedQueue === queueName) {
+        setSelectedQueue(null);
+      }
+      loadQueues();
+      alert('Queue supprimée avec succès !');
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const openEditQueue = queue => {
+    setQueueForm({
+      name: queue.name,
+      strategy: queue.strategy,
+      timeout: queue.timeout,
+      retry: queue.retry,
+      wrapuptime: queue.wrapuptime,
+      maxlen: queue.maxlen,
+      tenant_id: queue.tenant_id
+    });
+    setShowEditQueue(true);
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -858,33 +971,94 @@ const QueuesManager = () => {
         <p className="text-gray-500 mt-2">Gérez vos queues et agents</p>
       </div>
 
+      {/* Filtre par tenant */}
+      <div className="bg-white rounded-2xl shadow-xl p-6">
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-bold text-gray-700 whitespace-nowrap">
+            Filtrer par tenant :
+          </label>
+          <select
+            value={selectedTenant}
+            onChange={e => {
+              setSelectedTenant(parseInt(e.target.value));
+              setSelectedQueue(null);
+            }}
+            className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all font-semibold"
+          >
+            {tenants.map(tenant => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name} (ID: {tenant.id})
+              </option>
+            ))}
+          </select>
+          <div className="text-sm text-gray-500">
+            {queues.length} queue(s)
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 bg-white rounded-2xl shadow-xl p-6">
-          <h2 className="text-xl font-bold mb-4 text-gray-900">
-            Files d'Attente
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              Files d'Attente
+            </h2>
+            <button
+              onClick={() => setShowCreateQueue(true)}
+              className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+              title="Créer une queue"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
           <div className="space-y-3">
             {queues.map(queue => (
-              <button
+              <div
                 key={queue.name}
-                onClick={() => setSelectedQueue(queue.name)}
-                className={`w-full text-left p-4 rounded-xl transition-all transform ${
+                className={`relative group p-4 rounded-xl transition-all ${
                   selectedQueue === queue.name
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg scale-105'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
                     : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
                 }`}
               >
-                <div className="font-bold text-lg">{queue.name}</div>
                 <div
-                  className={`text-sm mt-1 ${
-                    selectedQueue === queue.name
-                      ? 'text-blue-100'
-                      : 'text-gray-500'
-                  }`}
+                  onClick={() => setSelectedQueue(queue.name)}
+                  className="cursor-pointer"
                 >
-                  {queue.strategy} • {queue.member_count} agents
+                  <div className="font-bold text-lg">{queue.name}</div>
+                  <div
+                    className={`text-sm mt-1 ${
+                      selectedQueue === queue.name
+                        ? 'text-blue-100'
+                        : 'text-gray-500'
+                    }`}
+                  >
+                    {queue.strategy} • {queue.member_count} agents
+                  </div>
                 </div>
-              </button>
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      openEditQueue(queue);
+                    }}
+                    className="p-1.5 bg-white text-blue-600 rounded-lg hover:bg-blue-50 shadow-lg"
+                    title="Modifier"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleDeleteQueue(queue.name);
+                    }}
+                    className="p-1.5 bg-white text-red-600 rounded-lg hover:bg-red-50 shadow-lg"
+                    title="Supprimer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -897,7 +1071,10 @@ const QueuesManager = () => {
                   Agents de {selectedQueue}
                 </h2>
                 <button
-                  onClick={() => setShowAddMember(true)}
+                  onClick={() => {
+                    loadAvailableEndpoints();
+                    setShowAddMember(true);
+                  }}
                   className="px-5 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg flex items-center gap-2 font-semibold transform hover:scale-105 transition-all"
                 >
                   <UserPlus className="w-5 h-5" />
@@ -982,47 +1159,200 @@ const QueuesManager = () => {
       </div>
 
       {showAddMember && (
-        <Modal onClose={() => setShowAddMember(false)} title="Ajouter un Agent">
+        <Modal onClose={() => setShowAddMember(false)} title="Ajouter des Agents">
           <form onSubmit={handleAddMember} className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">
-                Interface (ex: PJSIP/101)
+                Sélectionner les agents à ajouter (tenant {selectedTenant})
               </label>
-              <input
-                type="text"
-                value={newMember.interface}
-                onChange={e =>
-                  setNewMember({ ...newMember, interface: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                required
-                placeholder="PJSIP/101"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Nom de l'agent
-              </label>
-              <input
-                type="text"
-                value={newMember.membername}
-                onChange={e =>
-                  setNewMember({ ...newMember, membername: e.target.value })
-                }
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
-                placeholder="Agent 101"
-              />
+              <div className="border-2 border-gray-200 rounded-xl p-4 max-h-64 overflow-y-auto space-y-2">
+                {availableEndpoints.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">Aucun endpoint disponible pour ce tenant</p>
+                ) : (
+                  availableEndpoints
+                    .filter(endpoint => !members.some(m => m.interface === `PJSIP/${endpoint.id}`))
+                    .map(endpoint => (
+                      <label
+                        key={endpoint.id}
+                        className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-all"
+                      >
+                        <input
+                          type="checkbox"
+                          value={endpoint.id}
+                          checked={selectedAgents.includes(endpoint.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setSelectedAgents([...selectedAgents, endpoint.id]);
+                            } else {
+                              setSelectedAgents(selectedAgents.filter(id => id !== endpoint.id));
+                            }
+                          }}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-900">{endpoint.id}</div>
+                          <div className="text-sm text-gray-500">PJSIP/{endpoint.id}</div>
+                        </div>
+                      </label>
+                    ))
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {selectedAgents.length} agent(s) sélectionné(s)
+              </p>
             </div>
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+                disabled={selectedAgents.length === 0}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Ajouter
+                Ajouter ({selectedAgents.length})
               </button>
               <button
                 type="button"
-                onClick={() => setShowAddMember(false)}
+                onClick={() => {
+                  setShowAddMember(false);
+                  setSelectedAgents([]);
+                }}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition-all"
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showCreateQueue && (
+        <Modal onClose={() => setShowCreateQueue(false)} title="Créer une File d'Attente">
+          <form onSubmit={handleCreateQueue} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Nom de la queue *
+              </label>
+              <input
+                type="text"
+                value={queueForm.name}
+                onChange={e => setQueueForm({ ...queueForm, name: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                required
+                pattern="[a-zA-Z0-9_-]+"
+                title="Uniquement lettres, chiffres, tirets et underscores (pas d'espaces)"
+                placeholder="ex: support_queue"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Les autres paramètres seront configurés par défaut (Strategy: ringall, Timeout: 20s, etc.)
+              </p>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+              >
+                Créer
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateQueue(false)}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition-all"
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showEditQueue && (
+        <Modal onClose={() => setShowEditQueue(false)} title="Modifier la File d'Attente">
+          <form onSubmit={handleEditQueue} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Nom de la queue
+              </label>
+              <input
+                type="text"
+                value={queueForm.name}
+                disabled
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-500 mt-1">Le nom ne peut pas être modifié</p>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Stratégie
+              </label>
+              <select
+                value={queueForm.strategy}
+                onChange={e => setQueueForm({ ...queueForm, strategy: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+              >
+                <option value="ringall">Ring All (tous sonnent)</option>
+                <option value="rrmemory">Round Robin (à tour de rôle)</option>
+                <option value="leastrecent">Least Recent (moins récent)</option>
+                <option value="fewestcalls">Fewest Calls (moins d'appels)</option>
+                <option value="random">Random (aléatoire)</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Timeout (sec)
+                </label>
+                <input
+                  type="number"
+                  value={queueForm.timeout}
+                  onChange={e => setQueueForm({ ...queueForm, timeout: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Retry (sec)
+                </label>
+                <input
+                  type="number"
+                  value={queueForm.retry}
+                  onChange={e => setQueueForm({ ...queueForm, retry: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Wrapup Time (sec)
+                </label>
+                <input
+                  type="number"
+                  value={queueForm.wrapuptime}
+                  onChange={e => setQueueForm({ ...queueForm, wrapuptime: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Max Length (0 = illimité)
+                </label>
+                <input
+                  type="number"
+                  value={queueForm.maxlen}
+                  onChange={e => setQueueForm({ ...queueForm, maxlen: parseInt(e.target.value) })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+              >
+                Modifier
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditQueue(false)}
                 className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition-all"
               >
                 Annuler
