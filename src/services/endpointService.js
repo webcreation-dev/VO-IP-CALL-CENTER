@@ -878,35 +878,46 @@ class EndpointService {
 
           try {
             // Parser la sortie CLI
-            const output = response.output || '';
+            let output = response.output || '';
+
+            // Si output est un array, le joindre
+            if (Array.isArray(output)) {
+              output = output.join('\n');
+            }
+
             const contactsByEndpoint = {};
 
-            // Format de sortie:
-            // Contact:  <Aor/ContactUri...........> <Hash....> <Status> <RTT(ms)..>
-            // Exemple:
-            // Contact:  101/sip:xxx@192.168.1.100:5060  abc123  Avail   12.345
+            // Format de sortie (peut être tronqué avec des points):
+            // Contact:  101/sip:xxx@192.168.1.100:57653;transpo 598e826 NonQual -nan
+            // Le format peut avoir des points de troncature: ContactUri......
 
             const lines = output.split('\n');
             for (const line of lines) {
-              // Chercher les lignes qui commencent par "Contact:"
-              if (line.trim().startsWith('Contact:') || line.includes('/sip:')) {
-                // Parser le format: endpoint/uri
-                const match = line.match(/(\d+)\/sip:([^\s]+)\s+\S+\s+(\w+)\s+([\d.]+)?/);
+              // Chercher les lignes qui contiennent "Contact:" et un chiffre suivi de /sip:
+              if (line.includes('Contact:') && line.match(/\d+\/sip:/)) {
+                // Parser avec regex flexible pour gérer la troncature
+                // Format: "  Contact:  101/sip:xxx@143.105.211.179:57653;transpo 598e826 NonQual -nan"
+                const match = line.match(/Contact:\s+(\d+)\/sip:([^@]+)@([^:\s;]+):?(\d+)?[^\s]*\s+(\S+)\s+(\S+)\s+([\d.\-nan]+)/);
+
                 if (match) {
-                  const [_, endpointId, uriPart, status, rtt] = match;
+                  const [_, endpointId, userPart, ipAddress, port, hash, status, rtt] = match;
 
                   if (!contactsByEndpoint[endpointId]) {
                     contactsByEndpoint[endpointId] = [];
                   }
 
-                  const fullUri = `sip:${uriPart}`;
+                  // Reconstruire l'URI complète
+                  const portStr = port ? `:${port}` : '';
+                  const fullUri = `sip:${userPart}@${ipAddress}${portStr}`;
+                  const ipWithPort = port ? `${ipAddress}:${port}` : ipAddress;
+
                   contactsByEndpoint[endpointId].push({
                     uri: fullUri,
                     status: status || 'Unknown',
-                    rtt: rtt ? `${rtt}ms` : null,
+                    rtt: (rtt && rtt !== '-nan') ? `${rtt}ms` : null,
                     user_agent: null, // Non disponible via cette commande
                     reg_expire: null,
-                    via_address: uriPart.split('@')[1]?.split(':')[0] || null,
+                    via_address: ipWithPort,
                   });
                 }
               }
