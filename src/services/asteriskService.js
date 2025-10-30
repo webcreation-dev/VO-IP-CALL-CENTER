@@ -485,11 +485,11 @@ class AsteriskService {
         // 1. Récupérer tous les endpoints du contexte depuis la DB
         const db = require('../../db');
         const endpointsResult = await db.query(
-          'SELECT name FROM ps_endpoints WHERE context = $1 ORDER BY name',
+          'SELECT id FROM ps_endpoints WHERE context = $1 ORDER BY id',
           [context]
         );
 
-        const allExtensions = endpointsResult.rows.map(row => row.name);
+        const allExtensions = endpointsResult.rows.map(row => row.id);
 
         // 2. Récupérer les canaux actifs
         const channelsData = await this.getActiveChannels();
