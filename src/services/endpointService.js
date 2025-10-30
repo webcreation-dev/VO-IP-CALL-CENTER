@@ -856,7 +856,7 @@ class EndpointService {
 
   /**
    * NOUVELLE MÉTHODE - Récupérer TOUS les contacts depuis AMI en une seule fois
-   * Plus efficace que d'appeler PJSIPShowEndpoint pour chaque endpoint
+   * Utilise la commande CLI "pjsip show contacts" via AMI
    * @returns {Promise<Object>} Map des contacts par endpoint_id
    */
   async getAllContactsFromAMI() {
@@ -865,55 +865,60 @@ class EndpointService {
         return reject(new Error('AMI non connecté'));
       }
 
-      const ami = amiConfig.ami;
-      const actionId = `contacts_${Date.now()}`;
-      const contactsByEndpoint = {};
-
-      const eventHandler = (event) => {
-        if (event.actionid !== actionId) return;
-
-        if (event.event === 'ContactList') {
-          const endpointId = event.endpointname || event.objectname;
-          if (endpointId) {
-            if (!contactsByEndpoint[endpointId]) {
-              contactsByEndpoint[endpointId] = [];
-            }
-            contactsByEndpoint[endpointId].push({
-              uri: event.uri,
-              status: event.status || 'Unknown',
-              rtt: event.roundtripusec ? `${(parseInt(event.roundtripusec) / 1000).toFixed(2)}ms` : null,
-              user_agent: event.useragent || null,
-              reg_expire: event.regexpire || null,
-              via_address: event.viaaddress || null,
-            });
-          }
-        } else if (event.event === 'ContactListComplete') {
-          ami.removeListener('managerevent', eventHandler);
-          resolve(contactsByEndpoint);
-        }
-      };
-
-      ami.on('managerevent', eventHandler);
-
-      // Envoyer la commande AMI pour récupérer TOUS les contacts
+      // Utiliser la commande CLI via AMI
       amiConfig.executeAction(
         {
-          Action: 'PJSIPShowContacts',
-          ActionID: actionId,
+          Action: 'Command',
+          Command: 'pjsip show contacts',
         },
         (err, response) => {
           if (err) {
-            ami.removeListener('managerevent', eventHandler);
             return reject(err);
+          }
+
+          try {
+            // Parser la sortie CLI
+            const output = response.output || '';
+            const contactsByEndpoint = {};
+
+            // Format de sortie:
+            // Contact:  <Aor/ContactUri...........> <Hash....> <Status> <RTT(ms)..>
+            // Exemple:
+            // Contact:  101/sip:xxx@192.168.1.100:5060  abc123  Avail   12.345
+
+            const lines = output.split('\n');
+            for (const line of lines) {
+              // Chercher les lignes qui commencent par "Contact:"
+              if (line.trim().startsWith('Contact:') || line.includes('/sip:')) {
+                // Parser le format: endpoint/uri
+                const match = line.match(/(\d+)\/sip:([^\s]+)\s+\S+\s+(\w+)\s+([\d.]+)?/);
+                if (match) {
+                  const [_, endpointId, uriPart, status, rtt] = match;
+
+                  if (!contactsByEndpoint[endpointId]) {
+                    contactsByEndpoint[endpointId] = [];
+                  }
+
+                  const fullUri = `sip:${uriPart}`;
+                  contactsByEndpoint[endpointId].push({
+                    uri: fullUri,
+                    status: status || 'Unknown',
+                    rtt: rtt ? `${rtt}ms` : null,
+                    user_agent: null, // Non disponible via cette commande
+                    reg_expire: null,
+                    via_address: uriPart.split('@')[1]?.split(':')[0] || null,
+                  });
+                }
+              }
+            }
+
+            resolve(contactsByEndpoint);
+          } catch (parseErr) {
+            console.error('❌ Erreur parsing contacts:', parseErr);
+            resolve({}); // Retourner vide en cas d'erreur de parsing
           }
         }
       );
-
-      // Timeout de sécurité (5 secondes)
-      setTimeout(() => {
-        ami.removeListener('managerevent', eventHandler);
-        resolve(contactsByEndpoint);
-      }, 5000);
     });
   }
 }
