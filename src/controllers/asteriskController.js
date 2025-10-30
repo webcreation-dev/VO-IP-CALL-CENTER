@@ -305,11 +305,36 @@ class AsteriskController {
       return success(res, uptime, 'Uptime d\'Asterisk');
     } catch (err) {
       console.error('❌ Erreur getUptime:', err);
-      
+
       if (err.message.includes('AMI non connecté')) {
         return error(res, 'AMI non disponible', 503);
       }
-      
+
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/asterisk/transfer/blind
+   * Effectuer un transfert d'appel simple (blind transfer)
+   */
+  async blindTransfer(req, res, next) {
+    try {
+      const { channelName, extension, context } = req.body;
+
+      if (!channelName || !extension || !context) {
+        return error(res, 'Les champs channelName, extension et context sont requis', 400);
+      }
+
+      const result = await asteriskService.blindTransfer(channelName, extension, context);
+      return success(res, result, `Transfert vers ${extension} effectué`);
+    } catch (err) {
+      console.error('❌ Erreur blindTransfer:', err);
+
+      if (err.message.includes('AMI non connecté')) {
+        return error(res, 'AMI non disponible', 503);
+      }
+
       next(err);
     }
   }

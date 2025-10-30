@@ -410,6 +410,37 @@ class AsteriskService {
       });
     });
   }
+
+  /**
+   * Effectuer un transfert simple (Blind Transfer)
+   * Transfère un appel actif vers une extension sans supervision
+   * @param {string} channelName - Nom du canal à transférer (ex: PJSIP/101-00000001)
+   * @param {string} extension - Extension de destination (ex: 102)
+   * @param {string} context - Contexte du dialplan (ex: client-a-context)
+   */
+  async blindTransfer(channelName, extension, context) {
+    if (!channelName || !extension || !context) {
+      throw new Error('Les champs channelName, extension et context sont requis');
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      // Utiliser Redirect pour effectuer le transfert simple
+      amiConfig.executeAction({
+        Action: 'Redirect',
+        Channel: channelName,
+        Exten: extension,
+        Context: context,
+        Priority: '1'
+      }, (err, res) => {
+        if (err) return reject(err);
+        resolve(res);
+      });
+    });
+  }
 }
 
 module.exports = new AsteriskService();

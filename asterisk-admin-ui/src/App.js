@@ -1655,6 +1655,12 @@ const ActiveCalls = () => {
   const [channels, setChannels] = useState([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [transferModal, setTransferModal] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState(null);
+  const [transferData, setTransferData] = useState({
+    extension: '',
+    context: 'client-a-context'
+  });
 
   useEffect(() => {
     loadChannels();
@@ -1687,6 +1693,41 @@ const ActiveCalls = () => {
       loadChannels();
     } catch (error) {
       alert('Erreur lors du raccrochage');
+    }
+  };
+
+  const openTransferModal = (channelName, context) => {
+    setSelectedChannel(channelName);
+    setTransferData({
+      extension: '',
+      context: context || 'client-a-context'
+    });
+    setTransferModal(true);
+  };
+
+  const closeTransferModal = () => {
+    setTransferModal(false);
+    setSelectedChannel(null);
+    setTransferData({ extension: '', context: 'client-a-context' });
+  };
+
+  const handleBlindTransfer = async () => {
+    if (!transferData.extension.trim()) {
+      alert('Veuillez saisir une extension de destination');
+      return;
+    }
+
+    try {
+      await apiCall('/api/asterisk/transfer/blind', 'POST', {
+        channelName: selectedChannel,
+        extension: transferData.extension,
+        context: transferData.context
+      });
+      alert(`Transfert vers ${transferData.extension} effectue avec succes`);
+      closeTransferModal();
+      loadChannels();
+    } catch (error) {
+      alert('Erreur lors du transfert: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
@@ -1764,12 +1805,20 @@ const ActiveCalls = () => {
                       {channel.context || '-'}
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => hangupChannel(channel.channel)}
-                        className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:shadow-lg text-sm font-semibold transition-all"
-                      >
-                        Raccrocher
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openTransferModal(channel.channel, channel.context)}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg text-sm font-semibold transition-all"
+                        >
+                          Transferer
+                        </button>
+                        <button
+                          onClick={() => hangupChannel(channel.channel)}
+                          className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:shadow-lg text-sm font-semibold transition-all"
+                        >
+                          Raccrocher
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1778,6 +1827,72 @@ const ActiveCalls = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de transfert d'appel */}
+      {transferModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+              Transferer l'appel
+            </h2>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Canal source
+                </label>
+                <input
+                  type="text"
+                  value={selectedChannel || ''}
+                  disabled
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-600 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Extension de destination *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 102"
+                  value={transferData.extension}
+                  onChange={(e) => setTransferData({ ...transferData, extension: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Contexte
+                </label>
+                <input
+                  type="text"
+                  value={transferData.context}
+                  onChange={(e) => setTransferData({ ...transferData, context: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleBlindTransfer}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+              >
+                Transferer
+              </button>
+              <button
+                onClick={closeTransferModal}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition-all"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -20,6 +20,9 @@ router.delete('/channels/:channelName', asteriskController.hangupChannel.bind(as
 // Originate (initier un appel)
 router.post('/originate', asteriskController.originateCall.bind(asteriskController));
 
+// Transfert d'appel
+router.post('/transfer/blind', asteriskController.blindTransfer.bind(asteriskController));
+
 // Rechargement des configurations
 router.post('/reload', asteriskController.reloadAll.bind(asteriskController));
 router.post('/reload/pjsip', asteriskController.reloadPJSIP.bind(asteriskController));
