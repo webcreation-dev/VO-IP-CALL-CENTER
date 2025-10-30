@@ -671,6 +671,173 @@ class EndpointService {
       };
     }
   }
+
+  /**
+   * NOUVELLE MÉTHODE - Récupérer les détails complets d'un endpoint depuis AMI
+   * Inclut: IP, User-Agent, Codec, Latence, etc.
+   * @param {string} endpointId - ID de l'endpoint (ex: 101)
+   * @returns {Promise<Object>} Détails complets de l'endpoint
+   */
+  async getEndpointDetailsFromAMI(endpointId) {
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      const ami = amiConfig.ami;
+      const actionId = `detail_${Date.now()}`;
+      const details = {
+        endpoint_id: endpointId,
+        contacts: [],
+        auths: [],
+        transports: [],
+        identifies: [],
+        channel_ids: [],
+      };
+
+      let currentSection = null;
+
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        // Événements de détails
+        if (event.event === 'EndpointDetail') {
+          // Informations générales de l'endpoint
+          details.object_type = event.objecttype;
+          details.device_state = event.devicestate;
+          details.active_channels = parseInt(event.activechannels || '0');
+        }
+        else if (event.event === 'ContactStatusDetail') {
+          // Informations de contact (IP, User-Agent, etc.)
+          details.contacts.push({
+            uri: event.uri,
+            status: event.status,
+            rtt: event.roundtripusec ? `${(parseInt(event.roundtripusec) / 1000).toFixed(2)}ms` : null,
+            user_agent: event.useragent || null,
+            reg_expire: event.regexpire || null,
+            via_address: event.viaaddress || null,
+            call_id: event.callid || null,
+            endpoint_name: event.endpointname,
+          });
+        }
+        else if (event.event === 'AorDetail') {
+          // Détails AOR
+          details.aor = {
+            object_name: event.objectname,
+            max_contacts: parseInt(event.maxcontacts || '1'),
+            qualify_frequency: parseInt(event.qualifyfrequency || '0'),
+            authenticate_qualify: event.authenticatequalify,
+            maximum_expiration: event.maximumexpiration,
+            minimum_expiration: event.minimumexpiration,
+            default_expiration: event.defaultexpiration,
+          };
+        }
+        else if (event.event === 'AuthDetail') {
+          // Détails d'authentification
+          details.auths.push({
+            object_name: event.objectname,
+            auth_type: event.authtype,
+            username: event.username,
+          });
+        }
+        else if (event.event === 'TransportDetail') {
+          // Détails du transport
+          details.transports.push({
+            object_name: event.objectname,
+            protocol: event.protocol,
+            bind: event.bind,
+            tos: event.tos,
+            local_net: event.localnet,
+            external_media_address: event.externalmediaaddress,
+            external_signaling_address: event.externalsignalingaddress,
+          });
+        }
+        else if (event.event === 'IdentifyDetail') {
+          details.identifies.push({
+            object_name: event.objectname,
+            endpoint: event.endpoint,
+            match: event.match,
+          });
+        }
+        else if (event.event === 'EndpointDetailComplete') {
+          // Fin de la récupération
+          ami.removeListener('managerevent', eventHandler);
+          resolve(details);
+        }
+      };
+
+      ami.on('managerevent', eventHandler);
+
+      // Envoyer la commande AMI
+      amiConfig.executeAction(
+        {
+          Action: 'PJSIPShowEndpoint',
+          Endpoint: endpointId,
+          ActionID: actionId,
+        },
+        (err, response) => {
+          if (err) {
+            ami.removeListener('managerevent', eventHandler);
+            return reject(err);
+          }
+          // Si l'endpoint n'existe pas
+          if (response && response.response === 'Error') {
+            ami.removeListener('managerevent', eventHandler);
+            return reject(new Error(response.message || 'Endpoint non trouvé'));
+          }
+        }
+      );
+
+      // Timeout de sécurité (10 secondes)
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        resolve(details);
+      }, 10000);
+    });
+  }
+
+  /**
+   * NOUVELLE MÉTHODE - Enrichir TOUS les endpoints avec détails complets AMI
+   * Cette méthode enrichit chaque endpoint avec IP, User-Agent, etc.
+   * @param {Array} endpoints - Liste des endpoints depuis la DB
+   * @returns {Promise<Array>} Endpoints enrichis
+   */
+  async enrichEndpointsWithFullDetails(endpoints) {
+    if (!amiConfig.isConnected()) {
+      console.warn('⚠️ AMI non connecté - pas d\'enrichissement des détails');
+      return endpoints;
+    }
+
+    // Enrichir chaque endpoint avec ses détails complets
+    const enrichedEndpoints = await Promise.all(
+      endpoints.map(async (endpoint) => {
+        try {
+          const details = await this.getEndpointDetailsFromAMI(endpoint.id);
+
+          // Extraire les infos pertinentes
+          const contact = details.contacts && details.contacts.length > 0 ? details.contacts[0] : null;
+
+          return {
+            ...endpoint,
+            // Infos réseau
+            contact_uri: contact?.uri || null,
+            ip_address: contact?.via_address || null,
+            user_agent: contact?.user_agent || null,
+            rtt: contact?.rtt || null,
+            contact_status: contact?.status || null,
+            reg_expire: contact?.reg_expire || null,
+            // Détails AMI complets (pour la vue détaillée)
+            ami_details: details,
+          };
+        } catch (err) {
+          console.warn(`⚠️ Erreur enrichissement endpoint ${endpoint.id}:`, err.message);
+          return endpoint; // Retourner l'endpoint sans enrichissement en cas d'erreur
+        }
+      })
+    );
+
+    return enrichedEndpoints;
+  }
 }
 
 module.exports = new EndpointService();

@@ -146,6 +146,65 @@ class EndpointController {
       next(err);
     }
   }
+
+  /**
+   * NOUVELLE ROUTE - GET /api/endpoints/enriched
+   * GET /api/endpoints/enriched?tenant_id=1
+   * Récupérer tous les endpoints ENRICHIS avec détails AMI complets
+   * (IP, User-Agent, Latence, etc.)
+   */
+  async getAllEndpointsEnriched(req, res, next) {
+    try {
+      const { tenant_id } = req.query;
+
+      // 1. Récupérer les endpoints de base (comme avant)
+      const endpoints = await endpointService.getAllEndpoints(tenant_id || null);
+
+      // 2. Enrichir avec les détails complets AMI
+      const enrichedEndpoints = await endpointService.enrichEndpointsWithFullDetails(endpoints);
+
+      return success(
+        res,
+        enrichedEndpoints,
+        `${enrichedEndpoints.length} endpoint(s) enrichi(s)`
+      );
+    } catch (err) {
+      console.error('❌ Erreur getAllEndpointsEnriched:', err);
+      next(err);
+    }
+  }
+
+  /**
+   * NOUVELLE ROUTE - GET /api/endpoints/:id/details
+   * Récupérer les détails complets AMI d'un endpoint spécifique
+   */
+  async getEndpointDetails(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      // Vérifier que l'endpoint existe en DB
+      const endpoint = await endpointService.getEndpointById(id);
+      if (!endpoint) {
+        return notFound(res, `Endpoint "${id}" introuvable`);
+      }
+
+      // Récupérer les détails AMI
+      const details = await endpointService.getEndpointDetailsFromAMI(id);
+
+      return success(res, {
+        ...endpoint,
+        ami_details: details
+      }, 'Détails complets de l\'endpoint');
+    } catch (err) {
+      console.error('❌ Erreur getEndpointDetails:', err);
+
+      if (err.message.includes('introuvable') || err.message.includes('non trouvé')) {
+        return notFound(res, err.message);
+      }
+
+      next(err);
+    }
+  }
 }
 
 module.exports = new EndpointController();

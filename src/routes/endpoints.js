@@ -7,15 +7,22 @@ const endpointController = require('../controllers/endpointController');
  * Base URL: /api/endpoints
  */
 
-// GET /api/endpoints - Liste tous les endpoints
+// NOUVELLE ROUTE - GET /api/endpoints/enriched - Liste avec détails AMI complets
+// Query params: ?tenant_id=1
+router.get('/enriched', endpointController.getAllEndpointsEnriched.bind(endpointController));
+
+// GET /api/endpoints - Liste tous les endpoints (route existante)
 // Query params: ?tenant_id=1
 router.get('/', endpointController.getAllEndpoints.bind(endpointController));
 
-// GET /api/endpoints/:id - Détails d'un endpoint
-router.get('/:id', endpointController.getEndpointById.bind(endpointController));
+// NOUVELLE ROUTE - GET /api/endpoints/:id/details - Détails AMI complets
+router.get('/:id/details', endpointController.getEndpointDetails.bind(endpointController));
 
-// GET /api/endpoints/:id/status - Statut d'enregistrement
+// GET /api/endpoints/:id/status - Statut d'enregistrement (route existante)
 router.get('/:id/status', endpointController.getEndpointStatus.bind(endpointController));
+
+// GET /api/endpoints/:id - Détails d'un endpoint (route existante)
+router.get('/:id', endpointController.getEndpointById.bind(endpointController));
 
 // POST /api/endpoints - Créer un endpoint
 router.post('/', endpointController.createEndpoint.bind(endpointController));
