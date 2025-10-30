@@ -461,14 +461,12 @@ class AsteriskService {
         return reject(new Error('AMI non connecté'));
       }
 
-      // Utiliser BlindTransfer au lieu de Redirect
-      // Format: exten@context
-      const destination = `${extension}@${context}`;
-
+      // Action BlindTransfer avec Exten et Context séparés
       amiConfig.executeAction({
         Action: 'BlindTransfer',
         Channel: channelName,
-        Exten: destination
+        Exten: extension,
+        Context: context
       }, (err, res) => {
         if (err) return reject(err);
         resolve(res);
