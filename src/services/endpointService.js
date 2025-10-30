@@ -720,6 +720,19 @@ class EndpointService {
             endpoint_name: event.endpointname,
           });
         }
+        else if (event.event === 'ContactList') {
+          // Alternative: ContactList event (parfois utilisé à la place de ContactStatusDetail)
+          details.contacts.push({
+            uri: event.uri,
+            status: event.status || 'Unknown',
+            rtt: event.roundtripusec ? `${(parseInt(event.roundtripusec) / 1000).toFixed(2)}ms` : null,
+            user_agent: event.useragent || null,
+            reg_expire: event.regexpire || null,
+            via_address: event.viaaddress || null,
+            call_id: event.callid || null,
+            endpoint_name: event.endpointname || endpointId,
+          });
+        }
         else if (event.event === 'AorDetail') {
           // Détails AOR
           details.aor = {
