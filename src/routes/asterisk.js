@@ -22,6 +22,7 @@ router.post('/originate', asteriskController.originateCall.bind(asteriskControll
 
 // Transfert d'appel
 router.post('/transfer/blind', asteriskController.blindTransfer.bind(asteriskController));
+router.get('/extensions/available', asteriskController.getAvailableExtensions.bind(asteriskController));
 
 // Rechargement des configurations
 router.post('/reload', asteriskController.reloadAll.bind(asteriskController));

@@ -1661,6 +1661,7 @@ const ActiveCalls = () => {
     extension: '',
     context: 'client-a-context'
   });
+  const [availableExtensions, setAvailableExtensions] = useState([]);
 
   useEffect(() => {
     loadChannels();
@@ -1696,12 +1697,23 @@ const ActiveCalls = () => {
     }
   };
 
-  const openTransferModal = (channelName, context) => {
+  const openTransferModal = async (channelName, context) => {
     setSelectedChannel(channelName);
+    const ctx = context || 'client-a-context';
     setTransferData({
       extension: '',
-      context: context || 'client-a-context'
+      context: ctx
     });
+
+    // Charger les extensions disponibles pour ce contexte
+    try {
+      const data = await apiCall(`/api/asterisk/extensions/available?context=${ctx}`);
+      setAvailableExtensions(data.data || []);
+    } catch (error) {
+      console.error('Erreur chargement extensions disponibles');
+      setAvailableExtensions([]);
+    }
+
     setTransferModal(true);
   };
 
@@ -1853,27 +1865,25 @@ const ActiveCalls = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Extension de destination *
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 102"
-                  value={transferData.extension}
-                  onChange={(e) => setTransferData({ ...transferData, extension: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  autoFocus
-                />
+                {availableExtensions.length > 0 ? (
+                  <select
+                    value={transferData.extension}
+                    onChange={(e) => setTransferData({ ...transferData, extension: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    autoFocus
+                  >
+                    <option value="">-- Sélectionner une extension --</option>
+                    {availableExtensions.map(ext => (
+                      <option key={ext} value={ext}>{ext}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500 text-sm">
+                    Aucune extension disponible
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Contexte
-                </label>
-                <input
-                  type="text"
-                  value={transferData.context}
-                  onChange={(e) => setTransferData({ ...transferData, context: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
             </div>
 
             <div className="flex gap-3">

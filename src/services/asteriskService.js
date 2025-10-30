@@ -461,17 +461,61 @@ class AsteriskService {
         return reject(new Error('AMI non connecté'));
       }
 
-      // Utiliser Redirect pour effectuer le transfert simple
+      // Utiliser BlindTransfer au lieu de Redirect
+      // Format: exten@context
+      const destination = `${extension}@${context}`;
+
       amiConfig.executeAction({
-        Action: 'Redirect',
+        Action: 'BlindTransfer',
         Channel: channelName,
-        Exten: extension,
-        Context: context,
-        Priority: '1'
+        Exten: destination
       }, (err, res) => {
         if (err) return reject(err);
         resolve(res);
       });
+    });
+  }
+
+  /**
+   * Obtenir les extensions disponibles (non en appel) pour un contexte donné
+   */
+  async getAvailableExtensions(context) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // 1. Récupérer tous les endpoints du contexte depuis la DB
+        const db = require('../../db');
+        const endpointsResult = await db.query(
+          'SELECT name FROM ps_endpoints WHERE context = $1 ORDER BY name',
+          [context]
+        );
+
+        const allExtensions = endpointsResult.rows.map(row => row.name);
+
+        // 2. Récupérer les canaux actifs
+        const channelsData = await this.getActiveChannels();
+        const activeChannels = channelsData.events || [];
+
+        // 3. Extraire les extensions en appel
+        const busyExtensions = new Set();
+        activeChannels.forEach(channel => {
+          if (channel.context === context) {
+            // Extraire l'extension du nom du canal (ex: PJSIP/101-xxx -> 101)
+            const match = channel.channel.match(/PJSIP\/(\d+)-/);
+            if (match) {
+              busyExtensions.add(match[1]);
+            }
+          }
+        });
+
+        // 4. Filtrer les extensions disponibles
+        const availableExtensions = allExtensions.filter(
+          ext => !busyExtensions.has(ext)
+        );
+
+        resolve(availableExtensions);
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 }

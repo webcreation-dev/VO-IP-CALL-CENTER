@@ -338,6 +338,31 @@ class AsteriskController {
       next(err);
     }
   }
+
+  /**
+   * GET /api/asterisk/extensions/available
+   * Obtenir les extensions disponibles (non en appel) pour un contexte
+   */
+  async getAvailableExtensions(req, res, next) {
+    try {
+      const { context } = req.query;
+
+      if (!context) {
+        return error(res, 'Le paramètre context est requis', 400);
+      }
+
+      const extensions = await asteriskService.getAvailableExtensions(context);
+      return success(res, extensions, 'Extensions disponibles');
+    } catch (err) {
+      console.error('❌ Erreur getAvailableExtensions:', err);
+
+      if (err.message.includes('AMI non connecté')) {
+        return error(res, 'AMI non disponible', 503);
+      }
+
+      next(err);
+    }
+  }
 }
 
 module.exports = new AsteriskController();
