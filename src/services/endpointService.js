@@ -821,35 +821,100 @@ class EndpointService {
       return endpoints;
     }
 
-    // Enrichir chaque endpoint avec ses détails complets
-    const enrichedEndpoints = await Promise.all(
-      endpoints.map(async (endpoint) => {
-        try {
-          const details = await this.getEndpointDetailsFromAMI(endpoint.id);
+    // Récupérer TOUS les contacts en une seule fois via PJSIPShowContacts
+    const allContacts = await this.getAllContactsFromAMI();
 
-          // Extraire les infos pertinentes
-          const contact = details.contacts && details.contacts.length > 0 ? details.contacts[0] : null;
+    // Enrichir chaque endpoint avec ses contacts
+    const enrichedEndpoints = endpoints.map((endpoint) => {
+      const contacts = allContacts[endpoint.id] || [];
+      const contact = contacts.length > 0 ? contacts[0] : null;
 
-          return {
-            ...endpoint,
-            // Infos réseau
-            contact_uri: contact?.uri || null,
-            ip_address: contact?.via_address || null,
-            user_agent: contact?.user_agent || null,
-            rtt: contact?.rtt || null,
-            contact_status: contact?.status || null,
-            reg_expire: contact?.reg_expire || null,
-            // Détails AMI complets (pour la vue détaillée)
-            ami_details: details,
-          };
-        } catch (err) {
-          console.warn(`⚠️ Erreur enrichissement endpoint ${endpoint.id}:`, err.message);
-          return endpoint; // Retourner l'endpoint sans enrichissement en cas d'erreur
+      // Extraire l'IP depuis l'URI SIP (ex: sip:xxx@192.168.1.100:5060)
+      let ip_address = null;
+      if (contact?.uri) {
+        const ipMatch = contact.uri.match(/@([^:;]+)(?::(\d+))?/);
+        if (ipMatch) {
+          ip_address = ipMatch[2] ? `${ipMatch[1]}:${ipMatch[2]}` : ipMatch[1];
         }
-      })
-    );
+      }
+
+      return {
+        ...endpoint, // Garde TOUTES les données existantes (device_state, registered, etc.)
+        // Ajouter les infos réseau
+        contact_uri: contact?.uri || null,
+        ip_address: ip_address,
+        user_agent: contact?.user_agent || null,
+        rtt: contact?.rtt || null,
+        contact_status: contact?.status || null,
+        reg_expire: contact?.reg_expire || null,
+        contacts_count: contacts.length,
+      };
+    });
 
     return enrichedEndpoints;
+  }
+
+  /**
+   * NOUVELLE MÉTHODE - Récupérer TOUS les contacts depuis AMI en une seule fois
+   * Plus efficace que d'appeler PJSIPShowEndpoint pour chaque endpoint
+   * @returns {Promise<Object>} Map des contacts par endpoint_id
+   */
+  async getAllContactsFromAMI() {
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      const ami = amiConfig.ami;
+      const actionId = `contacts_${Date.now()}`;
+      const contactsByEndpoint = {};
+
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        if (event.event === 'ContactList') {
+          const endpointId = event.endpointname || event.objectname;
+          if (endpointId) {
+            if (!contactsByEndpoint[endpointId]) {
+              contactsByEndpoint[endpointId] = [];
+            }
+            contactsByEndpoint[endpointId].push({
+              uri: event.uri,
+              status: event.status || 'Unknown',
+              rtt: event.roundtripusec ? `${(parseInt(event.roundtripusec) / 1000).toFixed(2)}ms` : null,
+              user_agent: event.useragent || null,
+              reg_expire: event.regexpire || null,
+              via_address: event.viaaddress || null,
+            });
+          }
+        } else if (event.event === 'ContactListComplete') {
+          ami.removeListener('managerevent', eventHandler);
+          resolve(contactsByEndpoint);
+        }
+      };
+
+      ami.on('managerevent', eventHandler);
+
+      // Envoyer la commande AMI pour récupérer TOUS les contacts
+      amiConfig.executeAction(
+        {
+          Action: 'PJSIPShowContacts',
+          ActionID: actionId,
+        },
+        (err, response) => {
+          if (err) {
+            ami.removeListener('managerevent', eventHandler);
+            return reject(err);
+          }
+        }
+      );
+
+      // Timeout de sécurité (5 secondes)
+      setTimeout(() => {
+        ami.removeListener('managerevent', eventHandler);
+        resolve(contactsByEndpoint);
+      }, 5000);
+    });
   }
 }
 
