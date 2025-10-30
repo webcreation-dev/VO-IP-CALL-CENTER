@@ -10,7 +10,7 @@ class QueueMemberService {
    */
   async getQueueMembers(queueName) {
     const query = `
-      SELECT 
+      SELECT
         qm.queue_name,
         qm.interface,
         qm.uniqueid,
@@ -18,6 +18,7 @@ class QueueMemberService {
         qm.penalty,
         qm.paused,
         qm.state_interface,
+        qm.tenant_id,
         e.id as endpoint_id,
         e.context as endpoint_context
       FROM queue_members qm
@@ -150,14 +151,15 @@ class QueueMemberService {
       throw new Error("L'interface du membre est requise (ex: PJSIP/101)");
     }
 
-    // Vérifier si la queue existe
+    // Vérifier si la queue existe et récupérer son tenant_id
     const queueCheck = await db.query(
-      'SELECT name FROM queues WHERE name = $1',
+      'SELECT name, tenant_id FROM queues WHERE name = $1',
       [queueName]
     );
     if (queueCheck.rows.length === 0) {
       throw new Error(`Queue "${queueName}" introuvable`);
     }
+    const queueTenantId = queueCheck.rows[0].tenant_id;
 
     // Vérifier si le membre existe déjà
     if (await this.memberExists(queueName, memberInterface)) {
@@ -174,8 +176,8 @@ class QueueMemberService {
 
     const query = `
       INSERT INTO queue_members (
-        queue_name, interface, uniqueid, membername, penalty, paused, state_interface
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        queue_name, interface, uniqueid, membername, penalty, paused, state_interface, tenant_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
 
@@ -187,6 +189,7 @@ class QueueMemberService {
       penalty,
       paused,
       state_interface,
+      queueTenantId,
     ];
 
     const { rows } = await db.query(query, values);

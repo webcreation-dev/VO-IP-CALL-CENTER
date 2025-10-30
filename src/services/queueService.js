@@ -92,6 +92,7 @@ class QueueService {
     let query = `
       SELECT
         q.name,
+        q.tenant_id,
         q.musiconhold,
         q.strategy,
         q.timeout,
@@ -387,8 +388,8 @@ class QueueService {
         maxlen, announce_frequency, announce_holdtime, announce_position,
         periodic_announce, periodic_announce_frequency,
         monitor_type, monitor_format, ringinuse,
-        setinterfacevar, setqueuevar, autofill
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        setinterfacevar, setqueuevar, autofill, tenant_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `;
 
@@ -411,6 +412,7 @@ class QueueService {
       setinterfacevar,
       setqueuevar,
       autofill,
+      tenant_id,
     ];
 
     const { rows } = await db.query(query, values);
