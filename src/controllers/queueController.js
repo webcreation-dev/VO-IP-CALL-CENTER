@@ -260,6 +260,138 @@ class QueueController {
       next(err);
     }
   }
+
+  /**
+   * NOUVELLES API COMPLÈTES ET RÉUTILISABLES
+   */
+
+  /**
+   * GET /api/queues/enriched
+   * GET /api/queues/enriched?tenant_id=1
+   * Liste enrichie complète des queues avec toutes les statistiques AMI
+   */
+  async getAllQueuesEnriched(req, res, next) {
+    try {
+      const { tenant_id } = req.query;
+      const enrichedQueues = await queueService.getAllQueuesEnriched(tenant_id || null);
+      return success(
+        res,
+        enrichedQueues,
+        `${enrichedQueues.length} queue(s) enrichie(s) avec données AMI`
+      );
+    } catch (err) {
+      console.error('❌ Erreur getAllQueuesEnriched:', err);
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/queues/stats/global
+   * GET /api/queues/stats/global?tenant_id=1
+   * Statistiques globales agrégées de toutes les queues
+   */
+  async getGlobalQueueStats(req, res, next) {
+    try {
+      const { tenant_id } = req.query;
+      const stats = await queueService.getGlobalQueueStats(tenant_id || null);
+      return success(res, stats, 'Statistiques globales des queues');
+    } catch (err) {
+      console.error('❌ Erreur getGlobalQueueStats:', err);
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/queues/:name/details
+   * Détails complets d'une queue avec configuration + statistiques + membres
+   */
+  async getQueueDetailedStats(req, res, next) {
+    try {
+      const { name } = req.params;
+      const details = await queueService.getQueueDetailedStats(name);
+      return success(res, details, `Détails complets de la queue "${name}"`);
+    } catch (err) {
+      console.error('❌ Erreur getQueueDetailedStats:', err);
+
+      if (err.message.includes('introuvable')) {
+        return notFound(res, err.message);
+      }
+
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/queues/:name/reload
+   * Recharger une queue spécifique dans Asterisk
+   */
+  async reloadQueue(req, res, next) {
+    try {
+      const { name } = req.params;
+      const result = await queueService.reloadSpecificQueue(name);
+      return success(res, result, `Queue "${name}" rechargée avec succès`);
+    } catch (err) {
+      console.error('❌ Erreur reloadQueue:', err);
+
+      if (err.message.includes('introuvable')) {
+        return notFound(res, err.message);
+      }
+
+      if (err.message.includes('AMI non connecté')) {
+        return error(res, err.message, 503);
+      }
+
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/queues/:name/calls
+   * Liste des appels en attente dans une queue
+   */
+  async getQueueCalls(req, res, next) {
+    try {
+      const { name } = req.params;
+      const calls = await queueService.getQueueCalls(name);
+      return success(res, calls, `${calls.calls_count} appel(s) en attente dans "${name}"`);
+    } catch (err) {
+      console.error('❌ Erreur getQueueCalls:', err);
+
+      if (err.message.includes('non trouvée') || err.message.includes('introuvable')) {
+        return notFound(res, err.message);
+      }
+
+      if (err.message.includes('AMI non connecté')) {
+        return error(res, err.message, 503);
+      }
+
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/queues/:queueName/members/enriched
+   * Liste enrichie des membres avec informations endpoint
+   */
+  async getQueueMembersEnriched(req, res, next) {
+    try {
+      const { queueName } = req.params;
+      const enrichedMembers = await queueMemberService.getQueueMembersEnriched(queueName);
+      return success(
+        res,
+        enrichedMembers,
+        `${enrichedMembers.length} membre(s) enrichi(s) dans la queue "${queueName}"`
+      );
+    } catch (err) {
+      console.error('❌ Erreur getQueueMembersEnriched:', err);
+
+      if (err.message.includes('introuvable')) {
+        return notFound(res, err.message);
+      }
+
+      next(err);
+    }
+  }
 }
 
 module.exports = new QueueController();

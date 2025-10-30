@@ -573,6 +573,523 @@ class QueueService {
       }
     );
   }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * GET /api/queues/enriched
+   * Récupérer toutes les queues avec enrichissement AMI complet
+   * @param {number|null} tenantId - Filtrer par tenant (optionnel)
+   * @returns {Promise<Array>} Liste complète des queues avec toutes les données DB + AMI
+   */
+  async getAllQueuesEnriched(tenantId = null) {
+    try {
+      // 1. Récupérer les données de base depuis DB
+      const queuesFromDB = await this.getAllQueues(tenantId);
+
+      // 2. Récupérer les données AMI complètes
+      let queuesFromAMI = {};
+      try {
+        queuesFromAMI = await this.getAllQueuesFromAMI();
+      } catch (err) {
+        console.warn('⚠️ AMI non disponible pour enrichissement, données DB uniquement');
+      }
+
+      // 3. Enrichir chaque queue avec données AMI étendues
+      const enrichedQueues = queuesFromDB.map(queue => {
+        const amiData = queuesFromAMI[queue.name] || {};
+
+        // Calculer statistiques étendues
+        const calls_waiting = parseInt(amiData.calls || 0);
+        const members = amiData.members || [];
+        const members_total = members.length;
+        const members_available = members.filter(m => m.status === '1' && !m.paused && m.in_call === 0).length;
+        const members_in_call = members.filter(m => m.in_call > 0).length;
+        const members_paused = members.filter(m => m.paused).length;
+        const members_unavailable = members.filter(m => m.status !== '1').length;
+
+        // Calculer le temps d'attente le plus long (estimation)
+        const avg_holdtime = parseInt(amiData.holdtime || 0);
+        const longest_wait_time = calls_waiting > 0 ? Math.round(avg_holdtime * 1.5) : 0;
+
+        // Déterminer l'état visuel de la queue
+        let visual_state = 'idle'; // idle, active, busy, critical
+        if (calls_waiting === 0) {
+          visual_state = 'idle';
+        } else if (calls_waiting <= 2 && longest_wait_time < 60) {
+          visual_state = 'active';
+        } else if (calls_waiting <= 5 && longest_wait_time < 120) {
+          visual_state = 'busy';
+        } else {
+          visual_state = 'critical';
+        }
+
+        // Calculer le taux d'abandon
+        const total_calls = (amiData.completed || 0) + (amiData.abandoned || 0);
+        const abandonment_rate = total_calls > 0 ? ((amiData.abandoned || 0) / total_calls * 100).toFixed(2) : 0;
+
+        // Calculer l'utilisation des agents
+        const agent_utilization = members_total > 0 ? ((members_in_call / members_total) * 100).toFixed(2) : 0;
+
+        return {
+          // Données DB de base
+          ...queue,
+
+          // Statistiques d'appels AMI
+          calls_waiting,
+          calls_completed: parseInt(amiData.completed || 0),
+          calls_abandoned: parseInt(amiData.abandoned || 0),
+          calls_total: total_calls,
+
+          // Temps et performance
+          avg_holdtime,
+          avg_talktime: parseInt(amiData.talktime || 0),
+          longest_wait_time,
+          service_level: parseInt(amiData.service_level || 0),
+          service_level_perf: parseFloat(amiData.service_level_perf || 0),
+
+          // Métriques calculées
+          abandonment_rate: parseFloat(abandonment_rate),
+          agent_utilization: parseFloat(agent_utilization),
+
+          // Statistiques membres
+          members_total,
+          members_available,
+          members_in_call,
+          members_paused,
+          members_unavailable,
+
+          // État visuel
+          visual_state, // idle, active, busy, critical
+
+          // Métadonnées AMI
+          ami_connected: Object.keys(queuesFromAMI).length > 0,
+          ami_data_available: !!amiData.name,
+
+          // Timestamp
+          enriched_at: new Date().toISOString(),
+        };
+      });
+
+      return enrichedQueues;
+    } catch (error) {
+      console.error('❌ Erreur getAllQueuesEnriched:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * GET /api/queues/stats/global
+   * Statistiques globales agrégées de toutes les queues
+   * @param {number|null} tenantId - Filtrer par tenant (optionnel)
+   * @returns {Promise<Object>} Statistiques globales complètes
+   */
+  async getGlobalQueueStats(tenantId = null) {
+    try {
+      // Récupérer les queues enrichies
+      const enrichedQueues = await this.getAllQueuesEnriched(tenantId);
+
+      // Agréger les statistiques
+      const stats = {
+        // Compteurs de base
+        total_queues: enrichedQueues.length,
+        total_calls_waiting: 0,
+        total_calls_completed: 0,
+        total_calls_abandoned: 0,
+        total_calls_handled: 0,
+
+        // Statistiques membres globales
+        total_members: 0,
+        members_available: 0,
+        members_in_call: 0,
+        members_paused: 0,
+        members_unavailable: 0,
+
+        // Métriques de performance globales
+        avg_holdtime_global: 0,
+        avg_talktime_global: 0,
+        longest_wait_time_global: 0,
+        global_abandonment_rate: 0,
+        global_agent_utilization: 0,
+
+        // Répartition par état visuel
+        queues_idle: 0,
+        queues_active: 0,
+        queues_busy: 0,
+        queues_critical: 0,
+
+        // Queues avec le plus d'appels en attente
+        top_busy_queues: [],
+
+        // Métadonnées
+        ami_connected: enrichedQueues.length > 0 ? enrichedQueues[0].ami_connected : false,
+        calculated_at: new Date().toISOString(),
+        tenant_id: tenantId,
+      };
+
+      let total_holdtime = 0;
+      let total_talktime = 0;
+      let queues_with_calls = 0;
+
+      enrichedQueues.forEach(queue => {
+        // Appels
+        stats.total_calls_waiting += queue.calls_waiting || 0;
+        stats.total_calls_completed += queue.calls_completed || 0;
+        stats.total_calls_abandoned += queue.calls_abandoned || 0;
+
+        // Membres
+        stats.total_members += queue.members_total || 0;
+        stats.members_available += queue.members_available || 0;
+        stats.members_in_call += queue.members_in_call || 0;
+        stats.members_paused += queue.members_paused || 0;
+        stats.members_unavailable += queue.members_unavailable || 0;
+
+        // Temps
+        if (queue.avg_holdtime > 0) {
+          total_holdtime += queue.avg_holdtime;
+          queues_with_calls++;
+        }
+        total_talktime += queue.avg_talktime || 0;
+
+        if (queue.longest_wait_time > stats.longest_wait_time_global) {
+          stats.longest_wait_time_global = queue.longest_wait_time;
+        }
+
+        // États visuels
+        switch (queue.visual_state) {
+          case 'idle': stats.queues_idle++; break;
+          case 'active': stats.queues_active++; break;
+          case 'busy': stats.queues_busy++; break;
+          case 'critical': stats.queues_critical++; break;
+        }
+      });
+
+      // Calculer les totaux et moyennes
+      stats.total_calls_handled = stats.total_calls_completed + stats.total_calls_abandoned;
+      stats.avg_holdtime_global = queues_with_calls > 0 ? Math.round(total_holdtime / queues_with_calls) : 0;
+      stats.avg_talktime_global = enrichedQueues.length > 0 ? Math.round(total_talktime / enrichedQueues.length) : 0;
+
+      if (stats.total_calls_handled > 0) {
+        stats.global_abandonment_rate = parseFloat(
+          ((stats.total_calls_abandoned / stats.total_calls_handled) * 100).toFixed(2)
+        );
+      }
+
+      if (stats.total_members > 0) {
+        stats.global_agent_utilization = parseFloat(
+          ((stats.members_in_call / stats.total_members) * 100).toFixed(2)
+        );
+      }
+
+      // Top 5 queues avec le plus d'appels en attente
+      stats.top_busy_queues = enrichedQueues
+        .filter(q => q.calls_waiting > 0)
+        .sort((a, b) => b.calls_waiting - a.calls_waiting)
+        .slice(0, 5)
+        .map(q => ({
+          name: q.name,
+          calls_waiting: q.calls_waiting,
+          longest_wait_time: q.longest_wait_time,
+          members_available: q.members_available,
+        }));
+
+      return stats;
+    } catch (error) {
+      console.error('❌ Erreur getGlobalQueueStats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * GET /api/queues/:name/details
+   * Détails complets d'une queue spécifique avec toutes les données DB + AMI
+   * @param {string} queueName - Nom de la queue
+   * @returns {Promise<Object>} Objet complet avec configuration + statistiques + membres
+   */
+  async getQueueDetailedStats(queueName) {
+    try {
+      // 1. Récupérer les données DB
+      const queueFromDB = await this.getQueueByName(queueName);
+      if (!queueFromDB) {
+        throw new Error(`Queue "${queueName}" introuvable`);
+      }
+
+      // 2. Récupérer le statut AMI complet
+      const queueStatus = await this.getQueueStatusFromAMI(queueName);
+
+      // 3. Récupérer les membres enrichis
+      const queueMemberService = require('./queueMemberService');
+      const members = await queueMemberService.getQueueMembers(queueName);
+
+      // 4. Construire la réponse complète
+      const details = {
+        // Configuration complète de la queue (DB)
+        configuration: {
+          name: queueFromDB.name,
+          tenant_id: queueFromDB.tenant_id,
+          tenant_name: queueFromDB.tenant_name,
+
+          // Paramètres de base
+          strategy: queueFromDB.strategy,
+          musiconhold: queueFromDB.musiconhold,
+          context: queueFromDB.context,
+          timeout: queueFromDB.timeout,
+          retry: queueFromDB.retry,
+          wrapuptime: queueFromDB.wrapuptime,
+          maxlen: queueFromDB.maxlen,
+          weight: queueFromDB.weight,
+
+          // Annonces
+          announce_frequency: queueFromDB.announce_frequency,
+          announce_holdtime: queueFromDB.announce_holdtime,
+          announce_position: queueFromDB.announce_position,
+          announce_round_seconds: queueFromDB.announce_round_seconds,
+          periodic_announce: queueFromDB.periodic_announce,
+          periodic_announce_frequency: queueFromDB.periodic_announce_frequency,
+          min_announce_frequency: queueFromDB.min_announce_frequency,
+          random_periodic_announce: queueFromDB.random_periodic_announce,
+          relative_periodic_announce: queueFromDB.relative_periodic_announce,
+
+          // Messages sonores
+          queue_youarenext: queueFromDB.queue_youarenext,
+          queue_thereare: queueFromDB.queue_thereare,
+          queue_callswaiting: queueFromDB.queue_callswaiting,
+          queue_holdtime: queueFromDB.queue_holdtime,
+          queue_minutes: queueFromDB.queue_minutes,
+          queue_seconds: queueFromDB.queue_seconds,
+          queue_thankyou: queueFromDB.queue_thankyou,
+          queue_reporthold: queueFromDB.queue_reporthold,
+
+          // Monitoring
+          monitor_type: queueFromDB.monitor_type,
+          monitor_format: queueFromDB.monitor_format,
+
+          // Autopause
+          autopause: queueFromDB.autopause,
+          autopausedelay: queueFromDB.autopausedelay,
+          autopausebusy: queueFromDB.autopausebusy,
+          autopauseunavail: queueFromDB.autopauseunavail,
+
+          // Paramètres avancés
+          servicelevel: queueFromDB.servicelevel,
+          joinempty: queueFromDB.joinempty,
+          leavewhenempty: queueFromDB.leavewhenempty,
+          timeoutrestart: queueFromDB.timeoutrestart,
+          ringinuse: queueFromDB.ringinuse,
+          autofill: queueFromDB.autofill,
+          setinterfacevar: queueFromDB.setinterfacevar,
+          setqueueentryvar: queueFromDB.setqueueentryvar,
+          setqueuevar: queueFromDB.setqueuevar,
+        },
+
+        // Statistiques en temps réel (AMI)
+        statistics: {
+          calls_waiting: queueStatus.calls || 0,
+          calls_completed: queueStatus.completed || 0,
+          calls_abandoned: queueStatus.abandoned || 0,
+          calls_total: (queueStatus.completed || 0) + (queueStatus.abandoned || 0),
+
+          avg_holdtime: queueStatus.holdtime || 0,
+          avg_talktime: queueStatus.talktime || 0,
+          service_level: queueStatus.service_level || 0,
+          service_level_perf: queueStatus.service_level_perf || 0,
+
+          abandonment_rate:
+            ((queueStatus.completed || 0) + (queueStatus.abandoned || 0)) > 0
+              ? parseFloat((((queueStatus.abandoned || 0) / ((queueStatus.completed || 0) + (queueStatus.abandoned || 0))) * 100).toFixed(2))
+              : 0,
+        },
+
+        // Membres de la queue
+        members: {
+          total: members.length,
+          available: members.filter(m => m.status === 'available' && !m.paused && !m.in_call).length,
+          in_call: members.filter(m => m.in_call).length,
+          paused: members.filter(m => m.paused).length,
+          unavailable: members.filter(m => m.status === 'unavailable').length,
+          list: members.map(m => ({
+            interface: m.interface,
+            member_name: m.member_name,
+            status: m.status,
+            paused: m.paused,
+            paused_reason: m.paused_reason || null,
+            penalty: m.penalty,
+            calls_taken: m.calls_taken || 0,
+            last_call: m.last_call || 0,
+            in_call: m.in_call || false,
+            state_interface: m.state_interface,
+          })),
+        },
+
+        // État global de la queue
+        state: {
+          is_active: (queueStatus.calls || 0) > 0,
+          has_available_agents: members.filter(m => m.status === 'available' && !m.paused).length > 0,
+          can_accept_calls:
+            members.filter(m => m.status === 'available' && !m.paused).length > 0 &&
+            (queueFromDB.maxlen === 0 || (queueStatus.calls || 0) < queueFromDB.maxlen),
+          visual_state: this._calculateVisualState(queueStatus.calls || 0, queueStatus.holdtime || 0),
+        },
+
+        // Métadonnées
+        meta: {
+          ami_connected: !!queueStatus.name,
+          retrieved_at: new Date().toISOString(),
+        },
+      };
+
+      return details;
+    } catch (error) {
+      console.error(`❌ Erreur getQueueDetailedStats pour "${queueName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Méthode utilitaire pour calculer l'état visuel
+   * @private
+   */
+  _calculateVisualState(callsWaiting, avgHoldtime) {
+    if (callsWaiting === 0) return 'idle';
+    if (callsWaiting <= 2 && avgHoldtime < 60) return 'active';
+    if (callsWaiting <= 5 && avgHoldtime < 120) return 'busy';
+    return 'critical';
+  }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * POST /api/queues/:name/reload
+   * Recharger une queue spécifique dans Asterisk
+   * @param {string} queueName - Nom de la queue à recharger
+   * @returns {Promise<Object>} Résultat du rechargement
+   */
+  async reloadSpecificQueue(queueName) {
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      // Vérifier que la queue existe
+      db.query('SELECT name FROM queues WHERE name = $1', [queueName])
+        .then(result => {
+          if (result.rows.length === 0) {
+            return reject(new Error(`Queue "${queueName}" introuvable`));
+          }
+
+          // Recharger la queue spécifique via CLI
+          amiConfig.executeAction(
+            {
+              Action: 'Command',
+              Command: `queue reload ${queueName}`,
+            },
+            (err, res) => {
+              if (err) {
+                console.error(`❌ Erreur reload queue "${queueName}":`, err);
+                return reject(err);
+              }
+
+              console.log(`✅ Queue "${queueName}" rechargée`);
+              resolve({
+                success: true,
+                queue_name: queueName,
+                message: 'Queue rechargée avec succès',
+                response: res,
+                reloaded_at: new Date().toISOString(),
+              });
+            }
+          );
+        })
+        .catch(reject);
+    });
+  }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * GET /api/queues/:name/calls
+   * Récupérer les appels en attente dans une queue (si disponible via AMI)
+   * @param {string} queueName - Nom de la queue
+   * @returns {Promise<Object>} Liste des appels en attente avec détails
+   */
+  async getQueueCalls(queueName) {
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      const calls = [];
+      const actionId = `${Date.now()}`;
+      let queueFound = false;
+
+      const eventHandler = (event) => {
+        if (event.actionid !== actionId) return;
+
+        if (event.event === 'QueueEntry') {
+          if (event.queue === queueName) {
+            queueFound = true;
+            calls.push({
+              position: parseInt(event.position || 0),
+              channel: event.channel,
+              caller_id_num: event.calleridnum,
+              caller_id_name: event.calleridname,
+              wait_time: parseInt(event.wait || 0),
+              priority: parseInt(event.priority || 0),
+            });
+          }
+        } else if (event.event === 'QueueStatusComplete') {
+          amiConfig.ami.removeListener('managerevent', eventHandler);
+
+          if (!queueFound) {
+            return reject(new Error(`Queue "${queueName}" non trouvée ou aucun appel en attente`));
+          }
+
+          resolve({
+            queue_name: queueName,
+            calls_count: calls.length,
+            calls: calls.sort((a, b) => a.position - b.position),
+            retrieved_at: new Date().toISOString(),
+          });
+        }
+      };
+
+      amiConfig.ami.on('managerevent', eventHandler);
+
+      amiConfig.executeAction(
+        {
+          Action: 'QueueStatus',
+          Queue: queueName,
+          ActionID: actionId,
+        },
+        (err, response) => {
+          if (err) {
+            amiConfig.ami.removeListener('managerevent', eventHandler);
+            return reject(err);
+          }
+        }
+      );
+
+      // Timeout
+      setTimeout(() => {
+        amiConfig.ami.removeListener('managerevent', eventHandler);
+        if (calls.length === 0 && !queueFound) {
+          resolve({
+            queue_name: queueName,
+            calls_count: 0,
+            calls: [],
+            message: 'Aucun appel en attente',
+            retrieved_at: new Date().toISOString(),
+          });
+        } else {
+          resolve({
+            queue_name: queueName,
+            calls_count: calls.length,
+            calls: calls.sort((a, b) => a.position - b.position),
+            retrieved_at: new Date().toISOString(),
+          });
+        }
+      }, 5000);
+    });
+  }
 }
 
 module.exports = new QueueService();

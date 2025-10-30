@@ -453,6 +453,101 @@ class QueueMemberService {
       );
     });
   }
+
+  /**
+   * API COMPLÈTE ET RÉUTILISABLE
+   * GET /api/queues/:queueName/members/enriched
+   * Récupérer tous les membres d'une queue avec enrichissement complet
+   * @param {string} queueName - Nom de la queue
+   * @returns {Promise<Array>} Liste des membres avec toutes les données DB + AMI + Endpoint info
+   */
+  async getQueueMembersEnriched(queueName) {
+    try {
+      // 1. Récupérer les membres de base (déjà enrichis avec AMI)
+      const members = await this.getQueueMembers(queueName);
+
+      // 2. Enrichir avec les informations supplémentaires des endpoints
+      const endpointService = require('./endpointService');
+
+      const enrichedMembers = await Promise.all(
+        members.map(async (member) => {
+          // Extraire l'ID de l'endpoint depuis l'interface (ex: PJSIP/101 -> 101)
+          const endpointIdMatch = member.interface.match(/PJSIP\/(\w+)/);
+          const endpointId = endpointIdMatch ? endpointIdMatch[1] : null;
+
+          let endpointData = null;
+          if (endpointId) {
+            try {
+              endpointData = await endpointService.getEndpointById(endpointId);
+            } catch (err) {
+              console.warn(`⚠️ Endpoint ${endpointId} non trouvé pour membre ${member.interface}`);
+            }
+          }
+
+          // Calculer des métriques additionnelles
+          const time_since_last_call = member.last_call > 0
+            ? Math.floor((Date.now() / 1000) - member.last_call)
+            : null;
+
+          // Déterminer le statut détaillé
+          let detailed_status = 'unknown';
+          if (member.status === 'unavailable') {
+            detailed_status = 'offline';
+          } else if (member.paused) {
+            detailed_status = 'paused';
+          } else if (member.in_call) {
+            detailed_status = 'in_call';
+          } else if (member.status === 'available') {
+            detailed_status = 'available';
+          }
+
+          return {
+            // Données de base du membre
+            interface: member.interface,
+            member_name: member.member_name,
+            queue_name: queueName,
+
+            // Statut détaillé
+            status: member.status,
+            detailed_status, // offline, paused, in_call, available, unknown
+            paused: member.paused,
+            paused_reason: member.paused_reason,
+            in_call: member.in_call,
+
+            // Priorité et config
+            penalty: member.penalty,
+            state_interface: member.state_interface,
+
+            // Statistiques d'appels
+            calls_taken: member.calls_taken || 0,
+            last_call: member.last_call || 0,
+            time_since_last_call, // en secondes
+
+            // Informations endpoint (si disponible)
+            endpoint: endpointData ? {
+              id: endpointData.id,
+              tenant_id: endpointData.tenant_id,
+              tenant_name: endpointData.tenant_name,
+              transport: endpointData.transport,
+              context: endpointData.context,
+              registered: endpointData.registered || false,
+              device_state: endpointData.device_state,
+              ip_address: endpointData.ip_address,
+            } : null,
+
+            // Métadonnées
+            ami_data_available: member.status !== 'unknown',
+            enriched_at: new Date().toISOString(),
+          };
+        })
+      );
+
+      return enrichedMembers;
+    } catch (error) {
+      console.error(`❌ Erreur getQueueMembersEnriched pour "${queueName}":`, error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new QueueMemberService();
