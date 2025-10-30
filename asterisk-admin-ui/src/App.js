@@ -31,6 +31,8 @@ import {
   Wifi,
   Zap,
   TrendingDown,
+  Eye,
+  WifiOff,
 } from 'lucide-react';
 import {
   LineChart,
@@ -513,6 +515,17 @@ const EndpointsManager = () => {
     transport: 'transport-udp',
   });
 
+  // Filtres
+  const [statusFilter, setStatusFilter] = useState('all'); // all, online, offline, in_call, available
+  const [transportFilter, setTransportFilter] = useState('all'); // all, webrtc, udp
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Modal détails
+  const [detailsModal, setDetailsModal] = useState(false);
+  const [selectedEndpoint, setSelectedEndpoint] = useState(null);
+  const [endpointDetails, setEndpointDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
   useEffect(() => {
     loadTenants();
     loadEndpoints();
@@ -564,6 +577,44 @@ const EndpointsManager = () => {
       loadEndpoints();
     } catch (error) {
       alert('Erreur lors de la suppression');
+    }
+  };
+
+  const openDetailsModal = async (endpoint) => {
+    setSelectedEndpoint(endpoint);
+    setDetailsModal(true);
+    setLoadingDetails(true);
+
+    try {
+      const data = await apiCall(`/api/endpoints/${endpoint.id}/details`);
+      setEndpointDetails(data.data);
+    } catch (error) {
+      alert('Erreur lors du chargement des détails: ' + error.message);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const closeDetailsModal = () => {
+    setDetailsModal(false);
+    setSelectedEndpoint(null);
+    setEndpointDetails(null);
+  };
+
+  const handleForceDisconnect = async (endpointId) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir forcer la déconnexion de l'endpoint "${endpointId}" ?`)) {
+      return;
+    }
+
+    try {
+      await apiCall(`/api/endpoints/${endpointId}/disconnect`, 'POST');
+      alert(`Endpoint "${endpointId}" déconnecté avec succès`);
+
+      // Recharger les endpoints et fermer le modal
+      loadEndpoints();
+      closeDetailsModal();
+    } catch (error) {
+      alert('Erreur lors de la déconnexion: ' + error.message);
     }
   };
 
@@ -660,6 +711,56 @@ const EndpointsManager = () => {
         </div>
       </div>
 
+      {/* Filtres */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              placeholder="Rechercher (ID, IP, Tenant)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all"
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium"
+          >
+            <option value="all">Tous les états</option>
+            <option value="available">🟢 Disponibles</option>
+            <option value="in_call">🔵 En appel</option>
+            <option value="online">🟡 En ligne</option>
+            <option value="offline">🔴 Hors ligne</option>
+          </select>
+
+          <select
+            value={transportFilter}
+            onChange={(e) => setTransportFilter(e.target.value)}
+            className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all font-medium"
+          >
+            <option value="all">Tous les transports</option>
+            <option value="webrtc">WebRTC</option>
+            <option value="udp">UDP/TCP</option>
+          </select>
+
+          {(statusFilter !== 'all' || transportFilter !== 'all' || searchQuery) && (
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setTransportFilter('all');
+                setSearchQuery('');
+              }}
+              className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-medium transition-all"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -695,7 +796,48 @@ const EndpointsManager = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {endpoints.map(endpoint => (
+              {endpoints.filter(endpoint => {
+                // Filtre par statut
+                if (statusFilter !== 'all') {
+                  if (statusFilter === 'available' && !(endpoint.registered && endpoint.active_channels_ami === 0 && endpoint.device_state === 'Not in use')) {
+                    return false;
+                  }
+                  if (statusFilter === 'in_call' && !(endpoint.active_channels_ami > 0)) {
+                    return false;
+                  }
+                  if (statusFilter === 'online' && !endpoint.registered) {
+                    return false;
+                  }
+                  if (statusFilter === 'offline' && endpoint.registered) {
+                    return false;
+                  }
+                }
+
+                // Filtre par transport
+                if (transportFilter !== 'all') {
+                  const isWebRTC = endpoint.transport && endpoint.transport.toLowerCase().includes('wss');
+                  if (transportFilter === 'webrtc' && !isWebRTC) {
+                    return false;
+                  }
+                  if (transportFilter === 'udp' && isWebRTC) {
+                    return false;
+                  }
+                }
+
+                // Filtre par recherche (ID, IP, Tenant)
+                if (searchQuery) {
+                  const query = searchQuery.toLowerCase();
+                  const matchesId = endpoint.id && endpoint.id.toLowerCase().includes(query);
+                  const matchesIp = endpoint.ip_address && endpoint.ip_address.toLowerCase().includes(query);
+                  const matchesTenant = endpoint.tenant_name && endpoint.tenant_name.toLowerCase().includes(query);
+
+                  if (!matchesId && !matchesIp && !matchesTenant) {
+                    return false;
+                  }
+                }
+
+                return true;
+              }).map(endpoint => (
                 <tr
                   key={endpoint.id}
                   className="hover:bg-gray-50 transition-colors"
@@ -775,12 +917,22 @@ const EndpointsManager = () => {
                     {endpoint.allow}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => handleDelete(endpoint.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openDetailsModal(endpoint)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        title="Voir les détails"
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(endpoint.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -860,6 +1012,220 @@ const EndpointsManager = () => {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {detailsModal && selectedEndpoint && (
+        <Modal onClose={closeDetailsModal} title={`Détails de l'endpoint ${selectedEndpoint.id}`}>
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+              <span className="ml-3 text-gray-600">Chargement des détails...</span>
+            </div>
+          ) : endpointDetails ? (
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* État Général */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border-2 border-blue-200">
+                <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                  <Activity className="w-5 h-5" />
+                  État Général
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-blue-700 font-semibold">Enregistrement</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {endpointDetails.registered ? '✅ Enregistré' : '❌ Non enregistré'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700 font-semibold">État de l'appareil</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {endpointDetails.device_state || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700 font-semibold">Appels actifs</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {endpointDetails.active_channels_ami || 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700 font-semibold">Transport</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {endpointDetails.transport || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informations Réseau */}
+              {endpointDetails.ami_details && (
+                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border-2 border-green-200">
+                  <h3 className="text-lg font-bold text-green-900 mb-4 flex items-center gap-2">
+                    <Wifi className="w-5 h-5" />
+                    Informations Réseau
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-green-700 font-semibold">Adresse IP</p>
+                      <p className="text-sm font-mono font-bold text-green-900">
+                        {endpointDetails.ip_address || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 font-semibold">URI de Contact</p>
+                      <p className="text-sm font-mono font-bold text-green-900 break-all">
+                        {endpointDetails.ami_details.contact_uri || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 font-semibold">RTT (Latence)</p>
+                      <p className="text-sm font-bold text-green-900">
+                        {endpointDetails.ami_details.rtt || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 font-semibold">Statut Contact</p>
+                      <p className="text-sm font-bold text-green-900">
+                        {endpointDetails.ami_details.contact_status || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Configuration */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border-2 border-purple-200">
+                <h3 className="text-lg font-bold text-purple-900 mb-4 flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Configuration
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">Contexte</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.context || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">Tenant</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.tenant_name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">Codecs Autorisés</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.allow || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">Direct Media</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.direct_media || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">DTMF Mode</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.dtmf_mode || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-700 font-semibold">RTP Symmetric</p>
+                    <p className="text-sm font-bold text-purple-900">
+                      {endpointDetails.rtp_symmetric || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sécurité */}
+              {endpointDetails.ami_details && (
+                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border-2 border-yellow-200">
+                  <h3 className="text-lg font-bold text-yellow-900 mb-4 flex items-center gap-2">
+                    <Power className="w-5 h-5" />
+                    Sécurité & Avancé
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-yellow-700 font-semibold">Type d'authentification</p>
+                      <p className="text-sm font-bold text-yellow-900">
+                        {endpointDetails.auth_type || 'userpass'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-yellow-700 font-semibold">DTLS</p>
+                      <p className="text-sm font-bold text-yellow-900">
+                        {endpointDetails.media_encryption || 'no'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-yellow-700 font-semibold">WebRTC</p>
+                      <p className="text-sm font-bold text-yellow-900">
+                        {endpointDetails.webrtc || 'no'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-yellow-700 font-semibold">Force RPORT</p>
+                      <p className="text-sm font-bold text-yellow-900">
+                        {endpointDetails.force_rport || 'yes'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Détails AMI Complets */}
+              {endpointDetails.ami_details && Object.keys(endpointDetails.ami_details).length > 0 && (
+                <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Database className="w-5 h-5" />
+                    Détails AMI Bruts
+                  </h3>
+                  <pre className="text-xs bg-white p-4 rounded-lg overflow-x-auto border border-gray-300 font-mono">
+                    {JSON.stringify(endpointDetails.ami_details, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-gray-500">
+              Aucun détail disponible
+            </div>
+          )}
+          <div className="mt-6 flex justify-between items-center gap-3">
+            <div className="flex gap-3">
+              {selectedEndpoint && selectedEndpoint.registered && (
+                <button
+                  onClick={() => handleForceDisconnect(selectedEndpoint.id)}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all font-semibold"
+                  disabled={loadingDetails}
+                >
+                  <WifiOff className="w-5 h-5" />
+                  Forcer déconnexion
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // Navigation vers la page CDR filtrée par endpoint
+                  // Pour l'instant, on affiche juste un message
+                  alert(`Historique CDR pour l'endpoint ${selectedEndpoint?.id} - À implémenter`);
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all font-semibold"
+                disabled={loadingDetails}
+              >
+                <FileText className="w-5 h-5" />
+                Historique CDR
+              </button>
+            </div>
+            <button
+              onClick={closeDetailsModal}
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition-all"
+            >
+              Fermer
+            </button>
+          </div>
         </Modal>
       )}
     </div>

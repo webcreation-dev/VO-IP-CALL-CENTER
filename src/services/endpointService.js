@@ -932,6 +932,49 @@ class EndpointService {
       );
     });
   }
+
+  /**
+   * Forcer la déconnexion d'un endpoint (unregister)
+   * @param {string} endpointId - ID de l'endpoint à déconnecter
+   */
+  async forceDisconnect(endpointId) {
+    return new Promise((resolve, reject) => {
+      if (!amiConfig.isConnected()) {
+        return reject(new Error('AMI non connecté'));
+      }
+
+      // Vérifier que l'endpoint existe
+      db.query('SELECT id FROM ps_endpoints WHERE id = $1', [endpointId])
+        .then(result => {
+          if (result.rows.length === 0) {
+            return reject(new Error(`Endpoint "${endpointId}" introuvable`));
+          }
+
+          // Envoyer la commande pour désenregistrer tous les contacts de cet endpoint
+          amiConfig.executeAction(
+            {
+              Action: 'Command',
+              Command: `pjsip send unregister ${endpointId}`,
+            },
+            (err, res) => {
+              if (err) {
+                console.error('❌ Erreur force disconnect:', err);
+                return reject(err);
+              }
+
+              console.log('✅ Force disconnect envoyé:', endpointId);
+              resolve({
+                success: true,
+                endpoint_id: endpointId,
+                message: 'Commande de déconnexion envoyée',
+                response: res,
+              });
+            }
+          );
+        })
+        .catch(reject);
+    });
+  }
 }
 
 module.exports = new EndpointService();

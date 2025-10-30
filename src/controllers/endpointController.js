@@ -205,6 +205,31 @@ class EndpointController {
       next(err);
     }
   }
+
+  /**
+   * POST /api/endpoints/:id/disconnect
+   * Forcer la déconnexion d'un endpoint
+   */
+  async forceDisconnect(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await endpointService.forceDisconnect(id);
+      return success(res, result, `Endpoint "${id}" déconnecté avec succès`);
+    } catch (err) {
+      console.error('❌ Erreur forceDisconnect:', err);
+
+      if (err.message.includes('introuvable') || err.message.includes('non trouvé')) {
+        return notFound(res, err.message);
+      }
+
+      if (err.message.includes('AMI non connecté')) {
+        return error(res, err.message, 503);
+      }
+
+      next(err);
+    }
+  }
 }
 
 module.exports = new EndpointController();

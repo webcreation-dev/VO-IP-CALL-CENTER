@@ -18,6 +18,9 @@ router.get('/', endpointController.getAllEndpoints.bind(endpointController));
 // NOUVELLE ROUTE - GET /api/endpoints/:id/details - Détails AMI complets
 router.get('/:id/details', endpointController.getEndpointDetails.bind(endpointController));
 
+// NOUVELLE ROUTE - POST /api/endpoints/:id/disconnect - Forcer déconnexion
+router.post('/:id/disconnect', endpointController.forceDisconnect.bind(endpointController));
+
 // GET /api/endpoints/:id/status - Statut d'enregistrement (route existante)
 router.get('/:id/status', endpointController.getEndpointStatus.bind(endpointController));
 
