@@ -86,12 +86,45 @@ class AsteriskService {
         return reject(new Error('AMI non connecté'));
       }
 
+      const channels = [];
+      let listening = true;
+
+      // Écouter les événements CoreShowChannel
+      const channelListener = (evt) => {
+        if (evt.event === 'CoreShowChannel') {
+          channels.push(evt);
+        } else if (evt.event === 'CoreShowChannelsComplete') {
+          // Fin de la liste des canaux
+          if (listening) {
+            listening = false;
+            amiConfig.ami.removeListener('managerevent', channelListener);
+            resolve({ events: channels });
+          }
+        }
+      };
+
+      // Attacher le listener
+      amiConfig.ami.on('managerevent', channelListener);
+
+      // Envoyer la commande
       amiConfig.executeAction({
         Action: 'CoreShowChannels',
       }, (err, res) => {
-        if (err) return reject(err);
-        resolve(res);
+        if (err) {
+          amiConfig.ami.removeListener('managerevent', channelListener);
+          return reject(err);
+        }
+        // La réponse initiale arrive ici, mais les événements arrivent via le listener
       });
+
+      // Timeout de sécurité (5 secondes)
+      setTimeout(() => {
+        if (listening) {
+          listening = false;
+          amiConfig.ami.removeListener('managerevent', channelListener);
+          resolve({ events: channels });
+        }
+      }, 5000);
     });
   }
 
