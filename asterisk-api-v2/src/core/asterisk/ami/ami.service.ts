@@ -56,15 +56,19 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
     this.ami.on('connect', () => {
       this.logger.log('✅ AMI connected successfully');
       this.isConnected = true;
-      
-      // ADDED: Explicitly enable events after connection
-      this.ami.action({ Action: 'Events', EventMask: 'on' }, (err: Error, res: any) => {
-        if (err) {
-          this.logger.warn('Failed to enable AMI events:', err.message);
-        } else {
-          this.logger.log('✅ AMI events enabled');
-        }
-      });
+
+      // Force enable ALL events immediately after connection
+      setTimeout(() => {
+        this.logger.log('🔧 Forcing AMI events activation...');
+        this.ami.action({ Action: 'Events', EventMask: 'on' }, (err: Error, res: any) => {
+          if (err) {
+            this.logger.error('❌ Failed to enable AMI events:', err.message);
+          } else {
+            this.logger.log('✅ AMI events enabled successfully');
+            this.logger.log(`📋 Response: ${JSON.stringify(res)}`);
+          }
+        });
+      }, 500);
     });
 
     this.ami.on('disconnect', () => {
@@ -404,63 +408,78 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
   return new Promise((resolve, reject) => {
     const events: any[] = [];
     const actionId = `endpoint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    let collecting = true;
 
-    // ✅ CORRECTION: Use internal event system instead of ami.on()
+    // NEW STRATEGY: Collect ALL EndpointDetail events for our endpoint, ignore ActionID
     const eventHandler = (event: any) => {
-      // Only process events with matching ActionID
-      if (event.actionid === actionId) {
-        this.logger.log(`[AMI Event] ${event.event} for endpoint ${endpointId} (ActionID: ${actionId})`);
-        events.push(event);
+      if (!collecting) return;
 
-        // When we get the complete event, process all events
-        if (event.event === 'EndpointDetailComplete') {
-          // ✅ CORRECTION: Use off() instead of removeListener()
-          this.off('managerevent', eventHandler);
-          
-          // Parse collected events
-          const endpointDetail = events.find((e) => e.event === 'EndpointDetail');
-          const contacts = events
-            .filter((e) => e.event === 'ContactStatusDetail')
-            .map((c) => ({
-              uri: c.uri,
-              status: c.status,
-              rtt: c.roundtripusec,
-              userAgent: c.useragent,
-            }));
+      const eventName = event.event;
 
-          if (endpointDetail) {
-            resolve({
-              objectType: endpointDetail.objecttype,
-              objectName: endpointDetail.objectname,
-              transport: endpointDetail.transport,
-              aor: endpointDetail.aor,
-              auths: endpointDetail.auths,
-              outboundAuths: endpointDetail.outboundauths,
-              deviceState: endpointDetail.devicestate || 'Unknown',
-              activeChannels: parseInt(endpointDetail.activechannels, 10) || 0,
-              contacts: contacts.length > 0 ? contacts : null,
-            });
-          } else {
-            reject(new Error('No EndpointDetail received'));
+      // Collect all endpoint-related events
+      if (eventName === 'EndpointDetail' ||
+          eventName === 'AuthDetail' ||
+          eventName === 'TransportDetail' ||
+          eventName === 'AorDetail' ||
+          eventName === 'ContactStatusDetail' ||
+          eventName === 'EndpointDetailComplete') {
+
+        // Check if it's for our endpoint
+        if (event.objectname === endpointId || !event.objectname) {
+          this.logger.log(`✅ [MATCHED] ${eventName} for ${endpointId}`);
+          events.push(event);
+
+          // When we get the complete event, process all events
+          if (eventName === 'EndpointDetailComplete') {
+            collecting = false;
+            this.off('managerevent', eventHandler);
+            clearTimeout(timeout);
+
+            // Parse collected events
+            const endpointDetail = events.find((e) => e.event === 'EndpointDetail');
+            const contacts = events
+              .filter((e) => e.event === 'ContactStatusDetail')
+              .map((c) => ({
+                uri: c.uri,
+                status: c.status,
+                rtt: c.roundtripusec,
+                userAgent: c.useragent,
+              }));
+
+            if (endpointDetail) {
+              this.logger.log(`🎉 Successfully got endpoint status for ${endpointId}`);
+              resolve({
+                objectType: endpointDetail.objecttype,
+                objectName: endpointDetail.objectname,
+                transport: endpointDetail.transport,
+                aor: endpointDetail.aor,
+                auths: endpointDetail.auths,
+                outboundAuths: endpointDetail.outboundauths,
+                deviceState: endpointDetail.devicestate || 'Unknown',
+                activeChannels: parseInt(endpointDetail.activechannels, 10) || 0,
+                contacts: contacts.length > 0 ? contacts : null,
+              });
+            } else {
+              reject(new Error('No EndpointDetail received'));
+            }
           }
         }
       }
     };
 
-    // ✅ CORRECTION: Use internal on() method instead of ami.on()
     this.on('managerevent', eventHandler);
 
     // Set timeout
     const timeout = setTimeout(() => {
-      // ✅ CORRECTION: Use off() instead of removeListener()
+      if (!collecting) return;
+      collecting = false;
       this.off('managerevent', eventHandler);
       this.logger.warn(`Endpoint status timeout for ${endpointId} - Events received: ${events.length}`);
-      
-      // Log what we got for debugging
+
       if (events.length > 0) {
         this.logger.debug(`Events received: ${events.map(e => e.event).join(', ')}`);
       }
-      
+
       reject(new Error(`Endpoint status timeout for ${endpointId}`));
     }, AMI_TIMEOUTS.ENDPOINT_STATUS);
 
@@ -475,7 +494,7 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
       (err: Error) => {
         if (err) {
           clearTimeout(timeout);
-          // ✅ CORRECTION: Use off() instead of removeListener()
+          collecting = false;
           this.off('managerevent', eventHandler);
           this.logger.error(`PJSIPShowEndpoint action error for ${endpointId}:`, err.message);
           reject(err);

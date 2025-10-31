@@ -25,7 +25,7 @@ import { QueueMembersModule } from './queue-members/queue-members.module';
 import { ChannelsModule } from './channels/channels.module';
 import { CdrModule } from './cdr/cdr.module';
 import { RecordingsModule } from './recordings/recordings.module';
-import { MonitoringModule } from './monitoring/monitoring.module';
+// import { MonitoringModule } from './monitoring/monitoring.module';
 import { MetadataModule } from './metadata/metadata.module';
 import { AsteriskModule } from './asterisk/asterisk.module';
 import { StatisticsModule } from './statistics/statistics.module';
@@ -72,7 +72,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     ChannelsModule,
     CdrModule,
     RecordingsModule,
-    MonitoringModule,
+    // MonitoringModule,
     MetadataModule,
     AsteriskModule,
     StatisticsModule,

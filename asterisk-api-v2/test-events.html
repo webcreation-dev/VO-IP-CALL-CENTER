@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test AMI Events</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #fff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .connected {
+            background: #2d5016;
+            border: 1px solid #4caf50;
+        }
+        .disconnected {
+            background: #5d1616;
+            border: 1px solid #f44336;
+        }
+        #events {
+            background: #2d2d2d;
+            padding: 20px;
+            border-radius: 5px;
+            max-height: 600px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .event {
+            padding: 10px;
+            margin: 5px 0;
+            background: #3d3d3d;
+            border-left: 3px solid #2196f3;
+            border-radius: 3px;
+        }
+        .event-ami {
+            border-left-color: #ff9800;
+        }
+        .event-dashboard {
+            border-left-color: #4caf50;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 0.8em;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Test des événements AMI en temps réel</h1>
+
+        <div id="status" class="status disconnected">
+            ⏸️ Déconnecté
+        </div>
+
+        <div>
+            <button onclick="connect()">Connecter</button>
+            <button onclick="disconnect()">Déconnecter</button>
+            <button onclick="subscribe()">S'abonner (Tenant 1)</button>
+            <button onclick="clearEvents()">Effacer les événements</button>
+        </div>
+
+        <div id="events">
+            <p>En attente de connexion...</p>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        const eventsDiv = document.getElementById('events');
+        const statusDiv = document.getElementById('status');
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.innerHTML = '✅ Connecté';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.innerHTML = '❌ Déconnecté';
+            }
+        }
+
+        function addEvent(type, data) {
+            const eventDiv = document.createElement('div');
+            eventDiv.className = `event event-${type}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = type === 'ami' ? '📡' : '📊';
+
+            eventDiv.innerHTML = `
+                <div><strong>${icon} ${type.toUpperCase()}</strong> <span class="timestamp">${timestamp}</span></div>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+
+            eventsDiv.insertBefore(eventDiv, eventsDiv.firstChild);
+        }
+
+        function connect() {
+            if (socket) {
+                console.log('Déjà connecté');
+                return;
+            }
+
+            console.log('Connexion au WebSocket...');
+            socket = io('http://localhost:3000/monitoring', {
+                query: { tenantId: 1 }
+            });
+
+            socket.on('connect', () => {
+                console.log('✅ Connecté au WebSocket');
+                updateStatus(true);
+                addEvent('system', { message: 'Connecté au serveur WebSocket' });
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ Déconnecté du WebSocket');
+                updateStatus(false);
+                addEvent('system', { message: 'Déconnecté du serveur WebSocket' });
+            });
+
+            // Événements AMI
+            socket.on('ami_event', (data) => {
+                console.log('📡 AMI Event:', data);
+                addEvent('ami', data);
+            });
+
+            // Mises à jour du dashboard
+            socket.on('dashboard_update', (data) => {
+                console.log('📊 Dashboard Update:', data);
+                addEvent('dashboard', data);
+            });
+
+            // Erreurs
+            socket.on('error', (error) => {
+                console.error('❌ Erreur:', error);
+                addEvent('error', error);
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                updateStatus(false);
+            }
+        }
+
+        function subscribe() {
+            if (!socket) {
+                alert('Veuillez d\'abord vous connecter');
+                return;
+            }
+
+            console.log('Abonnement au tenant 1...');
+            socket.emit('subscribe_dashboard', { tenantId: 1 });
+            addEvent('system', { message: 'Abonné aux événements du tenant 1' });
+        }
+
+        function clearEvents() {
+            eventsDiv.innerHTML = '<p>Événements effacés</p>';
+        }
+
+        // Auto-connect on load
+        window.onload = () => {
+            console.log('Page chargée, connexion automatique...');
+            connect();
+            // Auto-subscribe after 1 second
+            setTimeout(subscribe, 1000);
+        };
+    </script>
+</body>
+</html>

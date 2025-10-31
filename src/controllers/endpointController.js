@@ -128,6 +128,7 @@ class EndpointController {
   }
 
   /**
+   * 
    * GET /api/endpoints/:id/status
    * Obtenir le statut d'enregistrement d'un endpoint
    */

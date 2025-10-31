@@ -33,7 +33,7 @@ export class TimeoutInterceptor implements NestInterceptor {
 
   constructor() {
     // Default 30 seconds, configurable via environment variable
-    this.timeoutMs = parseInt(process.env.TIMEOUT_MS || '30000', 10);
+    this.timeoutMs = parseInt(process.env.TIMEOUT_MS || '500000', 10);
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {

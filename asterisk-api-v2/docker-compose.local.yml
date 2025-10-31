@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Asterisk local qui se connecte à la DB distante
+  asterisk-local:
+    build:
+      context: ../asterisk-pgsql
+      dockerfile: Dockerfile
+    container_name: asterisk-local
+    ports:
+      - "5038:5038"     # AMI
+      - "5060:5060/tcp" # SIP TCP
+      - "5060:5060/udp" # SIP UDP
+      - "5061:5061/tcp" # SIP TLS
+      - "5061:5061/udp" # SIP TLS UDP
+      - "8088:8088"     # ARI HTTP
+      - "8089:8089"     # ARI HTTPS
+      - "10000-10200:10000-10200/udp" # RTP
+    environment:
+      # Connexion à la base de données distante
+      DB_HOST: 161.97.106.134
+      DB_PORT: 5432
+      DB_NAME: asterisk
+      DB_USER: asterisk
+      DB_PASSWORD: Obelix
+    volumes:
+      # Montage des fichiers de configuration si nécessaire
+      - asterisk_sounds:/var/lib/asterisk/sounds
+      - asterisk_moh:/var/lib/asterisk/moh
+      - asterisk_monitor:/var/spool/asterisk/monitor
+    networks:
+      - asterisk-local-net
+    restart: unless-stopped
+    privileged: true
+    healthcheck:
+      test: ["CMD", "asterisk", "-rx", "core show version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  asterisk_sounds:
+  asterisk_moh:
+  asterisk_monitor:
+
+networks:
+  asterisk-local-net:
+    driver: bridge
