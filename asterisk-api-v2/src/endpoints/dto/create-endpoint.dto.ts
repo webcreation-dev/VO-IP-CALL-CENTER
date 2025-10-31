@@ -35,6 +35,14 @@ import {
  * }
  */
 export class CreateEndpointDto {
+  // ADDED FOR TESTING - Accept tenant_id like old project
+  @ApiPropertyOptional({
+    description: 'Tenant ID (optional, for testing without auth)',
+    example: 1,
+  })
+  @IsOptional()
+  tenantId?: number;
+
   @ApiProperty({
     description: 'Endpoint username (unique within tenant, will be prefixed)',
     example: '101',

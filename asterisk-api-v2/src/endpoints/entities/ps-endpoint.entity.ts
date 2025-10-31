@@ -38,9 +38,10 @@ export class PsEndpoint {
   @PrimaryColumn({ length: 40 })
   id: string;
 
-  // Display name (user-friendly, without prefix)
-  @Column({ name: 'display_name', length: 40, nullable: true })
-  displayName: string;
+  // COMMENTED - COLUMN DOESN'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
+  // // Display name (user-friendly, without prefix)
+  // @Column({ name: 'display_name', length: 40, nullable: true })
+  // displayName: string;
 
   // Tenant relationship
   @ManyToOne(() => Tenant, { nullable: true, onDelete: 'CASCADE' })
@@ -109,12 +110,13 @@ export class PsEndpoint {
   // Endpoint device state (computed by Asterisk, not stored)
   // This will be enriched from AMI real-time data
 
-  // Timestamps (added by migration, not part of original Asterisk table)
-  @CreateDateColumn({ name: 'created_at', nullable: true })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at', nullable: true })
-  updatedAt: Date;
+  // COMMENTED - COLUMNS DON'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
+  // // Timestamps (added by migration, not part of original Asterisk table)
+  // @CreateDateColumn({ name: 'created_at', nullable: true })
+  // createdAt: Date;
+  //
+  // @UpdateDateColumn({ name: 'updated_at', nullable: true })
+  // updatedAt: Date;
 
   // Virtual properties
   get interface(): string {

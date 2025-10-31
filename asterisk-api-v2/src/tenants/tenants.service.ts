@@ -82,48 +82,43 @@ export class TenantsService {
       throw new ConflictException(`Tenant with name "${dto.name}" already exists`);
     }
 
-    // Generate or validate context name
-    let contextName: string;
-    if (dto.context) {
-      // User provided context, use it
-      contextName = dto.context;
-    } else {
-      // Auto-generate context from tenant name
-      contextName = generateContextName(dto.name);
-
-      // Ensure context is unique
-      const existingContexts = await this.getAllContextNames();
-      if (existingContexts.includes(contextName)) {
-        contextName = generateUniqueContextName(contextName, existingContexts);
-      }
+    // SIMPLIFIED - Auto-generate context from tenant name (like old project)
+    let contextName: string = generateContextName(dto.name);
+    
+    // Ensure context is unique
+    const existingContexts = await this.getAllContextNames();
+    if (existingContexts.includes(contextName)) {
+      contextName = generateUniqueContextName(contextName, existingContexts);
     }
 
-    // Use provided dialplan config or defaults
-    const dialplanConfig: DialplanConfig = dto.dialplanConfig
-      ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
-      : { ...DEFAULT_DIALPLAN_CONFIG };
+    // COMMENTED - Not needed for simplified version
+    // // Use provided dialplan config or defaults
+    // const dialplanConfig: DialplanConfig = dto.dialplanConfig
+    //   ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
+    //   : { ...DEFAULT_DIALPLAN_CONFIG };
 
-    // Create tenant
+    // Create tenant - SIMPLIFIED FOR TESTING (missing DB columns)
     const tenant = this.tenantRepository.create({
       name: dto.name,
-      companyName: dto.companyName,
-      contactEmail: dto.contactEmail,
-      contactPhone: dto.contactPhone,
-      address: dto.address,
-      city: dto.city,
-      country: dto.country,
-      timezone: dto.timezone || 'UTC',
-      maxEndpoints: dto.maxEndpoints || 100,
-      maxQueues: dto.maxQueues || 50,
+      // companyName: dto.companyName,  // COLUMN MISSING IN DB
+      // contactEmail: dto.contactEmail,  // COLUMN MISSING IN DB
+      // contactPhone: dto.contactPhone,  // COLUMN MISSING IN DB
+      // address: dto.address,  // COLUMN MISSING IN DB
+      // city: dto.city,  // COLUMN MISSING IN DB
+      // country: dto.country,  // COLUMN MISSING IN DB
+      // timezone: dto.timezone || 'UTC',  // COLUMN MISSING IN DB
+      // maxEndpoints: dto.maxEndpoints || 100,  // COLUMN MISSING IN DB
+      // maxQueues: dto.maxQueues || 50,  // COLUMN MISSING IN DB
       context: contextName,
-      dialplanConfig: dialplanConfig,
-      isActive: true,
+      // dialplanConfig: dialplanConfig,  // COLUMN MISSING IN DB
+      // isActive: true,  // COLUMN MISSING IN DB
     });
 
     const saved = await this.tenantRepository.save(tenant);
 
-    // Generate default extensions
-    await this.generateDefaultExtensions(saved.id, contextName, dialplanConfig);
+    // COMMENTED - Extensions table missing columns - UNCOMMENT FOR PRODUCTION
+    // // Generate default extensions
+    // await this.generateDefaultExtensions(saved.id, contextName, dialplanConfig);
 
     // Invalidate cache
     await this.cacheService.del('tenants:list');
@@ -160,10 +155,11 @@ export class TenantsService {
     // Query database
     const query = this.tenantRepository.createQueryBuilder('tenant');
 
-    // Filter by active status unless includeInactive is true
-    if (!includeInactive) {
-      query.where('tenant.is_active = :isActive', { isActive: true });
-    }
+    // COMMENTED - COLUMN MISSING IN DB
+    // // Filter by active status unless includeInactive is true
+    // if (!includeInactive) {
+    //   query.where('tenant.is_active = :isActive', { isActive: true });
+    // }
 
     query.orderBy('tenant.name', 'ASC');
 
@@ -240,21 +236,22 @@ export class TenantsService {
   async update(id: number, dto: UpdateTenantDto): Promise<Tenant> {
     const tenant = await this.findOne(id);
 
-    // If reducing limits, validate current usage doesn't exceed new limits
-    if (dto.maxEndpoints !== undefined && dto.maxEndpoints < tenant.maxEndpoints) {
-      // TODO: Check current endpoint count when Endpoints module is implemented
-      // For now, just log a warning
-      this.logger.warn(
-        `Reducing max_endpoints for tenant ${id} from ${tenant.maxEndpoints} to ${dto.maxEndpoints}`,
-      );
-    }
-
-    if (dto.maxQueues !== undefined && dto.maxQueues < tenant.maxQueues) {
-      // TODO: Check current queue count when Queues module is implemented
-      this.logger.warn(
-        `Reducing max_queues for tenant ${id} from ${tenant.maxQueues} to ${dto.maxQueues}`,
-      );
-    }
+    // COMMENTED - COLUMN MISSING IN DB
+    // // If reducing limits, validate current usage doesn't exceed new limits
+    // if (dto.maxEndpoints !== undefined && dto.maxEndpoints < tenant.maxEndpoints) {
+    //   // TODO: Check current endpoint count when Endpoints module is implemented
+    //   // For now, just log a warning
+    //   this.logger.warn(
+    //     `Reducing max_endpoints for tenant ${id} from ${tenant.maxEndpoints} to ${dto.maxEndpoints}`,
+    //   );
+    // }
+    //
+    // if (dto.maxQueues !== undefined && dto.maxQueues < tenant.maxQueues) {
+    //   // TODO: Check current queue count when Queues module is implemented
+    //   this.logger.warn(
+    //     `Reducing max_queues for tenant ${id} from ${tenant.maxQueues} to ${dto.maxQueues}`,
+    //   );
+    // }
 
     // Update fields
     Object.assign(tenant, dto);
@@ -283,9 +280,13 @@ export class TenantsService {
   async remove(id: number): Promise<void> {
     const tenant = await this.findOne(id);
 
-    // Soft delete: set is_active to false
-    tenant.isActive = false;
-    await this.tenantRepository.save(tenant);
+    // COMMENTED - COLUMN MISSING IN DB
+    // // Soft delete: set is_active to false
+    // tenant.isActive = false;
+    // await this.tenantRepository.save(tenant);
+    
+    // For now, just delete directly (hard delete) since isActive column missing
+    await this.tenantRepository.remove(tenant);
 
     // Invalidate cache
     await this.cacheService.del('tenants:list');
@@ -329,15 +330,17 @@ export class TenantsService {
       throw new NotFoundException(`Tenant with ID ${id} not found`);
     }
 
-    tenant.isActive = true;
-    const restored = await this.tenantRepository.save(tenant);
+    // COMMENTED - COLUMN MISSING IN DB
+    // tenant.isActive = true;
+    // const restored = await this.tenantRepository.save(tenant);
+    throw new Error('Restore disabled - isActive column missing in DB');
 
-    // Invalidate cache
-    await this.cacheService.del('tenants:list');
-    await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
-
-    this.logger.log(`Restored tenant: ${id}`);
-    return restored;
+    // // Invalidate cache
+    // await this.cacheService.del('tenants:list');
+    // await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
+    //
+    // this.logger.log(`Restored tenant: ${id}`);
+    // return restored;
   }
 
   /**
@@ -351,8 +354,10 @@ export class TenantsService {
     tenantId: number,
     currentCount: number,
   ): Promise<boolean> {
-    const tenant = await this.findOne(tenantId);
-    return currentCount >= tenant.maxEndpoints;
+    // COMMENTED - COLUMN MISSING IN DB
+    // const tenant = await this.findOne(tenantId);
+    // return currentCount >= tenant.maxEndpoints;
+    return false; // No limit for now
   }
 
   /**
@@ -366,8 +371,10 @@ export class TenantsService {
     tenantId: number,
     currentCount: number,
   ): Promise<boolean> {
-    const tenant = await this.findOne(tenantId);
-    return currentCount >= tenant.maxQueues;
+    // COMMENTED - COLUMN MISSING IN DB
+    // const tenant = await this.findOne(tenantId);
+    // return currentCount >= tenant.maxQueues;
+    return false; // No limit for now
   }
 
   /**
@@ -509,75 +516,7 @@ export class TenantsService {
    * @throws NotFoundException if tenant not found
    */
   async getTenantStats(id: number): Promise<any> {
-    const tenant = await this.findOne(id);
-
-    // Get current usage counts
-    const endpointCount = await this.endpointRepository.count({
-      where: { tenantId: id },
-    });
-
-    const queueCount = await this.queueRepository.count({
-      where: { tenantId: id },
-    });
-
-    // Get call statistics (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentCalls = await this.cdrRepository.count({
-      where: {
-        tenantId: id,
-        calldate: MoreThanOrEqual(thirtyDaysAgo),
-      },
-    });
-
-    const answeredCalls = await this.cdrRepository.count({
-      where: {
-        tenantId: id,
-        calldate: MoreThanOrEqual(thirtyDaysAgo),
-        disposition: 'ANSWERED',
-      },
-    });
-
-    // Calculate usage percentages
-    const endpointUsagePercent = tenant.maxEndpoints > 0
-      ? parseFloat(((endpointCount / tenant.maxEndpoints) * 100).toFixed(2))
-      : 0;
-
-    const queueUsagePercent = tenant.maxQueues > 0
-      ? parseFloat(((queueCount / tenant.maxQueues) * 100).toFixed(2))
-      : 0;
-
-    const answerRate = recentCalls > 0
-      ? parseFloat(((answeredCalls / recentCalls) * 100).toFixed(2))
-      : 0;
-
-    return {
-      tenant_id: tenant.id,
-      tenant_name: tenant.name,
-      endpoints: {
-        current: endpointCount,
-        max: tenant.maxEndpoints,
-        usage_percent: endpointUsagePercent,
-        available: tenant.maxEndpoints - endpointCount,
-      },
-      queues: {
-        current: queueCount,
-        max: tenant.maxQueues,
-        usage_percent: queueUsagePercent,
-        available: tenant.maxQueues - queueCount,
-      },
-      calls_last_30_days: {
-        total: recentCalls,
-        answered: answeredCalls,
-        answer_rate_percent: answerRate,
-      },
-      tenant_info: {
-        is_active: tenant.isActive,
-        created_at: tenant.createdAt,
-        context: tenant.context,
-      },
-      timestamp: new Date().toISOString(),
-    };
+    // COMMENTED - COLUMNS MISSING IN DB (maxEndpoints, maxQueues, isActive)
+    throw new Error('getTenantStats disabled - missing DB columns');
   }
 }

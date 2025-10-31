@@ -4,7 +4,7 @@ const fs = require('fs');
 // Configuration AMI basée sur manager.conf
 const amiConfig = {
   port: process.env.AMI_PORT || 5038,
-  host: process.env.AMI_HOST || 'localhost',
+  host: process.env.AMI_HOST || '161.97.106.134',
   username: process.env.AMI_USER || 'admin',
   password: process.env.AMI_PASSWORD || 'Sp33Dd14L',
   events: true,

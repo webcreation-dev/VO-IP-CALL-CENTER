@@ -56,6 +56,15 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
     this.ami.on('connect', () => {
       this.logger.log('✅ AMI connected successfully');
       this.isConnected = true;
+      
+      // ADDED: Explicitly enable events after connection
+      this.ami.action({ Action: 'Events', EventMask: 'on' }, (err: Error, res: any) => {
+        if (err) {
+          this.logger.warn('Failed to enable AMI events:', err.message);
+        } else {
+          this.logger.log('✅ AMI events enabled');
+        }
+      });
     });
 
     this.ami.on('disconnect', () => {
@@ -71,6 +80,8 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
 
     // Forward all events to subscribers
     this.ami.on('managerevent', (event: any) => {
+      // DEBUG: Log EVERY SINGLE EVENT that arrives
+      this.logger.log(`🔔 [GLOBAL LISTENER] Event: ${event.event || 'unknown'}, ActionID: ${event.actionid || 'none'}`);
       this.emitEvent(event.event, event);
     });
   }
@@ -379,35 +390,100 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
   // PJSIP OPERATIONS
   // ========================================
 
-  /**
-   * Get endpoint status
-   */
-  async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
-    try {
-      const result = await this.executeAction<any>(
-        {
-          Action: AMI_ACTIONS.PJSIP_SHOW_ENDPOINT,
-          Endpoint: endpointId,
-        },
-        AMI_TIMEOUTS.ENDPOINT_STATUS,
-      );
+  // Dans ami.service.ts - Modifier la méthode getEndpointStatus()
 
-      return {
-        objectType: result.objecttype,
-        objectName: result.objectname,
-        transport: result.transport,
-        aor: result.aor,
-        auths: result.auths,
-        outboundAuths: result.outboundauths,
-        contacts: result.contacts,
-        deviceState: result.devicestate || 'Unknown',
-        activeChannels: parseInt(result.activechannels, 10) || 0,
-      };
-    } catch (error) {
-      this.logger.warn(`Could not get endpoint status for ${endpointId}: ${error.message}`);
-      throw error;
-    }
+/**
+ * Get endpoint status
+ * FIXED - Use internal event system instead of direct ami.on()
+ */
+async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
+  if (!this.isConnected) {
+    throw new Error('AMI is not connected');
   }
+
+  return new Promise((resolve, reject) => {
+    const events: any[] = [];
+    const actionId = `endpoint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // ✅ CORRECTION: Use internal event system instead of ami.on()
+    const eventHandler = (event: any) => {
+      // Only process events with matching ActionID
+      if (event.actionid === actionId) {
+        this.logger.log(`[AMI Event] ${event.event} for endpoint ${endpointId} (ActionID: ${actionId})`);
+        events.push(event);
+
+        // When we get the complete event, process all events
+        if (event.event === 'EndpointDetailComplete') {
+          // ✅ CORRECTION: Use off() instead of removeListener()
+          this.off('managerevent', eventHandler);
+          
+          // Parse collected events
+          const endpointDetail = events.find((e) => e.event === 'EndpointDetail');
+          const contacts = events
+            .filter((e) => e.event === 'ContactStatusDetail')
+            .map((c) => ({
+              uri: c.uri,
+              status: c.status,
+              rtt: c.roundtripusec,
+              userAgent: c.useragent,
+            }));
+
+          if (endpointDetail) {
+            resolve({
+              objectType: endpointDetail.objecttype,
+              objectName: endpointDetail.objectname,
+              transport: endpointDetail.transport,
+              aor: endpointDetail.aor,
+              auths: endpointDetail.auths,
+              outboundAuths: endpointDetail.outboundauths,
+              deviceState: endpointDetail.devicestate || 'Unknown',
+              activeChannels: parseInt(endpointDetail.activechannels, 10) || 0,
+              contacts: contacts.length > 0 ? contacts : null,
+            });
+          } else {
+            reject(new Error('No EndpointDetail received'));
+          }
+        }
+      }
+    };
+
+    // ✅ CORRECTION: Use internal on() method instead of ami.on()
+    this.on('managerevent', eventHandler);
+
+    // Set timeout
+    const timeout = setTimeout(() => {
+      // ✅ CORRECTION: Use off() instead of removeListener()
+      this.off('managerevent', eventHandler);
+      this.logger.warn(`Endpoint status timeout for ${endpointId} - Events received: ${events.length}`);
+      
+      // Log what we got for debugging
+      if (events.length > 0) {
+        this.logger.debug(`Events received: ${events.map(e => e.event).join(', ')}`);
+      }
+      
+      reject(new Error(`Endpoint status timeout for ${endpointId}`));
+    }, AMI_TIMEOUTS.ENDPOINT_STATUS);
+
+    // Execute action
+    this.logger.log(`Sending PJSIPShowEndpoint for ${endpointId} (ActionID: ${actionId})`);
+    this.ami.action(
+      {
+        Action: AMI_ACTIONS.PJSIP_SHOW_ENDPOINT,
+        Endpoint: endpointId,
+        ActionID: actionId,
+      },
+      (err: Error) => {
+        if (err) {
+          clearTimeout(timeout);
+          // ✅ CORRECTION: Use off() instead of removeListener()
+          this.off('managerevent', eventHandler);
+          this.logger.error(`PJSIPShowEndpoint action error for ${endpointId}:`, err.message);
+          reject(err);
+        }
+      },
+    );
+  });
+}
 
   /**
    * Reload PJSIP

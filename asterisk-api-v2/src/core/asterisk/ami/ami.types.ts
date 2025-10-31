@@ -66,6 +66,16 @@ export interface QueueMember {
 }
 
 /**
+ * Contact Status Detail
+ */
+export interface ContactStatusDetail {
+  uri: string;
+  status: string;
+  rtt?: string;
+  userAgent?: string;
+}
+
+/**
  * Endpoint Status Result
  */
 export interface EndpointStatusResult {
@@ -75,7 +85,7 @@ export interface EndpointStatusResult {
   aor: string;
   auths: string;
   outboundAuths: string;
-  contacts: string;
+  contacts: ContactStatusDetail[] | null;
   deviceState: string;
   activeChannels: number;
 }

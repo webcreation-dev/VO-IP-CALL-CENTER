@@ -45,6 +45,44 @@ services:
     restart: always
     #network_mode: host
 
+  # Nouvelle API NestJS v2
+  api-v2:
+    build: ../asterisk-api-v2 # Pointe vers le dossier de la nouvelle API
+    ports:
+      - "3001:3001" # Port différent de l'ancienne API
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - API_PREFIX=api/v1
+      # Database - Utilise la même DB
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USERNAME=asterisk
+      - DB_PASSWORD=Obelix
+      - DB_NAME=asterisk
+      # AMI - Utilise le même Asterisk
+      - AMI_HOST=asterisk
+      - AMI_PORT=5038
+      - AMI_USER=admin
+      - AMI_PASSWORD=Sp33Dd14L
+      # ARI
+      - ARI_HOST=asterisk
+      - ARI_PORT=8088
+      - ARI_USER=asterisk
+      - ARI_PASSWORD=asterisk
+      # Redis/Cache
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
+      # JWT
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_EXPIRATION=7d
+      # Bcrypt
+      - BCRYPT_ROUNDS=10
+    depends_on:
+      - db
+      - asterisk
+    restart: always
+
   db:
     image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_IMAGE_VERSION:-12}
     environment:

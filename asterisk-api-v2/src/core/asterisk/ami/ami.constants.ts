@@ -84,13 +84,14 @@ export const AMI_EVENTS = {
 
 /**
  * Default timeouts (milliseconds)
+ * INCREASED FOR TESTING - AMI seems slow
  */
 export const AMI_TIMEOUTS = {
-  DEFAULT: 5000,
-  LONG: 10000,
-  SHORT: 2000,
-  QUEUE_STATUS: 5000,
-  ENDPOINT_STATUS: 5000,
+  DEFAULT: 30000,  // 30s instead of 5s
+  LONG: 60000,     // 60s instead of 10s
+  SHORT: 10000,    // 10s instead of 2s
+  QUEUE_STATUS: 30000,     // 30s instead of 5s
+  ENDPOINT_STATUS: 30000,  // 30s instead of 5s
 } as const;
 
 /**

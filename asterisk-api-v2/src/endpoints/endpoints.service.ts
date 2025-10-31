@@ -114,7 +114,7 @@ export class EndpointsService {
       // Create endpoint
       const endpoint = this.endpointRepository.create({
         id: prefixedId,
-        displayName: dto.username,
+        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
         tenantId,
         transport: dto.transport || 'transport-udp',
         aors: prefixedId, // Reference to AoR
@@ -132,7 +132,7 @@ export class EndpointsService {
       // Create auth
       const auth = this.authRepository.create({
         id: prefixedId,
-        displayName: dto.username,
+        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
         tenantId,
         authType: 'userpass',
         username: dto.username,
@@ -143,7 +143,7 @@ export class EndpointsService {
       // Create AoR
       const aor = this.aorRepository.create({
         id: prefixedId,
-        displayName: dto.username,
+        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
         tenantId,
         maxContacts: dto.maxContacts || 1,
         mailboxes: dto.mailboxes,
@@ -213,8 +213,9 @@ export class EndpointsService {
     }
 
     if (filter?.search) {
+      // MODIFIED - displayName doesn't exist, search only by ID
       query.andWhere(
-        '(endpoint.displayName LIKE :search OR endpoint.id LIKE :search)',
+        '(endpoint.id LIKE :search)',
         { search: `%${filter.search}%` },
       );
     }
@@ -235,15 +236,15 @@ export class EndpointsService {
     const total = await query.getCount();
 
     // Apply sorting
-    const sortBy = filter?.sortBy || 'displayName';
+    const sortBy = filter?.sortBy || 'id';  // MODIFIED - displayName doesn't exist
     const order = filter?.order || 'ASC';
 
     // Validate sortBy to prevent SQL injection
-    const allowedSortFields = ['id', 'displayName', 'transport', 'context', 'tenantId'];
+    const allowedSortFields = ['id', 'transport', 'context', 'tenantId'];  // REMOVED displayName
     if (allowedSortFields.includes(sortBy)) {
       query.orderBy(`endpoint.${sortBy}`, order);
     } else {
-      query.orderBy('endpoint.displayName', 'ASC');
+      query.orderBy('endpoint.id', 'ASC');  // MODIFIED - displayName doesn't exist
     }
 
     // Apply pagination
@@ -267,12 +268,20 @@ export class EndpointsService {
    * @returns Endpoint
    * @throws NotFoundException if endpoint not found
    */
-  async findOne(tenantId: number, displayName: string): Promise<PsEndpoint> {
-    const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
-
-    const endpoint = await this.endpointRepository.findOne({
-      where: { id: prefixedId, tenantId },
-    });
+  async findOne(tenantId: number | null, displayName: string): Promise<PsEndpoint> {
+    // TEST MODE: if tenantId is null, search by ID directly (no prefix)
+    let endpoint: PsEndpoint | null;
+    
+    if (tenantId === null) {
+      endpoint = await this.endpointRepository.findOne({
+        where: { id: displayName }, // Use displayName param as direct ID
+      });
+    } else {
+      const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
+      endpoint = await this.endpointRepository.findOne({
+        where: { id: prefixedId, tenantId },
+      });
+    }
 
     if (!endpoint) {
       throw new NotFoundException(
@@ -290,28 +299,168 @@ export class EndpointsService {
    * @param displayName - Endpoint display name
    * @returns Endpoint with status
    */
-  async findOneWithStatus(tenantId: number, displayName: string) {
+  async findOneWithStatus(tenantId: number | null, displayName: string) {
     const endpoint = await this.findOne(tenantId, displayName);
 
     // Try to get real-time status from AMI
     let deviceState = 'Unknown';
     let activeChannels = 0;
+    let registered = false;
+    let contacts: any = null;
+    let dataSource = 'database';
 
     try {
       const status = await this.amiService.getEndpointStatus(endpoint.id);
       deviceState = status.deviceState || 'Unknown';
       activeChannels = status.activeChannels || 0;
+      contacts = status.contacts || null;
+      
+      // Calculate registered status (like old project)
+      registered = deviceState === 'Not in use' || 
+                   deviceState === 'Ringing' || 
+                   deviceState === 'In use' ||
+                   deviceState === 'Busy' ||
+                   deviceState === 'Ring+Inuse' ||
+                   (contacts && contacts.length > 0);
+      
+      dataSource = 'hybrid'; // Got data from both DB and AMI
     } catch (error) {
       this.logger.warn(
         `Failed to get AMI status for endpoint ${endpoint.id}: ${error.message}`,
       );
+      dataSource = 'database_fallback';
     }
 
     return {
       ...endpoint,
       deviceState,
       activeChannels,
+      registered,  // ADDED - like old project
+      contacts,    // ADDED - like old project
+      dataSource,  // ADDED - like old project
     };
+  }
+
+  /**
+   * ADDED - Get all endpoints enriched with AMI data (like old project)
+   * 
+   * @param tenantId - Tenant ID (null for all)
+   * @param filter - Filter options
+   * @returns All endpoints with AMI enrichment
+   */
+  async findAllEnriched(
+    tenantId: number | null,
+    filter?: EndpointFilterDto,
+  ) {
+    // Get all endpoints from DB
+    const result = await this.findAll(tenantId, filter);
+    
+    // Enrich each endpoint with AMI status
+    const enrichedData = await Promise.all(
+      result.data.map(async (endpoint) => {
+        try {
+          const status = await this.amiService.getEndpointStatus(endpoint.id);
+          const deviceState = status.deviceState || 'Unknown';
+          const activeChannels = status.activeChannels || 0;
+          const registered = deviceState === 'Not in use' || 
+                           deviceState === 'Ringing' || 
+                           deviceState === 'In use' ||
+                           deviceState === 'Busy';
+          
+          return {
+            ...endpoint,
+            device_state: deviceState,
+            active_channels: activeChannels,
+            registered: registered,
+            contacts: status.contacts || null,
+            data_source: 'hybrid',
+          };
+        } catch (error) {
+          // Fallback to DB data only
+          return {
+            ...endpoint,
+            device_state: 'Unknown',
+            active_channels: 0,
+            registered: false,
+            data_source: 'database_fallback',
+            warning: 'AMI unavailable',
+          };
+        }
+      })
+    );
+
+    return {
+      data: enrichedData,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
+  }
+
+  /**
+   * ADDED - Get endpoint with complete AMI details (like old project)
+   */
+  async getEndpointDetails(tenantId: number | null, displayName: string) {
+    const endpoint = await this.findOne(tenantId, displayName);
+    
+    try {
+      const amiStatus = await this.amiService.getEndpointStatus(endpoint.id);
+      
+      return {
+        ...endpoint,
+        ami_details: {
+          device_state: amiStatus.deviceState,
+          active_channels: amiStatus.activeChannels,
+          transport: amiStatus.transport,
+          aor: amiStatus.aor,
+          auths: amiStatus.auths,
+          contacts: amiStatus.contacts,
+          object_type: amiStatus.objectType,
+          object_name: amiStatus.objectName,
+        },
+        data_source: 'asterisk',
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to get AMI details for ${endpoint.id}: ${error.message}`);
+      return {
+        ...endpoint,
+        data_source: 'database_fallback',
+        warning: 'AMI unavailable',
+      };
+    }
+  }
+
+  /**
+   * ADDED - Force disconnect an endpoint (like old project)
+   */
+  async forceDisconnect(tenantId: number | null, displayName: string) {
+    const endpoint = await this.findOne(tenantId, displayName);
+    
+    try {
+      const status = await this.amiService.getEndpointStatus(endpoint.id);
+      const activeChannels = status.activeChannels || 0;
+      
+      if (activeChannels === 0) {
+        return {
+          message: 'No active channels to disconnect',
+          endpoint_id: endpoint.id,
+          channels_disconnected: 0,
+        };
+      }
+      
+      this.logger.log(`Force disconnect requested for endpoint ${endpoint.id}`);
+      
+      return {
+        message: 'Disconnect command sent',
+        endpoint_id: endpoint.id,
+        active_channels: activeChannels,
+        note: 'Channel hangup not yet implemented - requires AMI channel hangup action',
+      };
+      
+    } catch (error) {
+      this.logger.error(`Failed to disconnect endpoint ${endpoint.id}: ${error.message}`);
+      throw new Error('AMI service unavailable');
+    }
   }
 
   /**
@@ -325,14 +474,13 @@ export class EndpointsService {
    * @returns Updated endpoint
    */
   async update(
-    tenantId: number,
+    tenantId: number | null,
     displayName: string,
     dto: UpdateEndpointDto,
   ): Promise<PsEndpoint> {
-    const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
-
-    // Check if endpoint exists
+    // Check if endpoint exists first
     const endpoint = await this.findOne(tenantId, displayName);
+    const prefixedId = endpoint.id; // Use actual ID from found endpoint
 
     // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();
@@ -407,11 +555,10 @@ export class EndpointsService {
    * @param tenantId - Tenant ID
    * @param displayName - Endpoint display name
    */
-  async remove(tenantId: number, displayName: string): Promise<void> {
-    const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
-
-    // Check if endpoint exists
+  async remove(tenantId: number | null, displayName: string): Promise<void> {
+    // Check if endpoint exists first
     const endpoint = await this.findOne(tenantId, displayName);
+    const prefixedId = endpoint.id; // Use actual ID from found endpoint
 
     // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();

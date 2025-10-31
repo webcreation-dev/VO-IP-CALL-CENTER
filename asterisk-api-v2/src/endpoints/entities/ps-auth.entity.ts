@@ -38,9 +38,10 @@ export class PsAuth {
   @PrimaryColumn({ length: 40 })
   id: string;
 
-  // Display name (user-friendly, without prefix)
-  @Column({ name: 'display_name', length: 40, nullable: true })
-  displayName: string;
+  // COMMENTED - COLUMN DOESN'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
+  // // Display name (user-friendly, without prefix)
+  // @Column({ name: 'display_name', length: 40, nullable: true })
+  // displayName: string;
 
   // Tenant relationship
   @ManyToOne(() => Tenant, { nullable: true, onDelete: 'CASCADE' })
@@ -74,10 +75,11 @@ export class PsAuth {
   @Column({ name: 'nonce_lifetime', type: 'integer', nullable: true, default: 32 })
   nonceLifetime: number;
 
-  // Timestamps (added by migration, not part of original Asterisk table)
-  @CreateDateColumn({ name: 'created_at', nullable: true })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at', nullable: true })
-  updatedAt: Date;
+  // COMMENTED - COLUMNS DON'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
+  // // Timestamps (added by migration, not part of original Asterisk table)
+  // @CreateDateColumn({ name: 'created_at', nullable: true })
+  // createdAt: Date;
+  //
+  // @UpdateDateColumn({ name: 'updated_at', nullable: true })
+  // updatedAt: Date;
 }
