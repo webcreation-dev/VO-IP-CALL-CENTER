@@ -105,7 +105,7 @@ export class QueuesService {
     return queues;
   }
 
-  async findOne(tenantId: number, name: string): Promise<Queue> {
+  async findOne(tenantId: number | null, name: string): Promise<Queue> {
     const where: any = { name };
 
     if (tenantId !== null) {
@@ -123,7 +123,7 @@ export class QueuesService {
     return queue;
   }
 
-  async findOneWithStats(tenantId: number, displayName: string) {
+  async findOneWithStats(tenantId: number | null, displayName: string) {
     const queue = await this.findOne(tenantId, displayName);
 
     // Get real-time stats from AMI
@@ -153,7 +153,7 @@ export class QueuesService {
   }
 
   async update(
-    tenantId: number,
+    tenantId: number | null,
     displayName: string,
     dto: UpdateQueueDto,
   ): Promise<Queue> {
@@ -169,7 +169,7 @@ export class QueuesService {
     return updated;
   }
 
-  async remove(tenantId: number, displayName: string): Promise<void> {
+  async remove(tenantId: number | null, displayName: string): Promise<void> {
     const queue = await this.findOne(tenantId, displayName);
 
     await this.queueRepository.remove(queue);
@@ -523,7 +523,7 @@ export class QueuesService {
    * GET /api/v1/queues/:name/details
    * Get complete details of a specific queue with all DB + AMI data
    */
-  async getQueueDetails(tenantId: number, displayName: string): Promise<any> {
+  async getQueueDetails(tenantId: number | null, displayName: string): Promise<any> {
     try {
       // 1. Get DB data
       const queueFromDB = await this.findOne(tenantId, displayName);
@@ -645,7 +645,7 @@ export class QueuesService {
    * POST /api/v1/queues/:name/reload
    * Reload a specific queue configuration
    */
-  async reloadQueue(tenantId: number, displayName: string): Promise<any> {
+  async reloadQueue(tenantId: number | null, displayName: string): Promise<any> {
     return new Promise(async (resolve, reject) => {
       if (!this.amiService.isAmiConnected()) {
         throw new BadRequestException('AMI not connected');
@@ -658,21 +658,22 @@ export class QueuesService {
       }
 
       try {
-        // Reload specific queue via CLI
+        // Reload all queues (Asterisk doesn't support reloading a specific queue)
+        // Available commands: queue reload all, queue reload members, queue reload parameters
         const response = await this.amiService.executeAction(
           {
             Action: 'Command',
-            Command: `queue reload ${queue.name}`,
+            Command: `queue reload all`,
           },
           AMI_TIMEOUTS.DEFAULT,
         );
 
-        this.logger.log(`✅ Queue "${displayName}" reloaded`);
+        this.logger.log(`✅ Queue "${displayName}" reloaded (via queue reload all)`);
         resolve({
           success: true,
           queue_name: queue.name,
           display_name: displayName,
-          message: 'Queue reloaded successfully',
+          message: 'Queue reloaded successfully (all queues were reloaded)',
           response,
           reloaded_at: new Date().toISOString(),
         });
@@ -687,7 +688,7 @@ export class QueuesService {
    * GET /api/v1/queues/:name/calls
    * Get waiting calls in a queue
    */
-  async getQueueCalls(tenantId: number, displayName: string): Promise<any> {
+  async getQueueCalls(tenantId: number | null, displayName: string): Promise<any> {
     return new Promise(async (resolve, reject) => {
       if (!this.amiService.isAmiConnected()) {
         throw new BadRequestException('AMI not connected');
@@ -702,13 +703,18 @@ export class QueuesService {
       const calls: any[] = [];
       const actionId = `queue_calls_${Date.now()}`;
       let queueFound = false;
+      let timeoutHandle: NodeJS.Timeout;
 
       const eventHandler = (event: any) => {
         if (event.actionid !== actionId) return;
 
+        // Mark queue as found when we receive QueueParams event
+        if (event.event === 'QueueParams' && event.queue === queue.name) {
+          queueFound = true;
+        }
+
         if (event.event === 'QueueEntry') {
           if (event.queue === queue.name) {
-            queueFound = true;
             calls.push({
               position: parseInt(event.position || 0),
               channel: event.channel,
@@ -720,20 +726,27 @@ export class QueuesService {
           }
         } else if (event.event === 'QueueStatusComplete') {
           this.amiService.off('managerevent', eventHandler);
+          clearTimeout(timeoutHandle);
 
-          resolve({
-            queue_name: queue.name,
-            display_name: displayName,
-            calls_count: calls.length,
-            calls: calls.sort((a, b) => a.position - b.position),
-            retrieved_at: new Date().toISOString(),
-          });
+          if (queueFound) {
+            resolve({
+              queue_name: queue.name,
+              display_name: displayName,
+              calls_count: calls.length,
+              calls: calls.sort((a, b) => a.position - b.position),
+              retrieved_at: new Date().toISOString(),
+            });
+          } else {
+            reject(new Error(`Queue "${displayName}" not found in Asterisk`));
+          }
         }
       };
 
       this.amiService.on('managerevent', eventHandler);
 
       try {
+        // Note: We send QueueStatus for the specific queue
+        // If the queue doesn't exist in Asterisk, we won't receive any QueueParams event
         await this.amiService.executeAction(
           {
             Action: 'QueueStatus',
@@ -744,11 +757,13 @@ export class QueuesService {
         );
       } catch (err) {
         this.amiService.off('managerevent', eventHandler);
+        clearTimeout(timeoutHandle);
         reject(err);
+        return;
       }
 
-      // Timeout - return empty if no calls
-      setTimeout(() => {
+      // Timeout - safety fallback
+      timeoutHandle = setTimeout(() => {
         this.amiService.off('managerevent', eventHandler);
         if (queueFound) {
           resolve({

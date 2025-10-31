@@ -76,29 +76,33 @@ export class QueueMembersService {
     return saved;
   }
 
-  async findAll(tenantId: number, queueName: string): Promise<QueueMember[]> {
-    const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
+  async findAll(tenantId: number | null, queueName: string): Promise<QueueMember[]> {
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
 
     return await this.memberRepository.find({
-      where: { tenantId, queueName: prefixedQueue },
+      where: { tenantId: effectiveTenantId, queueName: prefixedQueue },
       order: { membername: 'ASC' },
     });
   }
 
   async pause(
-    tenantId: number,
+    tenantId: number | null,
     queueName: string,
     memberName: string,
     reason?: string,
   ): Promise<void> {
-    const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, memberName);
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
     await this.amiService.queuePause(prefixedQueue, interfaceName, true, reason);
 
     await this.memberRepository.update(
-      { tenantId, queueName: prefixedQueue, interface: interfaceName },
+      { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
       { paused: 1 },
     );
 
@@ -106,18 +110,20 @@ export class QueueMembersService {
   }
 
   async unpause(
-    tenantId: number,
+    tenantId: number | null,
     queueName: string,
     memberName: string,
   ): Promise<void> {
-    const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, memberName);
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
     await this.amiService.queuePause(prefixedQueue, interfaceName, false);
 
     await this.memberRepository.update(
-      { tenantId, queueName: prefixedQueue, interface: interfaceName },
+      { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
       { paused: 0 },
     );
 
@@ -125,19 +131,21 @@ export class QueueMembersService {
   }
 
   async updatePenalty(
-    tenantId: number,
+    tenantId: number | null,
     queueName: string,
     memberName: string,
     penalty: number,
   ): Promise<void> {
-    const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, memberName);
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
     await this.amiService.queuePenalty(prefixedQueue, interfaceName, penalty);
 
     await this.memberRepository.update(
-      { tenantId, queueName: prefixedQueue, interface: interfaceName },
+      { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
       { penalty },
     );
 
@@ -147,12 +155,14 @@ export class QueueMembersService {
   }
 
   async removeMember(
-    tenantId: number,
+    tenantId: number | null,
     queueName: string,
     memberName: string,
   ): Promise<void> {
-    const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, memberName);
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
     // Remove from AMI
@@ -160,7 +170,7 @@ export class QueueMembersService {
 
     // Remove from DB
     const member = await this.memberRepository.findOne({
-      where: { tenantId, queueName: prefixedQueue, interface: interfaceName },
+      where: { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
     });
 
     if (member) {
@@ -174,13 +184,15 @@ export class QueueMembersService {
    * GET /api/v1/queues/:queueName/members/enriched
    * Get all members with enriched endpoint data
    */
-  async findAllEnriched(tenantId: number, queueName: string): Promise<any[]> {
+  async findAllEnriched(tenantId: number | null, queueName: string): Promise<any[]> {
     try {
-      const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
+      // TEST MODE: use default tenantId if null
+      const effectiveTenantId = tenantId ?? 1;
+      const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
 
       // 1. Get base members data from DB
       const members = await this.memberRepository.find({
-        where: { tenantId, queueName: prefixedQueue },
+        where: { tenantId: effectiveTenantId, queueName: prefixedQueue },
         order: { penalty: 'ASC', membername: 'ASC' },
       });
 

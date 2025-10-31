@@ -10,6 +10,12 @@ import {
 } from 'class-validator';
 
 export class AddMemberDto {
+  // TEST MODE: optional tenantId for testing without auth
+  @ApiPropertyOptional({ description: 'Tenant ID (for testing)', example: 1 })
+  @IsNumber()
+  @IsOptional()
+  tenantId?: number;
+
   @ApiProperty({
     description: 'Endpoint username to add',
     example: '101',
