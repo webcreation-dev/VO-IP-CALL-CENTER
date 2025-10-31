@@ -1012,19 +1012,9 @@ class QueueService {
    * @returns {Promise<Object>} Liste des appels en attente avec détails
    */
   async getQueueCalls(queueName) {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       if (!amiConfig.isConnected()) {
         return reject(new Error('AMI non connecté'));
-      }
-
-      // Vérifier que la queue existe en DB d'abord
-      try {
-        const result = await db.query('SELECT name FROM queues WHERE name = $1', [queueName]);
-        if (result.rows.length === 0) {
-          return reject(new Error(`Queue "${queueName}" introuvable`));
-        }
-      } catch (dbErr) {
-        return reject(dbErr);
       }
 
       const calls = [];
@@ -1048,6 +1038,10 @@ class QueueService {
           }
         } else if (event.event === 'QueueStatusComplete') {
           amiConfig.ami.removeListener('managerevent', eventHandler);
+
+          if (!queueFound) {
+            return reject(new Error(`Queue "${queueName}" non trouvée ou aucun appel en attente`));
+          }
 
           resolve({
             queue_name: queueName,
@@ -1074,16 +1068,25 @@ class QueueService {
         }
       );
 
-      // Timeout - retourne vide si aucun appel
+      // Timeout
       setTimeout(() => {
         amiConfig.ami.removeListener('managerevent', eventHandler);
-        resolve({
-          queue_name: queueName,
-          calls_count: calls.length,
-          calls: calls.sort((a, b) => a.position - b.position),
-          message: calls.length === 0 ? 'Aucun appel en attente' : undefined,
-          retrieved_at: new Date().toISOString(),
-        });
+        if (calls.length === 0 && !queueFound) {
+          resolve({
+            queue_name: queueName,
+            calls_count: 0,
+            calls: [],
+            message: 'Aucun appel en attente',
+            retrieved_at: new Date().toISOString(),
+          });
+        } else {
+          resolve({
+            queue_name: queueName,
+            calls_count: calls.length,
+            calls: calls.sort((a, b) => a.position - b.position),
+            retrieved_at: new Date().toISOString(),
+          });
+        }
       }, 5000);
     });
   }
