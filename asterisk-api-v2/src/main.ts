@@ -6,6 +6,12 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { CustomLoggerService } from './core/logger/logger.service';
 
+// Fix for Node.js 18 crypto polyfill issue
+import { webcrypto } from 'crypto';
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto as any;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
