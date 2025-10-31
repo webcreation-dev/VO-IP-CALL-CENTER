@@ -1,7 +1,8 @@
 # Dockerfile pour l'API NestJS v2
-FROM node:18-alpine
+# Stage 1: Build
+FROM node:18-alpine AS builder
 
-# Installer les dépendances système nécessaires pour bcrypt
+# Installer les dépendances système nécessaires pour bcrypt et le build
 RUN apk add --no-cache python3 make g++
 
 # Créer le répertoire de l'application
@@ -11,19 +12,42 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installer TOUTES les dépendances (y compris devDependencies pour le build)
-RUN npm install && npm cache clean --force
+RUN npm install
+
+# Copier les fichiers de configuration TypeScript
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
 
 # Copier le code source
-COPY . .
+COPY src ./src
+
+# Compiler TypeScript et vérifier que dist/main.js existe
+RUN npm run build && \
+    ls -la dist/ && \
+    test -f dist/main.js || (echo "ERROR: dist/main.js not found after build!" && exit 1)
+
+# Stage 2: Production
+FROM node:18-alpine
+
+# Installer les dépendances système nécessaires pour bcrypt
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app
+
+# Copier package.json pour installer les dépendances de production
+COPY package*.json ./
+
+# Installer uniquement les dépendances de production
+RUN npm install --omit=dev && npm cache clean --force
 
 # Rebuild bcrypt pour l'architecture du conteneur
 RUN npm rebuild bcrypt --build-from-source
 
-# Compiler TypeScript
-RUN npm run build
+# Copier les fichiers compilés depuis le stage builder
+COPY --from=builder /app/dist ./dist
 
-# Supprimer les devDependencies après le build
-RUN npm prune --omit=dev
+# Vérifier que main.js existe dans l'image finale
+RUN ls -la dist/ && test -f dist/main.js || (echo "ERROR: dist/main.js not found in final image!" && exit 1)
 
 # Exposer le port
 EXPOSE 3001
