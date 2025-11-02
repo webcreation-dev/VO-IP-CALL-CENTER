@@ -18,7 +18,7 @@ export class ChannelsService {
   /**
    * List all active channels with optional filtering
    */
-  async findAll(tenantId: number, filter?: ChannelFilterDto): Promise<any[]> {
+  async findAll(tenantId: number | null, filter?: ChannelFilterDto): Promise<any[]> {
     try {
       const channels = await this.ariService.getChannels();
 
@@ -66,16 +66,18 @@ export class ChannelsService {
    * Originate an outbound call
    */
   async originate(
-    tenantId: number,
+    tenantId: number | null,
     dto: OriginateCallDto,
   ): Promise<{ channelId: string }> {
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, dto.endpoint);
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, dto.endpoint);
     const endpoint = `PJSIP/${prefixedEndpoint}`;
     const context = dto.context || 'default';
     const timeout = dto.timeout || 30;
 
     const variables: Record<string, string> = {
-      TENANT_ID: tenantId.toString(),
+      TENANT_ID: effectiveTenantId.toString(),
       ...(dto.variables || {}),
     };
 

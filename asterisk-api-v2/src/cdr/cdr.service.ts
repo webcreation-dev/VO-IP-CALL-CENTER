@@ -18,7 +18,7 @@ export class CdrService {
    * Find all CDR records with filtering and pagination
    */
   async findAll(
-    tenantId: number,
+    tenantId: number | null,
     filter: CdrFilterDto,
   ): Promise<{ data: Cdr[]; total: number; page: number; limit: number }> {
     const page = filter.page || 1;
@@ -88,16 +88,18 @@ export class CdrService {
   /**
    * Find a single CDR record by ID
    */
-  async findOne(tenantId: number, id: number): Promise<Cdr | null> {
-    return await this.cdrRepository.findOne({
-      where: { id, tenantId },
-    });
+  async findOne(tenantId: number | null, id: number): Promise<Cdr | null> {
+    const where: any = { id };
+    if (tenantId !== null) {
+      where.tenantId = tenantId;
+    }
+    return await this.cdrRepository.findOne({ where });
   }
 
   /**
    * Get CDR statistics for a tenant
    */
-  async getStats(tenantId: number, filter: CdrFilterDto): Promise<CdrStatsDto> {
+  async getStats(tenantId: number | null, filter: CdrFilterDto): Promise<CdrStatsDto> {
     const queryBuilder = this.cdrRepository
       .createQueryBuilder('cdr')
       .where('cdr.tenantId = :tenantId', { tenantId });
@@ -162,7 +164,7 @@ export class CdrService {
   /**
    * Export CDR records to CSV format
    */
-  async exportToCsv(tenantId: number, filter: CdrFilterDto): Promise<string> {
+  async exportToCsv(tenantId: number | null, filter: CdrFilterDto): Promise<string> {
     const { data } = await this.findAll(tenantId, {
       ...filter,
       limit: 10000, // Max records for export

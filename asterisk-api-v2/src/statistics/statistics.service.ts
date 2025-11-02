@@ -269,7 +269,7 @@ export class StatisticsService {
       const recordings = await this.recordingRepository.find({ where });
 
       const totalRecordings = recordings.length;
-      const totalSize = recordings.reduce((sum, r) => sum + (r.fileSize || 0), 0);
+      const totalSize = recordings.reduce((sum, r) => sum + (r.filesize || 0), 0);
       const totalDuration = recordings.reduce((sum, r) => sum + (r.duration || 0), 0);
 
       return {

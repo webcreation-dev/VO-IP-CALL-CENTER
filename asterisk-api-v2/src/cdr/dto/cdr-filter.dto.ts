@@ -11,6 +11,13 @@ import { Type } from 'class-transformer';
 import { BaseFilterDto } from '../../common/dto/base-filter.dto';
 
 export class CdrFilterDto extends BaseFilterDto {
+  // TEST MODE: optional tenantId for testing without auth
+  @ApiPropertyOptional({ description: 'Tenant ID (for testing)', example: 1 })
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  tenantId?: number;
+
   @ApiPropertyOptional({
     description: 'Filter by source number',
     example: '101',

@@ -1,7 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsIn } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsIn, IsNumber } from 'class-validator';
 
 export class StartRecordingDto {
+  // TEST MODE: optional tenantId for testing without auth
+  @ApiPropertyOptional({ description: 'Tenant ID (for testing)', example: 1 })
+  @IsNumber()
+  @IsOptional()
+  tenantId?: number;
+
   @ApiProperty({
     description: 'Channel ID to record',
     example: '1234567890.123',

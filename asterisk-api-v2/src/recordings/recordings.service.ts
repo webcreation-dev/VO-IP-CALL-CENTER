@@ -67,13 +67,13 @@ export class RecordingsService {
       // Save recording metadata to database
       const recording = this.recordingRepository.create({
         tenantId,
-        callId: channel.id,
+        uniqueid: channel.id,
         filename: recordingName,
-        filePath,
+        filepath: filePath,
         format,
         src: channel.caller?.number || '',
         dst: channel.connected?.number || '',
-        recordedBy: 'system',
+        notes: 'system',
       });
 
       const saved = await this.recordingRepository.save(recording);
@@ -103,7 +103,7 @@ export class RecordingsService {
    * List all recordings with filtering and pagination
    */
   async findAll(
-    tenantId: number,
+    tenantId: number | null,
     filter: RecordingFilterDto,
   ): Promise<{ data: Recording[]; total: number; page: number; limit: number }> {
     const page = filter.page || 1;
@@ -117,7 +117,7 @@ export class RecordingsService {
 
     // Apply filters
     if (filter.callId) {
-      queryBuilder.andWhere('recording.callId = :callId', {
+      queryBuilder.andWhere('recording.uniqueid = :callId', {
         callId: filter.callId,
       });
     }
@@ -164,9 +164,9 @@ export class RecordingsService {
 
     // Update file sizes if missing
     for (const recording of data) {
-      if (recording.fileSize === 0 && fs.existsSync(recording.filePath)) {
-        const stats = fs.statSync(recording.filePath);
-        recording.fileSize = stats.size;
+      if (recording.filesize === 0 && fs.existsSync(recording.filepath)) {
+        const stats = fs.statSync(recording.filepath);
+        recording.filesize = stats.size;
         await this.recordingRepository.save(recording);
       }
     }
@@ -182,10 +182,12 @@ export class RecordingsService {
   /**
    * Find a single recording by ID
    */
-  async findOne(tenantId: number, id: string): Promise<Recording> {
-    const recording = await this.recordingRepository.findOne({
-      where: { id, tenantId, isDeleted: false },
-    });
+  async findOne(tenantId: number | null, id: number): Promise<Recording> {
+    const where: any = { id, isDeleted: false };
+    if (tenantId !== null) {
+      where.tenantId = tenantId;
+    }
+    const recording = await this.recordingRepository.findOne({ where });
 
     if (!recording) {
       throw new NotFoundException(`Recording ${id} not found`);
@@ -197,20 +199,20 @@ export class RecordingsService {
   /**
    * Get recording file stream
    */
-  async getFileStream(tenantId: number, id: string): Promise<fs.ReadStream> {
+  async getFileStream(tenantId: number | null, id: number): Promise<fs.ReadStream> {
     const recording = await this.findOne(tenantId, id);
 
-    if (!fs.existsSync(recording.filePath)) {
+    if (!fs.existsSync(recording.filepath)) {
       throw new NotFoundException(`Recording file not found`);
     }
 
-    return fs.createReadStream(recording.filePath);
+    return fs.createReadStream(recording.filepath);
   }
 
   /**
    * Soft delete a recording
    */
-  async deleteRecording(tenantId: number, id: string): Promise<void> {
+  async deleteRecording(tenantId: number | null, id: number): Promise<void> {
     const recording = await this.findOne(tenantId, id);
 
     recording.isDeleted = true;
@@ -222,12 +224,12 @@ export class RecordingsService {
   /**
    * Permanently delete a recording file
    */
-  async permanentlyDelete(tenantId: number, id: string): Promise<void> {
+  async permanentlyDelete(tenantId: number | null, id: number): Promise<void> {
     const recording = await this.findOne(tenantId, id);
 
     // Delete physical file
-    if (fs.existsSync(recording.filePath)) {
-      fs.unlinkSync(recording.filePath);
+    if (fs.existsSync(recording.filepath)) {
+      fs.unlinkSync(recording.filepath);
     }
 
     // Delete database record

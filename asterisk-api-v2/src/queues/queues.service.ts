@@ -744,6 +744,22 @@ export class QueuesService {
 
       this.amiService.on('managerevent', eventHandler);
 
+      // Timeout - safety fallback (declare before try/catch)
+      timeoutHandle = setTimeout(() => {
+        this.amiService.off('managerevent', eventHandler);
+        if (queueFound) {
+          resolve({
+            queue_name: queue.name,
+            display_name: displayName,
+            calls_count: calls.length,
+            calls: calls.sort((a, b) => a.position - b.position),
+            retrieved_at: new Date().toISOString(),
+          });
+        } else {
+          reject(new Error(`Queue "${displayName}" not found in Asterisk`));
+        }
+      }, 3000);
+
       try {
         // Note: We send QueueStatus for the specific queue
         // If the queue doesn't exist in Asterisk, we won't receive any QueueParams event
@@ -761,22 +777,6 @@ export class QueuesService {
         reject(err);
         return;
       }
-
-      // Timeout - safety fallback
-      timeoutHandle = setTimeout(() => {
-        this.amiService.off('managerevent', eventHandler);
-        if (queueFound) {
-          resolve({
-            queue_name: queue.name,
-            display_name: displayName,
-            calls_count: calls.length,
-            calls: calls.sort((a, b) => a.position - b.position),
-            retrieved_at: new Date().toISOString(),
-          });
-        } else {
-          reject(new Error(`Queue "${displayName}" not found in Asterisk`));
-        }
-      }, 3000);
     });
   }
 }

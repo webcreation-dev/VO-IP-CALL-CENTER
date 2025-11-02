@@ -13,6 +13,15 @@ import { BaseFilterDto } from '../../common/dto/base-filter.dto';
 
 export class RecordingFilterDto extends BaseFilterDto {
   @ApiPropertyOptional({
+    description: 'Tenant ID for filtering',
+    example: 1,
+  })
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  tenantId?: number;
+
+  @ApiPropertyOptional({
     description: 'Filter by call ID',
     example: '1234567890.123',
   })

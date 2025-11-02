@@ -1,32 +1,32 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
 
-@Entity('recordings')
+@Entity('call_recordings')
 @Index(['tenantId', 'createdAt'])
-@Index(['tenantId', 'callId'])
+@Index(['tenantId', 'uniqueid'])
 export class Recording {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('increment')
+  id: number;
 
-  @Column({ name: 'tenant_id', type: 'integer' })
+  @Column({ name: 'tenant_id', type: 'integer', nullable: true })
   tenantId: number;
 
-  @Column({ name: 'call_id', length: 32 })
-  callId: string;
+  @Column({ name: 'uniqueid', length: 150 })
+  uniqueid: string;
 
   @Column({ length: 255 })
   filename: string;
 
-  @Column({ name: 'file_path', length: 500 })
-  filePath: string;
+  @Column({ name: 'filepath', length: 500 })
+  filepath: string;
 
-  @Column({ length: 10, default: 'wav' })
+  @Column({ length: 10, nullable: true })
   format: string;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({ type: 'integer', nullable: true })
   duration: number;
 
-  @Column({ name: 'file_size', type: 'bigint', default: 0 })
-  fileSize: number;
+  @Column({ name: 'filesize', type: 'bigint', nullable: true })
+  filesize: number;
 
   @Column({ length: 80, nullable: true })
   src: string;
@@ -34,12 +34,15 @@ export class Recording {
   @Column({ length: 80, nullable: true })
   dst: string;
 
-  @Column({ name: 'recorded_by', length: 100, nullable: true })
-  recordedBy: string;
+  @Column({ type: 'text', nullable: true })
+  notes: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
   createdAt: Date;
 
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
+
+  @Column({ name: 'deleted_at', type: 'timestamp with time zone', nullable: true })
+  deletedAt: Date;
 }
