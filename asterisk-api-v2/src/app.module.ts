@@ -42,6 +42,7 @@ import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 // Filters
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { IvrModule } from './ivr/ivr.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     MetadataModule,
     AsteriskModule,
     StatisticsModule,
+    IvrModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,11 +1,33 @@
+import { Injectable } from "@nestjs/common";
+import { AriService } from "src/core/asterisk/ari/ari.service";
+import { QueuesService } from "src/queues/queues.service";
+import { EndpointsService } from "src/endpoints/endpoints.service";
+import { IvrAudioService } from "./ivr-audio.service";
+import { IvrService } from "./ivr.service";
+import { CustomLoggerService } from "src/core/logger/logger.service";
+import { TenantPrefixUtil } from "src/common/utils/tenant-prefix.util";
+import type { IvrSession } from '../interfaces/ivr-session.interface';
+import type { 
+  ActionConfig,
+  QueueAction,
+  EndpointAction,
+  SubmenuAction,
+  PlaybackAction,
+  HangupAction,
+  VoicemailAction,
+  CallbackAction,
+  ExternalApiAction
+} from '../interfaces/action-config.interface';
+
 // ivr-action-executor.service.ts
 @Injectable()
 export class IvrActionExecutorService {
   constructor(
     private ariService: AriService,
     private queuesService: QueuesService,
+    private endpointsService: EndpointsService,
+    private ivrService: IvrService,
     private audioService: IvrAudioService,
-    private httpService: HttpService,
     private logger: CustomLoggerService,
   ) {}
 
@@ -38,8 +60,8 @@ export class IvrActionExecutorService {
         return this.executeExternalApiAction(session, action as ExternalApiAction);
       
       default:
-        this.logger.warn(`Action inconnue: ${action.type}`);
-        await this.ariService.hangup(session.channelId);
+        this.logger.warn(`Action inconnue: ${(action as any).type}`);
+        await this.ariService.hangupChannel(session.channelId);
     }
   }
 
@@ -48,8 +70,8 @@ export class IvrActionExecutorService {
     action: QueueAction,
   ): Promise<void> {
     // 1. Récupérer la queue
-    const queue = await this.queuesService.findOne(action.target, session.tenantId);
-    const queueName = TenantPrefixUtil.addPrefix(session.tenantId, queue.name);
+    const queue = await this.queuesService.findOne(Number(session.tenantId), action.target);
+    const queueName = queue.name;
 
     // 2. Jouer l'annonce si configurée
     if (action.announce) {
@@ -60,24 +82,16 @@ export class IvrActionExecutorService {
       await this.ariService.playback(session.channelId, soundPath);
     }
 
-    // 3. Créer un bridge
-    const bridge = await this.ariService.createBridge('mixing');
-
-    // 4. Ajouter le channel au bridge
-    await this.ariService.addChannelToBridge(bridge.id, session.channelId);
-
-    // 5. Originer un Local channel vers la queue
-    const localChannel = await this.ariService.originate({
-      endpoint: `Local/${queueName}@from-stasis`,
-      app: 'ivr-app',
-      appArgs: 'queue-bridge',
-      variables: {
-        QUEUE_NAME: queueName,
-        BRIDGE_ID: bridge.id,
-      },
-    });
-
-    // Le reste est géré par Asterisk (queue logic)
+    // 3. Sortir de Stasis et continuer dans le dialplan [from-stasis]
+    // Le channel va exécuter Queue() et Asterisk gérera le reste
+    this.logger.log(`Redirection channel ${session.channelId} vers queue ${queueName}`);
+    
+    await this.ariService.continueInDialplan(
+      session.channelId,
+      'from-stasis',
+      queueName,
+      1,
+    );
   }
 
   private async executeEndpointAction(
@@ -85,17 +99,22 @@ export class IvrActionExecutorService {
     action: EndpointAction,
   ): Promise<void> {
     const endpoint = await this.endpointsService.findOne(
+      Number(session.tenantId),
       action.target,
-      session.tenantId,
     );
-    const sipUri = TenantPrefixUtil.addPrefix(session.tenantId, endpoint.name);
+    const sipUri = TenantPrefixUtil.addPrefix(Number(session.tenantId), endpoint.id);
 
-    // Dial via ARI
-    await this.ariService.dial(
-      session.channelId,
-      `PJSIP/${sipUri}`,
-      action.timeout || 30,
-    );
+    // Créer un bridge et originer l'appel
+    const bridge = await this.ariService.createBridge('mixing');
+    await this.ariService.addChannelToBridge(bridge.id, session.channelId);
+    
+    const outboundChannel = await this.ariService.originateCall({
+      endpoint: `PJSIP/${sipUri}`,
+      app: 'ivr-app',
+      timeout: action.timeout || 30,
+    });
+    
+    await this.ariService.addChannelToBridge(bridge.id, outboundChannel.id);
   }
 
   private async executeSubmenuAction(
@@ -104,17 +123,17 @@ export class IvrActionExecutorService {
   ): Promise<void> {
     // Charger le sous-menu
     const submenu = await this.ivrService.findMenuById(
-      action.target,
+      Number(action.target),
       session.tenantId,
     );
 
     // Empiler le menu actuel
-    session.menuStack.push(session.currentMenu.id);
+    session.menuStack.push(Number(session.currentMenu.id));
     session.currentMenu = submenu;
     session.retryCount = 0;
 
-    // Jouer le sous-menu
-    await this.orchestrator.playMenu(session);
+    // TODO: Jouer le sous-menu via l'orchestrateur
+    this.logger.log(`Redirection vers sous-menu: ${submenu.name}`);
   }
 
   private async executePlaybackAction(
@@ -134,7 +153,7 @@ export class IvrActionExecutorService {
     if (action.then) {
       await this.execute(session, action.then);
     } else {
-      await this.ariService.hangup(session.channelId);
+      await this.ariService.hangupChannel(session.channelId);
     }
   }
 
@@ -142,28 +161,30 @@ export class IvrActionExecutorService {
     session: IvrSession,
     action: HangupAction,
   ): Promise<void> {
-    await this.ariService.hangup(session.channelId, action.cause);
+    await this.ariService.hangupChannel(session.channelId, action.cause);
+  }
+
+  private async executeVoicemailAction(
+    session: IvrSession,
+    action: VoicemailAction,
+  ): Promise<void> {
+    // TODO: Implémenter l'action voicemail
+    this.logger.warn('Action voicemail non implémentée');
+    await this.ariService.hangupChannel(session.channelId);
   }
 
   private async executeCallbackAction(
     session: IvrSession,
     action: CallbackAction,
   ): Promise<void> {
-    // 1. Enregistrer le callback dans une table dédiée
-    await this.callbackService.create({
-      tenant_id: session.tenantId,
-      caller_number: session.callData.callerId,
-      queue_id: action.queue_id,
-      requested_at: new Date(),
-      status: 'pending',
-    });
+    // TODO: Implémenter service de callback
+    this.logger.log(`Callback demandé pour ${session.callData.callerId}`);
 
     // 2. Jouer le message de confirmation
     if (action.message) {
       if (action.message.startsWith('say:')) {
-        // TTS
-        const text = action.message.replace('say:', '');
-        await this.ariService.playTTS(session.channelId, text);
+        // TTS - TODO: implémenter
+        this.logger.warn('TTS non implémenté');
       } else {
         const soundPath = await this.audioService.resolveSoundPath(
           action.message,
@@ -174,32 +195,21 @@ export class IvrActionExecutorService {
     }
 
     // 3. Raccrocher
-    await this.ariService.hangup(session.channelId);
+    await this.ariService.hangupChannel(session.channelId);
   }
 
   private async executeExternalApiAction(
     session: IvrSession,
     action: ExternalApiAction,
   ): Promise<void> {
-    try {
-      const response = await this.httpService.axiosRef.request({
-        method: action.method,
-        url: action.url,
-        data: {
-          tenant_id: session.tenantId,
-          caller_id: session.callData.callerId,
-          did: session.callData.did,
-        },
-        timeout: 5000,
-      });
-
-      // Action suivante selon réponse
-      if (action.then) {
-        await this.execute(session, action.then);
-      }
-    } catch (error) {
-      this.logger.error(`Erreur API externe: ${error.message}`);
-      await this.ariService.hangup(session.channelId);
+    // TODO: Implémenter l'appel API externe avec axios
+    this.logger.warn('Action external_api non implémentée');
+    
+    // Action suivante
+    if (action.then) {
+      await this.execute(session, action.then);
+    } else {
+      await this.ariService.hangupChannel(session.channelId);
     }
   }
 }

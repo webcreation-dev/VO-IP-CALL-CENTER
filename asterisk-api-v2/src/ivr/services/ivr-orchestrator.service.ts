@@ -1,3 +1,31 @@
+import { Injectable } from '@nestjs/common';
+import { AriService } from 'src/core/asterisk/ari/ari.service';
+import { CustomLoggerService } from 'src/core/logger/logger.service';
+import { IvrService } from './ivr.service';
+import { IvrActionExecutorService } from './ivr-action-executor.service';
+import { IvrAudioService } from './ivr-audio.service';
+import type { IvrSession } from '../interfaces/ivr-session.interface';
+import type { IvrMenu } from '../entities/ivr-menu.entity';
+import type { IvrCondition } from '../entities/ivr-condition.entity';
+
+// Types ARI
+interface AriChannel {
+  id: string;
+  name?: string;
+  state?: string;
+  caller?: {
+    number: string;
+    name: string;
+  };
+}
+
+interface AriDtmfEvent {
+  channel: {
+    id: string;
+  };
+  digit: string;
+}
+
 // ivr-orchestrator.service.ts
 @Injectable()
 export class IvrOrchestratorService {
@@ -27,13 +55,13 @@ export class IvrOrchestratorService {
       if (!mapping) {
         this.logger.warn(`Aucun IVR configuré pour le DID ${did}`);
         await this.ariService.playback(channelId, 'tt-monkeys'); // Son d'erreur
-        await this.ariService.hangup(channelId);
+        await this.ariService.hangupChannel(channelId);
         return;
       }
 
       const menu = await this.ivrService.findMenuById(
-        mapping.menu_id,
-        mapping.tenant_id,
+        Number(mapping.menu_id),
+        Number(mapping.tenant_id),
       );
 
       // 2. Évaluer les conditions (heure, caller_id, etc.)
@@ -45,16 +73,16 @@ export class IvrOrchestratorService {
       // 3. Créer une session IVR
       const session: IvrSession = {
         channelId,
-        tenantId: mapping.tenant_id,
+        tenantId: Number(mapping.tenant_id),
         currentMenu: evaluatedMenu,
-        menuStack: [evaluatedMenu.id],
+        menuStack: [Number(evaluatedMenu.id)],
         retryCount: 0,
         callData: { did, callerId },
       };
       this.activeSessions.set(channelId, session);
 
       // 4. Répondre à l'appel
-      await this.ariService.answer(channelId);
+      await this.ariService.answerChannel(channelId);
 
       // 5. Lancer le menu
       await this.playMenu(session);
@@ -93,7 +121,7 @@ export class IvrOrchestratorService {
 
     // 3. Trouver l'option correspondante
     const option = await this.ivrService.findOptionByDigit(
-      currentMenu.id,
+      Number(currentMenu.id),
       dtmf,
     );
 
@@ -118,8 +146,13 @@ export class IvrOrchestratorService {
   ): Promise<string | null> {
     return new Promise((resolve) => {
       let buffer = '';
+      
+      const removeListeners = () => {
+        this.ariService.off('ChannelDtmfReceived', onDtmf);
+      };
+
       const timer = setTimeout(() => {
-        this.removeListeners();
+        removeListeners();
         resolve(null);
       }, timeout * 1000);
 
@@ -130,13 +163,9 @@ export class IvrOrchestratorService {
         
         if (buffer.length >= maxDigits) {
           clearTimeout(timer);
-          this.removeListeners();
+          removeListeners();
           resolve(buffer);
         }
-      };
-
-      const removeListeners = () => {
-        this.ariService.off('ChannelDtmfReceived', onDtmf);
       };
 
       this.ariService.on('ChannelDtmfReceived', onDtmf);
@@ -147,6 +176,12 @@ export class IvrOrchestratorService {
    * Gestion du timeout
    */
   private async handleTimeout(session: IvrSession): Promise<void> {
+    // Vérifier que la session existe encore (peut avoir été fermée entre-temps)
+    if (!this.activeSessions.has(session.channelId)) {
+      this.logger.debug(`Session ${session.channelId} déjà fermée, ignorer timeout`);
+      return;
+    }
+
     session.retryCount++;
 
     if (session.retryCount >= session.currentMenu.max_retries) {
@@ -172,6 +207,12 @@ export class IvrOrchestratorService {
    * Gestion de l'input invalide
    */
   private async handleInvalidInput(session: IvrSession): Promise<void> {
+    // Vérifier que la session existe encore (peut avoir été fermée entre-temps)
+    if (!this.activeSessions.has(session.channelId)) {
+      this.logger.debug(`Session ${session.channelId} déjà fermée, ignorer input invalide`);
+      return;
+    }
+
     session.retryCount++;
 
     if (session.retryCount >= session.currentMenu.max_retries) {
@@ -198,7 +239,7 @@ export class IvrOrchestratorService {
     menu: IvrMenu,
     context: { did: string; callerId: string; datetime: Date },
   ): Promise<IvrMenu> {
-    const conditions = await this.ivrService.findConditionsByMenu(menu.id);
+    const conditions = await this.ivrService.findConditionsByMenu(Number(menu.id));
     
     for (const condition of conditions.sort((a, b) => a.priority - b.priority)) {
       if (!condition.is_active) continue;
@@ -207,8 +248,8 @@ export class IvrOrchestratorService {
       if (isValid && condition.action.type === 'submenu') {
         // Rediriger vers un autre menu
         return this.ivrService.findMenuById(
-          condition.action.target,
-          menu.tenant_id,
+          Number(condition.action.target),
+          Number(menu.tenant_id),
         );
       }
     }
@@ -247,6 +288,18 @@ export class IvrOrchestratorService {
     }
   }
 
+  private evaluateCallerIdCondition(config: any, callerId: string): boolean {
+    if (!config.caller_pattern) return false;
+    const pattern = new RegExp(config.caller_pattern);
+    return pattern.test(callerId);
+  }
+
+  private evaluateDidCondition(config: any, did: string): boolean {
+    if (!config.did_pattern) return false;
+    const pattern = new RegExp(config.did_pattern);
+    return pattern.test(did);
+  }
+
   private evaluateTimeCondition(config: any, datetime: Date): boolean {
     // Convertir en timezone configurée
     const localTime = datetime; // TODO: utiliser date-fns-tz
@@ -277,7 +330,7 @@ export class IvrOrchestratorService {
     return true;
   }
 
-  private async cleanupSession(channelId: string): Promise<void> {
+  async cleanupSession(channelId: string): Promise<void> {
     this.activeSessions.delete(channelId);
   }
 }

@@ -1,36 +1,82 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios, { AxiosInstance } from 'axios';
-import {
-  AriChannel,
-  AriBridge,
-  AriPlayback,
-  AriRecording,
-  OriginateOptions,
-} from './ari.types';
+import { EventEmitter } from 'events';
+import * as ari from 'ari-client';
 
 @Injectable()
-export class AriService {
+export class AriService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AriService.name);
-  private ariClient: AxiosInstance;
+  private client: ari.Client;
+  private eventEmitter = new EventEmitter();
 
-  constructor(private configService: ConfigService) {
-    const baseURL = `http://${this.configService.get('ari.host')}:${this.configService.get('ari.port')}/ari`;
-    const auth = {
-      username: this.configService.get('ari.user'),
-      password: this.configService.get('ari.password'),
-    };
+  constructor(private configService: ConfigService) {}
 
-    this.ariClient = axios.create({
-      baseURL,
-      auth,
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+  async onModuleInit() {
+    try {
+      // Connexion ARI avec WebSocket
+      const ariUrl = `http://${this.configService.get('ari.host')}:${this.configService.get('ari.port')}`;
+      const ariUser = this.configService.get('ari.user');
+      const ariPassword = this.configService.get('ari.password');
+
+      this.logger.log(`Connexion à ARI: ${ariUrl} (user: ${ariUser})`);
+
+      this.client = await ari.connect(ariUrl, ariUser, ariPassword);
+
+      this.logger.log('✅ ARI Client connecté avec WebSocket');
+
+      // Transférer tous les événements vers l'EventEmitter
+      this.setupEventForwarding();
+    } catch (error) {
+      this.logger.error('❌ Erreur connexion ARI:', error);
+      throw error;
+    }
+  }
+
+  async onModuleDestroy() {
+    if (this.client) {
+      this.logger.log('Fermeture connexion ARI...');
+      // ari-client ferme automatiquement la connexion
+    }
+  }
+
+  private setupEventForwarding() {
+    // Transférer tous les événements ARI vers l'EventEmitter interne
+    const events = [
+      'StasisStart',
+      'StasisEnd',
+      'ChannelDtmfReceived',
+      'PlaybackFinished',
+      'ChannelStateChange',
+      'ChannelHangupRequest',
+      'ChannelDestroyed',
+      'BridgeCreated',
+      'BridgeDestroyed',
+      'ChannelEnteredBridge',
+      'ChannelLeftBridge',
+    ];
+
+    events.forEach((eventName) => {
+      this.client.on(eventName, (...args) => {
+        this.logger.debug(`📡 Événement ARI: ${eventName}`);
+        this.eventEmitter.emit(eventName, ...args);
+      });
     });
+  }
 
-    this.logger.log(`ARI client initialized: ${baseURL}`);
+  // ========================================
+  // EVENT EMITTER METHODS
+  // ========================================
+
+  on(event: string, listener: (...args: any[]) => void) {
+    this.eventEmitter.on(event, listener);
+  }
+
+  off(event: string, listener: (...args: any[]) => void) {
+    this.eventEmitter.off(event, listener);
+  }
+
+  once(event: string, listener: (...args: any[]) => void) {
+    this.eventEmitter.once(event, listener);
   }
 
   // ========================================
@@ -38,205 +84,121 @@ export class AriService {
   // ========================================
 
   /**
-   * Get all active channels
-   */
-  async getChannels(): Promise<AriChannel[]> {
-    try {
-      const response = await this.ariClient.get('/channels');
-      return response.data;
-    } catch (error) {
-      this.logger.error('Failed to get channels:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Get specific channel
-   */
-  async getChannel(channelId: string): Promise<AriChannel> {
-    try {
-      const response = await this.ariClient.get(`/channels/${channelId}`);
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to get channel ${channelId}:`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Originate a call
-   */
-  async originateCall(options: OriginateOptions): Promise<AriChannel> {
-    try {
-      const response = await this.ariClient.post('/channels', null, {
-        params: {
-          endpoint: options.endpoint,
-          extension: options.extension,
-          context: options.context,
-          priority: options.priority,
-          label: options.label,
-          app: options.app,
-          appArgs: options.appArgs,
-          callerId: options.callerId,
-          timeout: options.timeout || 30,
-          variables: options.variables,
-        },
-      });
-      return response.data;
-    } catch (error) {
-      this.logger.error('Failed to originate call:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Hangup a channel
-   */
-  async hangupChannel(channelId: string, reason: string = 'normal'): Promise<void> {
-    try {
-      await this.ariClient.delete(`/channels/${channelId}`, {
-        params: { reason },
-      });
-      this.logger.log(`Channel ${channelId} hung up`);
-    } catch (error) {
-      this.logger.error(`Failed to hangup channel ${channelId}:`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Answer a channel
+   * Répondre à un appel
    */
   async answerChannel(channelId: string): Promise<void> {
     try {
-      await this.ariClient.post(`/channels/${channelId}/answer`);
-      this.logger.log(`Channel ${channelId} answered`);
+      await this.client.channels.answer({ channelId });
+      this.logger.log(`Channel ${channelId} répondu`);
     } catch (error) {
-      this.logger.error(`Failed to answer channel ${channelId}:`, error.message);
+      this.logger.error(`Erreur answer channel ${channelId}:`, error);
       throw error;
     }
   }
 
   /**
-   * Hold a channel
+   * Raccrocher un channel
+   */
+  async hangupChannel(channelId: string, reason?: string): Promise<void> {
+    try {
+      await this.client.channels.hangup({ channelId, reason });
+      this.logger.log(`Channel ${channelId} raccroché`);
+    } catch (error: any) {
+      // Si le channel n'existe plus (404), c'est normal (déjà raccroché)
+      if (error?.statusCode === 404 || error?.message?.includes('not found')) {
+        this.logger.debug(`Channel ${channelId} déjà fermé`);
+      } else {
+        this.logger.error(`Erreur hangup ${channelId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Obtenir les informations d'un channel
+   */
+  async getChannel(channelId: string): Promise<any> {
+    try {
+      return await this.client.channels.get({ channelId });
+    } catch (error) {
+      this.logger.error(`Erreur get channel info ${channelId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lister tous les channels actifs
+   */
+  async getChannels(): Promise<any[]> {
+    try {
+      const channels = this.client.channels;
+      return await channels.list();
+    } catch (error) {
+      this.logger.error('Erreur list channels:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mettre un channel en attente (hold)
    */
   async holdChannel(channelId: string): Promise<void> {
     try {
-      await this.ariClient.post(`/channels/${channelId}/hold`);
+      await this.client.channels.hold({ channelId });
+      this.logger.log(`Channel ${channelId} en attente`);
     } catch (error) {
-      this.logger.error(`Failed to hold channel ${channelId}:`, error.message);
+      this.logger.error('Erreur hold:', error);
       throw error;
     }
   }
 
   /**
-   * Unhold a channel
+   * Reprendre un channel en attente
    */
   async unholdChannel(channelId: string): Promise<void> {
     try {
-      await this.ariClient.delete(`/channels/${channelId}/hold`);
+      await this.client.channels.unhold({ channelId });
+      this.logger.log(`Channel ${channelId} repris`);
     } catch (error) {
-      this.logger.error(`Failed to unhold channel ${channelId}:`, error.message);
+      this.logger.error('Erreur unhold:', error);
       throw error;
     }
   }
 
   /**
-   * Mute a channel
+   * Muet sur un channel
    */
   async muteChannel(channelId: string, direction: 'in' | 'out' | 'both' = 'both'): Promise<void> {
     try {
-      await this.ariClient.post(`/channels/${channelId}/mute`, null, {
-        params: { direction },
-      });
+      await this.client.channels.mute({ channelId, direction });
+      this.logger.log(`Channel ${channelId} muté (${direction})`);
     } catch (error) {
-      this.logger.error(`Failed to mute channel ${channelId}:`, error.message);
+      this.logger.error('Erreur mute:', error);
       throw error;
     }
   }
 
   /**
-   * Unmute a channel
+   * Démuet sur un channel
    */
   async unmuteChannel(channelId: string, direction: 'in' | 'out' | 'both' = 'both'): Promise<void> {
     try {
-      await this.ariClient.delete(`/channels/${channelId}/mute`, {
-        params: { direction },
-      });
+      await this.client.channels.unmute({ channelId, direction });
+      this.logger.log(`Channel ${channelId} démuté (${direction})`);
     } catch (error) {
-      this.logger.error(`Failed to unmute channel ${channelId}:`, error.message);
-      throw error;
-    }
-  }
-
-  // ========================================
-  // BRIDGE OPERATIONS
-  // ========================================
-
-  /**
-   * Get all bridges
-   */
-  async getBridges(): Promise<AriBridge[]> {
-    try {
-      const response = await this.ariClient.get('/bridges');
-      return response.data;
-    } catch (error) {
-      this.logger.error('Failed to get bridges:', error.message);
+      this.logger.error('Erreur unmute:', error);
       throw error;
     }
   }
 
   /**
-   * Create a bridge
+   * Envoyer DTMF sur un channel
    */
-  async createBridge(type: string = 'mixing', name?: string): Promise<AriBridge> {
+  async sendDtmf(channelId: string, dtmf: string): Promise<void> {
     try {
-      const response = await this.ariClient.post('/bridges', null, {
-        params: { type, name },
-      });
-      return response.data;
+      await this.client.channels.sendDTMF({ channelId, dtmf });
+      this.logger.debug(`DTMF envoyé: ${dtmf} sur ${channelId}`);
     } catch (error) {
-      this.logger.error('Failed to create bridge:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Add channel to bridge
-   */
-  async addChannelToBridge(bridgeId: string, channelId: string): Promise<void> {
-    try {
-      await this.ariClient.post(`/bridges/${bridgeId}/addChannel`, null, {
-        params: { channel: channelId },
-      });
-    } catch (error) {
-      this.logger.error(`Failed to add channel ${channelId} to bridge ${bridgeId}:`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove channel from bridge
-   */
-  async removeChannelFromBridge(bridgeId: string, channelId: string): Promise<void> {
-    try {
-      await this.ariClient.post(`/bridges/${bridgeId}/removeChannel`, null, {
-        params: { channel: channelId },
-      });
-    } catch (error) {
-      this.logger.error(`Failed to remove channel ${channelId} from bridge ${bridgeId}:`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Destroy a bridge
-   */
-  async destroyBridge(bridgeId: string): Promise<void> {
-    try {
-      await this.ariClient.delete(`/bridges/${bridgeId}`);
-    } catch (error) {
-      this.logger.error(`Failed to destroy bridge ${bridgeId}:`, error.message);
+      this.logger.error('Erreur send DTMF:', error);
       throw error;
     }
   }
@@ -246,28 +208,172 @@ export class AriService {
   // ========================================
 
   /**
-   * Play media on channel
+   * Jouer un son
    */
-  async playback(channelId: string, media: string, lang: string = 'en'): Promise<AriPlayback> {
+  async playback(channelId: string, media: string, lang: string = 'fr'): Promise<any> {
     try {
-      const response = await this.ariClient.post(`/channels/${channelId}/play`, null, {
-        params: { media, lang },
+      const playback = await this.client.channels.play({
+        channelId,
+        media: `sound:${media}`,
+        lang,
       });
-      return response.data;
+
+      this.logger.debug(`Playback démarré: ${playback.id} sur ${channelId}`);
+      return playback;
     } catch (error) {
-      this.logger.error(`Failed to play media on channel ${channelId}:`, error.message);
+      this.logger.error(`Erreur playback sur ${channelId}:`, error);
       throw error;
     }
   }
 
   /**
-   * Stop playback
+   * Arrêter un playback
    */
   async stopPlayback(playbackId: string): Promise<void> {
     try {
-      await this.ariClient.delete(`/playbacks/${playbackId}`);
+      await this.client.playbacks.stop({ playbackId });
+      this.logger.log(`Playback ${playbackId} arrêté`);
     } catch (error) {
-      this.logger.error(`Failed to stop playback ${playbackId}:`, error.message);
+      this.logger.error(`Erreur stop playback ${playbackId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Jouer plusieurs sons en séquence
+   */
+  async playbackMultiple(channelId: string, mediaList: string[]): Promise<void> {
+    for (const media of mediaList) {
+      await this.playback(channelId, media);
+      await this.waitForPlaybackFinished(channelId);
+    }
+  }
+
+  /**
+   * Attendre la fin d'un playback
+   */
+  private waitForPlaybackFinished(channelId: string): Promise<void> {
+    return new Promise((resolve) => {
+      const handler = (event: any, playback: any) => {
+        if (playback.target_uri && playback.target_uri.includes(channelId)) {
+          this.eventEmitter.off('PlaybackFinished', handler);
+          resolve();
+        }
+      };
+      this.eventEmitter.on('PlaybackFinished', handler);
+    });
+  }
+
+  // ========================================
+  // BRIDGE OPERATIONS
+  // ========================================
+
+  /**
+   * Créer un bridge
+   */
+  async createBridge(type: 'mixing' | 'holding' = 'mixing', name?: string): Promise<any> {
+    try {
+      const bridges = this.client.bridges;
+      const bridge = await bridges.create({ type, name });
+      this.logger.log(`Bridge créé: ${bridge.id}`);
+      return bridge;
+    } catch (error) {
+      this.logger.error('Erreur création bridge:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtenir tous les bridges
+   */
+  async getBridges(): Promise<any[]> {
+    try {
+      const bridges = this.client.bridges;
+      return await bridges.list();
+    } catch (error) {
+      this.logger.error('Erreur list bridges:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ajouter un channel à un bridge
+   */
+  async addChannelToBridge(bridgeId: string, channelId: string): Promise<void> {
+    try {
+      await this.client.bridges.addChannel({ bridgeId, channel: channelId });
+      this.logger.log(`Channel ${channelId} ajouté au bridge ${bridgeId}`);
+    } catch (error) {
+      this.logger.error(`Erreur ajout channel au bridge:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Retirer un channel d'un bridge
+   */
+  async removeChannelFromBridge(bridgeId: string, channelId: string): Promise<void> {
+    try {
+      await this.client.bridges.removeChannel({ bridgeId, channel: channelId });
+      this.logger.log(`Channel ${channelId} retiré du bridge ${bridgeId}`);
+    } catch (error) {
+      this.logger.error(`Erreur retrait channel du bridge:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Détruire un bridge
+   */
+  async destroyBridge(bridgeId: string): Promise<void> {
+    try {
+      await this.client.bridges.destroy({ bridgeId });
+      this.logger.log(`Bridge ${bridgeId} détruit`);
+    } catch (error) {
+      this.logger.error(`Erreur destruction bridge:`, error);
+    }
+  }
+
+  // ========================================
+  // ORIGINATE OPERATIONS
+  // ========================================
+
+  /**
+   * Originer un appel
+   */
+  async originateCall(params: {
+    endpoint: string;
+    app?: string;
+    appArgs?: string;
+    extension?: string;
+    context?: string;
+    priority?: number;
+    callerId?: string;
+    timeout?: number;
+    variables?: Record<string, string>;
+  }): Promise<any> {
+    try {
+      const channels = this.client.channels;
+      const channel = await channels.originate({
+        endpoint: params.endpoint,
+        app: params.app,
+        appArgs: params.appArgs,
+        extension: params.extension,
+        context: params.context,
+        priority: params.priority,
+        callerId: params.callerId,
+        timeout: params.timeout || 30,
+        variables: params.variables,
+      });
+
+      this.logger.log(`Appel originé: ${channel.id} vers ${params.endpoint}`);
+      return channel;
+    } catch (error: any) {
+      this.logger.error(`Erreur originate vers ${params.endpoint}:`, {
+        message: error.message,
+        statusCode: error.statusCode,
+        response: error.response?.data,
+      });
       throw error;
     }
   }
@@ -277,7 +383,7 @@ export class AriService {
   // ========================================
 
   /**
-   * Start recording on channel
+   * Enregistrer un appel
    */
   async startRecording(
     channelId: string,
@@ -285,32 +391,34 @@ export class AriService {
     format: string = 'wav',
     maxDuration?: number,
     maxSilence?: number,
-  ): Promise<AriRecording> {
+  ): Promise<any> {
     try {
-      const response = await this.ariClient.post(`/channels/${channelId}/record`, null, {
-        params: {
-          name,
-          format,
-          maxDurationSeconds: maxDuration,
-          maxSilenceSeconds: maxSilence,
-          ifExists: 'overwrite',
-        },
+      const recording = await this.client.channels.record({
+        channelId,
+        name,
+        format,
+        maxDurationSeconds: maxDuration || 0,
+        maxSilenceSeconds: maxSilence || 0,
+        ifExists: 'overwrite',
       });
-      return response.data;
+
+      this.logger.log(`Enregistrement démarré: ${recording.name} sur ${channelId}`);
+      return recording;
     } catch (error) {
-      this.logger.error(`Failed to start recording on channel ${channelId}:`, error.message);
+      this.logger.error('Erreur start recording:', error);
       throw error;
     }
   }
 
   /**
-   * Stop recording
+   * Arrêter un enregistrement
    */
   async stopRecording(recordingName: string): Promise<void> {
     try {
-      await this.ariClient.post(`/recordings/live/${recordingName}/stop`);
+      await this.client.recordings.stop({ recordingName });
+      this.logger.log(`Enregistrement arrêté: ${recordingName}`);
     } catch (error) {
-      this.logger.error(`Failed to stop recording ${recordingName}:`, error.message);
+      this.logger.error('Erreur stop recording:', error);
       throw error;
     }
   }
@@ -320,9 +428,10 @@ export class AriService {
    */
   async pauseRecording(recordingName: string): Promise<void> {
     try {
-      await this.ariClient.post(`/recordings/live/${recordingName}/pause`);
+      await this.client.recordings.pause({ recordingName });
+      this.logger.log(`Enregistrement pausé: ${recordingName}`);
     } catch (error) {
-      this.logger.error(`Failed to pause recording ${recordingName}:`, error.message);
+      this.logger.error('Erreur pause recording:', error);
       throw error;
     }
   }
@@ -332,9 +441,10 @@ export class AriService {
    */
   async resumeRecording(recordingName: string): Promise<void> {
     try {
-      await this.ariClient.delete(`/recordings/live/${recordingName}/pause`);
+      await this.client.recordings.unpause({ recordingName });
+      this.logger.log(`Enregistrement repris: ${recordingName}`);
     } catch (error) {
-      this.logger.error(`Failed to resume recording ${recordingName}:`, error.message);
+      this.logger.error('Erreur resume recording:', error);
       throw error;
     }
   }
@@ -348,10 +458,40 @@ export class AriService {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      await this.ariClient.get('/asterisk/info');
+      await this.client.asterisk.getInfo();
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Continuer un channel dans le dialplan (sortir de Stasis)
+   */
+  async continueInDialplan(
+    channelId: string,
+    context: string,
+    extension: string,
+    priority: number = 1,
+  ): Promise<void> {
+    try {
+      await this.client.channels.continueInDialplan({
+        channelId,
+        context,
+        extension,
+        priority,
+      });
+      this.logger.log(`Channel ${channelId} continue dans ${context},${extension},${priority}`);
+    } catch (error: any) {
+      this.logger.error(`Erreur continueInDialplan ${channelId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtenir le client ARI brut (pour usage avancé)
+   */
+  getClient(): ari.Client {
+    return this.client;
   }
 }
