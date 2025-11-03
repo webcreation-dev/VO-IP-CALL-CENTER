@@ -22,7 +22,7 @@ COPY ormconfig.ts ./
 # Copier le code source
 COPY src ./src
 
-# Compiler TypeScript et vérifier que dist/src/main.js existe
+# Compiler TypeScript - Le build produit dist/src/main.js
 RUN npm run build && \
     ls -la dist/ && \
     ls -la dist/src/ && \
@@ -52,7 +52,7 @@ COPY --from=builder /app/dist ./dist
 COPY ormconfig.ts ./
 
 # Vérifier que main.js existe dans l'image finale
-RUN ls -la dist/ && ls -la dist/src/ && test -f dist/src/main.js || (echo "ERROR: dist/src/main.js not found in final image!" && exit 1)
+RUN test -f dist/src/main.js || (echo "ERROR: dist/src/main.js not found in final image!" && exit 1)
 
 # Exposer le port
 EXPOSE 3001
