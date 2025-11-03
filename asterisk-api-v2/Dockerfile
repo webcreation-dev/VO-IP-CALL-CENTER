@@ -22,10 +22,11 @@ COPY ormconfig.ts ./
 # Copier le code source
 COPY src ./src
 
-# Compiler TypeScript et vérifier que dist/main.js existe
+# Compiler TypeScript et vérifier que dist/src/main.js existe
 RUN npm run build && \
     ls -la dist/ && \
-    test -f dist/main.js || (echo "ERROR: dist/main.js not found after build!" && exit 1)
+    ls -la dist/src/ && \
+    test -f dist/src/main.js || (echo "ERROR: dist/src/main.js not found after build!" && exit 1)
 
 # Stage 2: Production
 FROM node:18-alpine
@@ -51,7 +52,7 @@ COPY --from=builder /app/dist ./dist
 COPY ormconfig.ts ./
 
 # Vérifier que main.js existe dans l'image finale
-RUN ls -la dist/ && test -f dist/main.js || (echo "ERROR: dist/main.js not found in final image!" && exit 1)
+RUN ls -la dist/ && ls -la dist/src/ && test -f dist/src/main.js || (echo "ERROR: dist/src/main.js not found in final image!" && exit 1)
 
 # Exposer le port
 EXPOSE 3001
@@ -60,4 +61,4 @@ EXPOSE 3001
 ENV NODE_ENV=production
 
 # Commande de démarrage
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
