@@ -17,6 +17,7 @@ RUN npm install
 # Copier les fichiers de configuration TypeScript
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
+COPY ormconfig.ts ./
 
 # Copier le code source
 COPY src ./src
@@ -45,6 +46,9 @@ RUN npm rebuild bcrypt --build-from-source
 
 # Copier les fichiers compilés depuis le stage builder
 COPY --from=builder /app/dist ./dist
+
+# Copier ormconfig pour TypeORM (migrations, etc.)
+COPY ormconfig.ts ./
 
 # Vérifier que main.js existe dans l'image finale
 RUN ls -la dist/ && test -f dist/main.js || (echo "ERROR: dist/main.js not found in final image!" && exit 1)
