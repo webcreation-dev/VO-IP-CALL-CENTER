@@ -68,8 +68,11 @@ services:
       # ARI
       - ARI_HOST=asterisk
       - ARI_PORT=8088
-      - ARI_USER=asterisk
-      - ARI_PASSWORD=asterisk
+      - ARI_USER=callcenter-ivr
+      - ARI_PASSWORD=Secret123!
+      - ASTERISK_ARI_URL=http://asterisk:8088
+      - ASTERISK_ARI_USERNAME=callcenter-ivr
+      - ASTERISK_ARI_PASSWORD=Secret123!
       # Redis/Cache
       - REDIS_HOST=localhost
       - REDIS_PORT=6379
