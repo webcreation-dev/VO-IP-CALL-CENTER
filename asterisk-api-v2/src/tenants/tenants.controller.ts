@@ -12,6 +12,8 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,6 +32,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import type { UserPayload } from '../common/interfaces/user-payload.interface';
+import { EndpointsService } from '../endpoints/endpoints.service';
+import { EndpointFilterDto } from '../endpoints/dto';
 
 /**
  * Tenants Controller
@@ -55,7 +59,11 @@ import type { UserPayload } from '../common/interfaces/user-payload.interface';
 @ApiBearerAuth()
 @Controller('tenants')
 export class TenantsController {
-  constructor(private readonly tenantsService: TenantsService) {}
+  constructor(
+    private readonly tenantsService: TenantsService,
+    @Inject(forwardRef(() => EndpointsService))
+    private readonly endpointsService: EndpointsService,
+  ) {}
 
   /**
    * Create a new tenant
@@ -166,9 +174,60 @@ export class TenantsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Tenant not found (admin users have no tenant)' })
-  async getMyTenant(/* @CurrentTenant() tenantId: number | null */) {
-    // TEST MODE: disabled
-    throw new ForbiddenException('Endpoint disabled for testing');
+  async getMyTenant(@CurrentTenant() tenantId: number | null) {
+    if (!tenantId) {
+      throw new ForbiddenException('Admin users do not have a tenant');
+    }
+    return await this.tenantsService.findOne(tenantId);
+  }
+
+  /**
+   * Get all endpoints for a tenant
+   *
+   * Returns all endpoints belonging to the specified tenant
+   */
+  @Get(':id/endpoints')
+  @ApiOperation({
+    summary: 'Get all endpoints for a tenant',
+    description: 'Retrieve all endpoints belonging to a specific tenant',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Endpoints retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          data: [
+            {
+              id: 't1_101',
+              displayName: '101',
+              tenantId: 1,
+              transport: 'transport-udp',
+              context: 'default',
+              allow: 'ulaw,alaw',
+              callerid: 'John Doe <101>',
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+        },
+        timestamp: '2025-11-04T15:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async getTenantEndpoints(
+    @Param('id', ParseIntPipe) tenantId: number,
+    @Query() filter: EndpointFilterDto,
+  ) {
+    // Verify tenant exists
+    await this.tenantsService.findOne(tenantId);
+
+    // Get endpoints for this tenant
+    return await this.endpointsService.findAll(tenantId, filter);
   }
 
   /**

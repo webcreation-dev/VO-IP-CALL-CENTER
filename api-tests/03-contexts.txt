@@ -1,0 +1,124 @@
+# ==============================================
+# CONTEXTS MODULE
+# ==============================================
+# Base URL: http://localhost:3001/api/v1
+# REMPLACER <TOKEN> par votre JWT token
+
+# Note: Les contextes sont créés automatiquement avec les tenants
+# Le contexte primaire a le pattern: t{tenantId}_default
+# Les contextes additionnels peuvent être créés pour IVR, External, etc.
+
+
+# ============== LISTE DES CONTEXTES (TOUS) ==============
+GET http://localhost:3001/api/v1/contexts
+Authorization: Bearer <TOKEN>
+
+
+# ============== CONTEXTES D'UN TENANT ==============
+GET http://localhost:3001/api/v1/tenants/1/contexts
+Authorization: Bearer <TOKEN>
+
+
+# ============== CRÉER CONTEXTE IVR POUR TENANT 1 ==============
+POST http://localhost:3001/api/v1/contexts
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "name": "ivr",
+  "description": "IVR Context for Company 1",
+  "dialplanConfig": {
+    "allowInbound": true,
+    "allowOutbound": false,
+    "allowInternal": true,
+    "allowInterContext": false
+  }
+}
+
+
+# ============== CRÉER CONTEXTE EXTERNAL POUR TENANT 1 ==============
+POST http://localhost:3001/api/v1/contexts
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "name": "external",
+  "description": "External calls context",
+  "dialplanConfig": {
+    "allowInbound": true,
+    "allowOutbound": true,
+    "allowInternal": false,
+    "allowInterContext": false
+  }
+}
+
+
+# ============== CRÉER CONTEXTE CONFERENCE POUR TENANT 1 ==============
+POST http://localhost:3001/api/v1/contexts
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "name": "conference",
+  "description": "Conference rooms context"
+}
+
+
+# ============== CRÉER CONTEXTE IVR POUR TENANT 2 ==============
+POST http://localhost:3001/api/v1/contexts
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 2,
+  "name": "ivr",
+  "description": "IVR Context for Company 2"
+}
+
+
+# ============== GET CONTEXTE PAR ID ==============
+GET http://localhost:3001/api/v1/contexts/1
+Authorization: Bearer <TOKEN>
+
+
+# ============== MODIFIER CONTEXTE ==============
+PATCH http://localhost:3001/api/v1/contexts/2
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "description": "Updated IVR Context",
+  "dialplanConfig": {
+    "allowInbound": true,
+    "allowOutbound": false,
+    "allowInternal": true,
+    "allowInterContext": true
+  }
+}
+
+
+# ============== SUPPRIMER CONTEXTE (NON PRIMAIRE) ==============
+DELETE http://localhost:3001/api/v1/contexts/3
+Authorization: Bearer <TOKEN>
+
+
+# ============== NOTES IMPORTANTES ==============
+#
+# 1. Le contexte primaire (t{tenantId}_default) est créé automatiquement avec le tenant
+# 2. Vous ne pouvez PAS supprimer un contexte primaire (isPrimary=true)
+# 3. Les noms de contextes sont automatiquement préfixés: t{tenantId}_{name}
+# 4. Exemples de contextes utiles:
+#    - ivr: Menu interactif vocal
+#    - external: Appels sortants vers l'extérieur
+#    - internal: Appels internes uniquement
+#    - conference: Salles de conférence
+#    - queue: Files d'attente
+#    - voicemail: Messagerie vocale
+# 5. dialplanConfig contrôle les permissions d'appel:
+#    - allowInbound: Peut recevoir des appels
+#    - allowOutbound: Peut faire des appels sortants
+#    - allowInternal: Peut appeler en interne
+#    - allowInterContext: Peut passer à d'autres contextes

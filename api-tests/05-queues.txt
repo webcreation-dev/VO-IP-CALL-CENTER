@@ -1,0 +1,115 @@
+# ==============================================
+# QUEUES MODULE
+# ==============================================
+# Base URL: http://localhost:3001/api/v1
+# REMPLACER <TOKEN> par votre JWT token
+
+# ============== LISTE DES QUEUES ==============
+GET http://localhost:3001/api/v1/queues
+Authorization: Bearer <TOKEN>
+
+
+# ============== QUEUES ENRICHIES (avec stats AMI) ==============
+GET http://localhost:3001/api/v1/queues/enriched
+Authorization: Bearer <TOKEN>
+
+
+# ============== STATS GLOBALES TOUTES QUEUES ==============
+GET http://localhost:3001/api/v1/queues/stats/global
+Authorization: Bearer <TOKEN>
+
+
+# ============== QUEUES D'UN TENANT ==============
+GET http://localhost:3001/api/v1/tenants/1/queues
+Authorization: Bearer <TOKEN>
+
+
+# ============== CRÉER QUEUE "support" (TENANT 1) ==============
+POST http://localhost:3001/api/v1/queues
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "name": "support",
+  "description": "Support client",
+  "strategy": "ringall",
+  "timeout": 15,
+  "retry": 5,
+  "wrapuptime": 10,
+  "maxlen": 20
+}
+
+
+# ============== CRÉER QUEUE "sales" (TENANT 1) ==============
+POST http://localhost:3001/api/v1/queues
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "name": "sales",
+  "description": "Équipe commerciale",
+  "strategy": "leastrecent",
+  "timeout": 20,
+  "retry": 3,
+  "wrapuptime": 15,
+  "maxlen": 30
+}
+
+
+# ============== CRÉER QUEUE "support" (TENANT 2) - Même nom, tenant différent ==============
+POST http://localhost:3001/api/v1/queues
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 2,
+  "name": "support",
+  "description": "Support Company 2",
+  "strategy": "ringall",
+  "timeout": 15,
+  "maxlen": 10
+}
+
+
+# ============== GET QUEUE PAR NOM ==============
+GET http://localhost:3001/api/v1/queues/support
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET STATS TEMPS RÉEL (AMI) ==============
+GET http://localhost:3001/api/v1/queues/support/stats
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET DÉTAILS COMPLETS (avec AMI) ==============
+GET http://localhost:3001/api/v1/queues/support/details
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET APPELS EN ATTENTE ==============
+GET http://localhost:3001/api/v1/queues/support/calls
+Authorization: Bearer <TOKEN>
+
+
+# ============== MODIFIER QUEUE ==============
+PATCH http://localhost:3001/api/v1/queues/support
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "description": "Support client - Mis à jour",
+  "timeout": 20,
+  "maxlen": 25
+}
+
+
+# ============== RECHARGER CONFIG QUEUE (AMI) ==============
+POST http://localhost:3001/api/v1/queues/support/reload
+Authorization: Bearer <TOKEN>
+
+
+# ============== SUPPRIMER QUEUE ==============
+DELETE http://localhost:3001/api/v1/queues/support
+Authorization: Bearer <TOKEN>

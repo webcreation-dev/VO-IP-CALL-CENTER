@@ -1,0 +1,119 @@
+# ==============================================
+# ENDPOINTS (SIP) MODULE
+# ==============================================
+# Base URL: http://localhost:3001/api/v1
+# REMPLACER <TOKEN> par votre JWT token
+
+# ============== LISTE DES ENDPOINTS ==============
+GET http://localhost:3001/api/v1/endpoints
+Authorization: Bearer <TOKEN>
+
+
+# ============== ENDPOINTS ENRICHIS (avec statut AMI) ==============
+GET http://localhost:3001/api/v1/endpoints/enriched/all
+Authorization: Bearer <TOKEN>
+
+
+# ============== ENDPOINTS D'UN TENANT ==============
+GET http://localhost:3001/api/v1/tenants/1/endpoints
+Authorization: Bearer <TOKEN>
+
+
+# ============== CRÉER ENDPOINT 101 (TENANT 1) ==============
+POST http://localhost:3001/api/v1/endpoints
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "username": "101",
+  "password": "SecurePass101",
+  "callerid": "John Doe <101>",
+  "context": "company1_context",
+  "transport": "transport-udp",
+  "codecs": "ulaw,alaw,gsm"
+}
+
+
+# ============== CRÉER ENDPOINT 102 (TENANT 1) ==============
+POST http://localhost:3001/api/v1/endpoints
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "username": "102",
+  "password": "SecurePass102",
+  "callerid": "Jane Smith <102>",
+  "context": "company1_context",
+  "transport": "transport-udp",
+  "codecs": "ulaw,alaw"
+}
+
+
+# ============== CRÉER ENDPOINT 101 (TENANT 2) - Même nom, tenant différent ==============
+POST http://localhost:3001/api/v1/endpoints
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 2,
+  "username": "101",
+  "password": "SecurePass101T2",
+  "callerid": "Bob Johnson <101>",
+  "context": "company2_context",
+  "transport": "transport-udp",
+  "codecs": "ulaw,alaw"
+}
+
+
+# ============== CRÉER ENDPOINT 201 avec contexte IVR (TENANT 1) ==============
+POST http://localhost:3001/api/v1/endpoints
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "tenantId": 1,
+  "username": "201",
+  "password": "IVRPass201",
+  "callerid": "IVR Menu <201>",
+  "context": "company1_ivr",
+  "transport": "transport-tcp",
+  "codecs": "ulaw,alaw"
+}
+
+
+# ============== GET ENDPOINT PAR USERNAME ==============
+GET http://localhost:3001/api/v1/endpoints/101
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET STATUT TEMPS RÉEL (AMI) ==============
+GET http://localhost:3001/api/v1/endpoints/101/status
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET DÉTAILS COMPLETS (avec AMI) ==============
+GET http://localhost:3001/api/v1/endpoints/101/details
+Authorization: Bearer <TOKEN>
+
+
+# ============== MODIFIER ENDPOINT ==============
+PATCH http://localhost:3001/api/v1/endpoints/101
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "callerid": "John Doe Updated <101>",
+  "codecs": "ulaw,alaw,gsm,g729"
+}
+
+
+# ============== DÉCONNECTER ENDPOINT (AMI) ==============
+POST http://localhost:3001/api/v1/endpoints/101/disconnect
+Authorization: Bearer <TOKEN>
+
+
+# ============== SUPPRIMER ENDPOINT ==============
+DELETE http://localhost:3001/api/v1/endpoints/101
+Authorization: Bearer <TOKEN>

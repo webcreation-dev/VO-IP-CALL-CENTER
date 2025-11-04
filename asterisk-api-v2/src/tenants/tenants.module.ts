@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { TenantsController } from './tenants.controller';
@@ -12,6 +12,7 @@ import { PsAor } from '../endpoints/entities/ps-aor.entity';
 import { Queue } from 'src/queues/entities/queue.entity';
 import { Cdr } from 'src/cdr/entities/cdr.entity';
 import { TenantContextsModule } from '../tenant-contexts/tenant-contexts.module';
+import { EndpointsModule } from '../endpoints/endpoints.module';
 
 /**
  * Tenants Module
@@ -40,6 +41,9 @@ import { TenantContextsModule } from '../tenant-contexts/tenant-contexts.module'
     // External modules
     CacheModule,
     TenantContextsModule,
+
+    // ForwardRef to avoid circular dependency with EndpointsModule
+    forwardRef(() => EndpointsModule),
   ],
   controllers: [TenantsController],
   providers: [TenantsService],

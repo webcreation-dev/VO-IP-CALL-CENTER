@@ -1,0 +1,35 @@
+# ==============================================
+# AUTHENTIFICATION
+# ==============================================
+# Base URL: http://localhost:3001/api/v1
+
+# ============== LOGIN ==============
+POST http://localhost:3001/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@asterisk.local",
+  "password": "Admin123!"
+}
+
+# Réponse attendue:
+# {
+#   "success": true,
+#   "data": {
+#     "accessToken": "eyJhbG...",
+#     "user": { ... }
+#   }
+# }
+
+# COPIER LE TOKEN ICI POUR LES AUTRES REQUETES:
+# TOKEN=eyJhbG...
+
+
+# ============== GET PROFILE ==============
+GET http://localhost:3001/api/v1/auth/me
+Authorization: Bearer <TOKEN>
+
+
+# ============== REFRESH TOKEN (si existe) ==============
+POST http://localhost:3001/api/v1/auth/refresh
+Authorization: Bearer <TOKEN>

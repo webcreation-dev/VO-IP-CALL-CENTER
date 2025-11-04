@@ -21,6 +21,12 @@ import UsersPage from '@/pages/users/UsersPage';
 // Contexts
 import ContextsPage from '@/pages/contexts/ContextsPage';
 
+// Endpoints
+import EndpointsPage from '@/pages/endpoints/EndpointsPage';
+
+// Queues
+import QueuesPage from '@/pages/queues/QueuesPage';
+
 // Create QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,23 +85,13 @@ function App() {
             {/* Endpoints */}
             <Route
               path="/endpoints"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold">Endpoints SIP</h2>
-                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
-                </div>
-              }
+              element={<EndpointsPage />}
             />
 
             {/* Queues */}
             <Route
               path="/queues"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold">Files d'attente</h2>
-                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
-                </div>
-              }
+              element={<QueuesPage />}
             />
 
             {/* Extensions */}

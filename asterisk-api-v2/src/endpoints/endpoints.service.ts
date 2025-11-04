@@ -4,6 +4,8 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -60,6 +62,7 @@ export class EndpointsService {
     private readonly dataSource: DataSource,
     private readonly amiService: AmiService,
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => TenantsService))
     private readonly tenantsService: TenantsService,
   ) {}
 
@@ -268,7 +271,32 @@ export class EndpointsService {
    * @returns Endpoint
    * @throws NotFoundException if endpoint not found
    */
-  async findOne(tenantId: number, displayName: string): Promise<PsEndpoint> {
+  async findOne(tenantId: number | null, displayName: string): Promise<PsEndpoint> {
+    // SUPER_ADMIN case: tenantId is null
+    if (tenantId === null) {
+      // Check if displayName has tenant prefix (e.g., "t1_101")
+      if (TenantPrefixUtil.hasPrefix(displayName)) {
+        // Use the full prefixed ID directly
+        const { tenantId: extractedTenantId } = TenantPrefixUtil.removePrefix(displayName);
+        const endpoint = await this.endpointRepository.findOne({
+          where: { id: displayName, tenantId: extractedTenantId },
+        });
+
+        if (!endpoint) {
+          throw new NotFoundException(
+            `Endpoint with ID "${displayName}" not found`,
+          );
+        }
+        return endpoint;
+      } else {
+        // SUPER_ADMIN must provide full ID with tenant prefix
+        throw new BadRequestException(
+          `SUPER_ADMIN must provide full endpoint ID with tenant prefix (e.g., "t1_101")`,
+        );
+      }
+    }
+
+    // Normal case: tenantId is provided
     const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
     const endpoint = await this.endpointRepository.findOne({
       where: { id: prefixedId, tenantId },

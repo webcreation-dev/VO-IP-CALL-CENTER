@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { EndpointsController } from './endpoints.controller';
@@ -40,7 +40,9 @@ import { TenantsModule } from '../tenants/tenants.module';
     // External modules
     AmiModule,
     CacheModule,
-    TenantsModule, // For tenant limits validation
+
+    // ForwardRef to avoid circular dependency with TenantsModule
+    forwardRef(() => TenantsModule),
   ],
   controllers: [EndpointsController],
   providers: [EndpointsService],

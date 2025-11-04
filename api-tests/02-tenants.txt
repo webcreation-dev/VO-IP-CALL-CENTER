@@ -1,0 +1,69 @@
+# ==============================================
+# TENANTS MODULE
+# ==============================================
+# Base URL: http://localhost:3001/api/v1
+# REMPLACER <TOKEN> par votre JWT token
+
+# ============== LISTE DES TENANTS ==============
+GET http://localhost:3001/api/v1/tenants
+Authorization: Bearer <TOKEN>
+
+
+# ============== CRÉER TENANT 1 ==============
+POST http://localhost:3001/api/v1/tenants
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "name": "company1",
+  "companyName": "Company One Ltd",
+  "contactEmail": "contact@company1.com",
+  "contactPhone": "+1234567890",
+  "maxEndpoints": 200,
+  "maxQueues": 100
+}
+
+
+# ============== CRÉER TENANT 2 ==============
+POST http://localhost:3001/api/v1/tenants
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "name": "company2",
+  "companyName": "Company Two Inc",
+  "contactEmail": "contact@company2.com",
+  "maxEndpoints": 150,
+  "maxQueues": 50
+}
+
+
+# ============== GET MON TENANT ==============
+GET http://localhost:3001/api/v1/tenants/me
+Authorization: Bearer <TOKEN>
+
+
+# ============== GET TENANT PAR ID ==============
+GET http://localhost:3001/api/v1/tenants/1
+Authorization: Bearer <TOKEN>
+
+
+# ============== MODIFIER TENANT ==============
+PATCH http://localhost:3001/api/v1/tenants/1
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "companyName": "Company One Ltd - Updated",
+  "maxEndpoints": 300
+}
+
+
+# ============== SUPPRIMER TENANT (SOFT DELETE) ==============
+DELETE http://localhost:3001/api/v1/tenants/1
+Authorization: Bearer <TOKEN>
+
+
+# ============== RESTAURER TENANT ==============
+PATCH http://localhost:3001/api/v1/tenants/1/restore
+Authorization: Bearer <TOKEN>
