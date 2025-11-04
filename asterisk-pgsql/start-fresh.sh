@@ -171,119 +171,119 @@ docker-compose up -d asterisk
 sleep 5
 print_success "Asterisk démarré"
 
-print_info "Démarrage du backend NestJS..."
-docker-compose up -d backend
-sleep 5
-print_success "Backend démarré"
+# print_info "Démarrage du backend NestJS..."
+# docker-compose up -d backend
+# sleep 5
+# print_success "Backend démarré"
 
-###############################################################################
-# VÉRIFICATIONS POST-DÉMARRAGE
-###############################################################################
+# ###############################################################################
+# # VÉRIFICATIONS POST-DÉMARRAGE
+# ###############################################################################
 
-print_header "VÉRIFICATIONS POST-DÉMARRAGE"
+# print_header "VÉRIFICATIONS POST-DÉMARRAGE"
 
-# Vérifier api-db
-print_info "Vérification de la base de données..."
-if docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -c "\dt" &> /dev/null; then
-    print_success "Base de données opérationnelle"
+# # Vérifier api-db
+# print_info "Vérification de la base de données..."
+# if docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -c "\dt" &> /dev/null; then
+#     print_success "Base de données opérationnelle"
 
-    # Compter les tables
-    table_count=$(docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
-    print_info "Nombre de tables créées: $table_count"
-else
-    print_error "Problème avec la base de données"
-fi
+#     # Compter les tables
+#     table_count=$(docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
+#     print_info "Nombre de tables créées: $table_count"
+# else
+#     print_error "Problème avec la base de données"
+# fi
 
-# Vérifier Asterisk ODBC
-print_info "Vérification de la connexion ODBC d'Asterisk..."
-sleep 3
-if docker exec asterisk asterisk -rx "odbc show" | grep -q "Connected: yes"; then
-    print_success "Asterisk connecté à ODBC"
-else
-    print_warning "Asterisk pas encore connecté à ODBC (peut prendre quelques secondes)"
-fi
+# # Vérifier Asterisk ODBC
+# print_info "Vérification de la connexion ODBC d'Asterisk..."
+# sleep 3
+# if docker exec asterisk asterisk -rx "odbc show" | grep -q "Connected: yes"; then
+#     print_success "Asterisk connecté à ODBC"
+# else
+#     print_warning "Asterisk pas encore connecté à ODBC (peut prendre quelques secondes)"
+# fi
 
-# Vérifier le backend
-print_info "Vérification du backend NestJS..."
-sleep 5
-if curl -s http://localhost:3001/api/v1/health > /dev/null 2>&1; then
-    print_success "Backend NestJS opérationnel"
-else
-    print_warning "Backend pas encore prêt (démarrage en cours...)"
-fi
+# # Vérifier le backend
+# print_info "Vérification du backend NestJS..."
+# sleep 5
+# if curl -s http://localhost:3001/api/v1/health > /dev/null 2>&1; then
+#     print_success "Backend NestJS opérationnel"
+# else
+#     print_warning "Backend pas encore prêt (démarrage en cours...)"
+# fi
 
-###############################################################################
-# AFFICHAGE DES INFORMATIONS
-###############################################################################
+# ###############################################################################
+# # AFFICHAGE DES INFORMATIONS
+# ###############################################################################
 
-print_header "🎉 DÉMARRAGE TERMINÉ !"
+# print_header "🎉 DÉMARRAGE TERMINÉ !"
 
-echo ""
-echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║         SYSTÈME MULTI-TENANT ASTERISK DÉMARRÉ          ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}📊 SERVICES DISPONIBLES:${NC}"
-echo ""
-echo "  🗄️  Base de données PostgreSQL"
-echo "      Host: localhost"
-echo "      Port: 5432"
-echo "      Database: asterisk_api"
-echo "      User: api_user"
-echo "      Password: ApiSecurePass2025!"
-echo ""
-echo "  📡 Asterisk PBX"
-echo "      AMI: localhost:5038"
-echo "      ARI: localhost:8088"
-echo "      SIP/UDP: localhost:5060"
-echo "      WSS: localhost:8089"
-echo ""
-echo "  🚀 Backend NestJS API"
-echo "      URL: http://localhost:3001/api/v1"
-echo "      Swagger: http://localhost:3001/api/v1/docs"
-echo "      Health: http://localhost:3001/api/v1/health"
-echo ""
-echo "  💾 Redis Cache"
-echo "      Host: localhost"
-echo "      Port: 6379"
-echo ""
-echo -e "${BLUE}👤 CREDENTIALS PAR DÉFAUT:${NC}"
-echo ""
-echo "  Admin API:"
-echo "      Username: admin"
-echo "      Email: admin@asterisk.local"
-echo "      Password: Admin123!"
-echo "      Role: SUPER_ADMIN"
-echo ""
-echo "  Asterisk AMI:"
-echo "      Username: admin"
-echo "      Password: Sp33Dd14L"
-echo ""
-echo "  Asterisk ARI:"
-echo "      Username: callcenter-ivr"
-echo "      Password: Secret123!"
-echo ""
-echo -e "${BLUE}📝 COMMANDES UTILES:${NC}"
-echo ""
-echo "  Voir les logs:"
-echo "    docker-compose logs -f [service]"
-echo ""
-echo "  Se connecter à PostgreSQL:"
-echo "    docker exec -it asterisk-api-postgres psql -U api_user -d asterisk_api"
-echo ""
-echo "  Se connecter au CLI Asterisk:"
-echo "    docker exec -it asterisk asterisk -rx 'core show version'"
-echo ""
-echo "  Arrêter tout:"
-echo "    docker-compose down"
-echo ""
-echo "  Redémarrer un service:"
-echo "    docker-compose restart [service]"
-echo ""
-echo -e "${YELLOW}⚠️  IMPORTANT:${NC}"
-echo "  - Changez le mot de passe admin après votre première connexion"
-echo "  - Consultez le fichier MIGRATION_GUIDE.md pour plus d'informations"
-echo "  - Vérifiez que tous les services sont bien démarrés avec: docker-compose ps"
-echo ""
-print_success "Le système est prêt à l'emploi !"
-echo ""
+# echo ""
+# echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
+# echo -e "${GREEN}║         SYSTÈME MULTI-TENANT ASTERISK DÉMARRÉ          ║${NC}"
+# echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
+# echo ""
+# echo -e "${BLUE}📊 SERVICES DISPONIBLES:${NC}"
+# echo ""
+# echo "  🗄️  Base de données PostgreSQL"
+# echo "      Host: localhost"
+# echo "      Port: 5432"
+# echo "      Database: asterisk_api"
+# echo "      User: api_user"
+# echo "      Password: ApiSecurePass2025!"
+# echo ""
+# echo "  📡 Asterisk PBX"
+# echo "      AMI: localhost:5038"
+# echo "      ARI: localhost:8088"
+# echo "      SIP/UDP: localhost:5060"
+# echo "      WSS: localhost:8089"
+# echo ""
+# echo "  🚀 Backend NestJS API"
+# echo "      URL: http://localhost:3001/api/v1"
+# echo "      Swagger: http://localhost:3001/api/v1/docs"
+# echo "      Health: http://localhost:3001/api/v1/health"
+# echo ""
+# echo "  💾 Redis Cache"
+# echo "      Host: localhost"
+# echo "      Port: 6379"
+# echo ""
+# echo -e "${BLUE}👤 CREDENTIALS PAR DÉFAUT:${NC}"
+# echo ""
+# echo "  Admin API:"
+# echo "      Username: admin"
+# echo "      Email: admin@asterisk.local"
+# echo "      Password: Admin123!"
+# echo "      Role: SUPER_ADMIN"
+# echo ""
+# echo "  Asterisk AMI:"
+# echo "      Username: admin"
+# echo "      Password: Sp33Dd14L"
+# echo ""
+# echo "  Asterisk ARI:"
+# echo "      Username: callcenter-ivr"
+# echo "      Password: Secret123!"
+# echo ""
+# echo -e "${BLUE}📝 COMMANDES UTILES:${NC}"
+# echo ""
+# echo "  Voir les logs:"
+# echo "    docker-compose logs -f [service]"
+# echo ""
+# echo "  Se connecter à PostgreSQL:"
+# echo "    docker exec -it asterisk-api-postgres psql -U api_user -d asterisk_api"
+# echo ""
+# echo "  Se connecter au CLI Asterisk:"
+# echo "    docker exec -it asterisk asterisk -rx 'core show version'"
+# echo ""
+# echo "  Arrêter tout:"
+# echo "    docker-compose down"
+# echo ""
+# echo "  Redémarrer un service:"
+# echo "    docker-compose restart [service]"
+# echo ""
+# echo -e "${YELLOW}⚠️  IMPORTANT:${NC}"
+# echo "  - Changez le mot de passe admin après votre première connexion"
+# echo "  - Consultez le fichier MIGRATION_GUIDE.md pour plus d'informations"
+# echo "  - Vérifiez que tous les services sont bien démarrés avec: docker-compose ps"
+# echo ""
+# print_success "Le système est prêt à l'emploi !"
+# echo ""

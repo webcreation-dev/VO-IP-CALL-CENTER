@@ -12,6 +12,12 @@ import LoginPage from '@/pages/auth/LoginPage';
 // Dashboard
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 
+// Tenants
+import TenantsPage from '@/pages/tenants/TenantsPage';
+
+// Users
+import UsersPage from '@/pages/users/UsersPage';
+
 // Create QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,10 +52,7 @@ function App() {
               path="/tenants"
               element={
                 <ProtectedRoute requiredRole="SUPER_ADMIN">
-                  <div className="text-center py-12">
-                    <h2 className="text-2xl font-bold">Gestion des Tenants</h2>
-                    <p className="text-gray-600 mt-2">Module en cours de développement...</p>
-                  </div>
+                  <TenantsPage />
                 </ProtectedRoute>
               }
             />
@@ -59,10 +62,7 @@ function App() {
               path="/users"
               element={
                 <ProtectedRoute requiredRole={['SUPER_ADMIN', 'TENANT_ADMIN']}>
-                  <div className="text-center py-12">
-                    <h2 className="text-2xl font-bold">Gestion des Utilisateurs</h2>
-                    <p className="text-gray-600 mt-2">Module en cours de développement...</p>
-                  </div>
+                  <UsersPage />
                 </ProtectedRoute>
               }
             />
