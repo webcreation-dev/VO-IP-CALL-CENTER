@@ -1,21 +1,18 @@
-/**
- * Main App Component
- */
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Toaster } from 'sonner';
-import { store } from './store';
-import { ProtectedRoute } from './routes/ProtectedRoute';
-import { RoleBasedRoute } from './routes/RoleBasedRoute';
-import { LoginPage } from './features/auth/LoginPage';
-import { DashboardPage } from './features/dashboard/DashboardPage';
-import { TenantsListPage } from './features/tenants/TenantsListPage';
-import { UserRole } from './types/entities.types';
 
-// Create React Query client
+// Layout
+import MainLayout from '@/components/layout/MainLayout';
+import ProtectedRoute from '@/components/layout/ProtectedRoute';
+
+// Auth
+import LoginPage from '@/pages/auth/LoginPage';
+
+// Dashboard
+import DashboardPage from '@/pages/dashboard/DashboardPage';
+
+// Create QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -28,47 +25,179 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <Toaster position="top-right" richColors />
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<LoginPage />} />
 
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<LoginPage />} />
+          {/* Protected Routes */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
 
-            {/* Protected Routes */}
+            {/* Tenants - Super Admin only */}
             <Route
-              path="/dashboard"
+              path="/tenants"
               element={
-                <ProtectedRoute>
-                  <DashboardPage />
+                <ProtectedRoute requiredRole="SUPER_ADMIN">
+                  <div className="text-center py-12">
+                    <h2 className="text-2xl font-bold">Gestion des Tenants</h2>
+                    <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                  </div>
                 </ProtectedRoute>
               }
             />
 
-            {/* Tenants (SUPER_ADMIN only) */}
+            {/* Users */}
             <Route
-              path="/tenants"
+              path="/users"
               element={
-                <RoleBasedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
-                  <TenantsListPage />
-                </RoleBasedRoute>
+                <ProtectedRoute requiredRole={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                  <div className="text-center py-12">
+                    <h2 className="text-2xl font-bold">Gestion des Utilisateurs</h2>
+                    <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                  </div>
+                </ProtectedRoute>
               }
             />
 
-            {/* Default Route */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {/* Contexts */}
+            <Route
+              path="/contexts"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Gestion des Contextes</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
 
-            {/* 404 */}
-            <Route path="*" element={<div className="p-8">Page non trouvée</div>} />
-          </Routes>
-        </BrowserRouter>
+            {/* Endpoints */}
+            <Route
+              path="/endpoints"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Endpoints SIP</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
 
-        {/* React Query Devtools (development only) */}
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
-    </Provider>
+            {/* Queues */}
+            <Route
+              path="/queues"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Files d'attente</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Extensions */}
+            <Route
+              path="/extensions"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Extensions & Dialplan</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* IVR */}
+            <Route
+              path="/ivr/*"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Configuration IVR</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Channels */}
+            <Route
+              path="/channels"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Canaux actifs</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* CDR */}
+            <Route
+              path="/cdr"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Historique des appels</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Recordings */}
+            <Route
+              path="/recordings"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Enregistrements</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Monitoring */}
+            <Route
+              path="/monitoring"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Monitoring temps réel</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Statistics */}
+            <Route
+              path="/statistics"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Statistiques</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+
+            {/* Settings */}
+            <Route
+              path="/settings"
+              element={
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold">Paramètres</h2>
+                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
+                </div>
+              }
+            />
+          </Route>
+
+          {/* Default Redirect */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+
+      {/* React Query Devtools */}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
 

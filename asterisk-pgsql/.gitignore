@@ -1,6 +1,28 @@
+# Environment variables
 .env
+.env.local
+
+# PostgreSQL data (volumes Docker)
 .pgdata
+api-pgdata/
+*-pgdata/
 .pgsocket
-log
+
+# Logs
+log/
+logs/
+*.log
+
+# Docker override
 docker-compose.override.yml
-etc/asterisk/keys
+
+# Asterisk keys (sensible)
+etc/asterisk/keys/
+
+# Temporary files
+*.tmp
+*.backup
+*.swp
+
+# OS
+.DS_Store

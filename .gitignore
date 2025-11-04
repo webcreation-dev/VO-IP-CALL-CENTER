@@ -1,0 +1,97 @@
+# ============================================
+# FICHIERS SENSIBLES (NE JAMAIS COMMITER)
+# ============================================
+
+# Variables d'environnement
+**/.env
+**/.env.local
+**/.env.*.local
+.env
+.env.local
+
+# ============================================
+# DÉPENDANCES ET BUILD
+# ============================================
+
+# Node modules
+**/node_modules/
+node_modules/
+
+# Build output
+**/dist/
+**/build/
+**/.next/
+**/out/
+dist/
+build/
+
+# ============================================
+# BASES DE DONNÉES (VOLUMES DOCKER)
+# ============================================
+
+# PostgreSQL data
+**/api-pgdata/
+**/*-pgdata/
+**/.pgdata/
+**/.pgsocket/
+
+# ============================================
+# LOGS
+# ============================================
+
+**/logs/
+**/log/
+**/*.log
+logs/
+log/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ============================================
+# FICHIERS TEMPORAIRES
+# ============================================
+
+**/.tmp/
+**/*.tmp
+**/*.backup
+**/*.swp
+**/*.swo
+*~
+
+# ============================================
+# CLÉS ET CERTIFICATS
+# ============================================
+
+**/etc/asterisk/keys/
+**/*.pem
+**/*.key
+**/*.crt
+
+# ============================================
+# CACHE
+# ============================================
+
+**/.cache/
+**/.parcel-cache/
+**/.eslintcache
+
+# ============================================
+# IDE ET ÉDITEURS
+# ============================================
+
+.vscode/
+.idea/
+*.sublime-workspace
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ============================================
+# DOCKER
+# ============================================
+
+docker-compose.override.yml

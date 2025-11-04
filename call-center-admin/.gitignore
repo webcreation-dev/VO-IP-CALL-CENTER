@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Environment variables (IMPORTANT!)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Cache
+.cache
+.parcel-cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
