@@ -78,6 +78,15 @@ export class QueuesService {
     this.logger.log(
       `Created queue: ${dto.name} (${prefixedName}) for tenant ${tenantId}`,
     );
+
+    // Auto-reload queue in Asterisk after creation
+    try {
+      await this.reloadQueue(tenantId, dto.name);
+      this.logger.log(`✅ Queue ${prefixedName} automatically reloaded in Asterisk`);
+    } catch (error) {
+      this.logger.warn(`⚠️ Failed to auto-reload queue ${prefixedName}: ${error.message}`);
+    }
+
     return saved;
   }
 
@@ -185,16 +194,27 @@ export class QueuesService {
 
   /**
    * Get all queues from AMI with full details
+   * FIXED - Don't filter by ActionID, collect all queue events
    */
   private async getAllQueuesFromAMI(): Promise<Record<string, any>> {
     return new Promise((resolve, reject) => {
       const queues: Record<string, any> = {};
       const actionId = `queue_all_${Date.now()}`;
+      let collecting = true;
+      let timeoutHandle: NodeJS.Timeout;
 
       const eventHandler = (event: any) => {
-        if (event.actionid !== actionId) return;
+        if (!collecting) return;
 
-        if (event.event === 'QueueParams') {
+        const eventName = event.event;
+
+        // Log all queue-related events for debugging
+        if (eventName === 'QueueParams' || eventName === 'QueueMember' || eventName === 'QueueStatusComplete') {
+          this.logger.debug(`🔔 [QUEUE EVENT] ${eventName} - Queue: ${event.queue || 'N/A'}, ActionID: ${event.actionid || 'none'}`);
+        }
+
+        // Collect all QueueParams events (one per queue)
+        if (eventName === 'QueueParams') {
           const queueName = event.queue;
           if (queueName) {
             queues[queueName] = {
@@ -212,7 +232,9 @@ export class QueuesService {
               members: [],
             };
           }
-        } else if (event.event === 'QueueMember') {
+        }
+        // Collect all QueueMember events (multiple per queue)
+        else if (eventName === 'QueueMember') {
           const queueName = event.queue;
           if (queueName && queues[queueName]) {
             queues[queueName].members.push({
@@ -226,15 +248,21 @@ export class QueuesService {
               in_call: parseInt(event.incall || '0'),
             });
           }
-        } else if (event.event === 'QueueStatusComplete') {
+        }
+        // When we get QueueStatusComplete, we're done
+        else if (eventName === 'QueueStatusComplete') {
+          collecting = false;
           this.amiService.off('managerevent', eventHandler);
+          clearTimeout(timeoutHandle);
           this.logger.log(`✅ Queues found in AMI: ${Object.keys(queues).length}`);
           resolve(queues);
         }
       };
 
+      // Subscribe to events
       this.amiService.on('managerevent', eventHandler);
 
+      // Send the QueueStatus action
       this.amiService
         .executeAction(
           {
@@ -244,16 +272,27 @@ export class QueuesService {
           AMI_TIMEOUTS.QUEUE_STATUS,
         )
         .catch((err) => {
+          if (!collecting) return;
+          collecting = false;
           this.amiService.off('managerevent', eventHandler);
+          clearTimeout(timeoutHandle);
           this.logger.error('❌ Error getting all queues from AMI:', err);
           reject(err);
         });
 
-      // Safety timeout
-      setTimeout(() => {
+      // Safety timeout - return whatever we collected so far
+      timeoutHandle = setTimeout(() => {
+        if (!collecting) return;
+        collecting = false;
         this.amiService.off('managerevent', eventHandler);
-        this.logger.warn('⏱️ Timeout getting all queues from AMI');
-        resolve(queues);
+        const queueCount = Object.keys(queues).length;
+        if (queueCount > 0) {
+          this.logger.warn(`⏱️ Timeout getting all queues from AMI, but collected ${queueCount} queues`);
+          resolve(queues);
+        } else {
+          this.logger.warn('⏱️ Timeout getting all queues from AMI, no queues collected');
+          resolve(queues); // Return empty object instead of rejecting
+        }
       }, 5000);
     });
   }
@@ -774,5 +813,136 @@ export class QueuesService {
         return;
       }
     });
+  }
+
+  // ========================================
+  // QUEUE MEMBERS MANAGEMENT
+  // ========================================
+
+  /**
+   * Add member to queue
+   */
+  async addMember(
+    tenantId: number | null,
+    displayName: string,
+    interfaceName: string,
+    memberName?: string,
+    penalty: number = 0,
+    paused: number = 0
+  ): Promise<any> {
+    if (!this.amiService.isAmiConnected()) {
+      throw new BadRequestException('AMI not connected');
+    }
+
+    const queue = await this.findOne(tenantId, displayName);
+
+    // Format interface if needed (ensure PJSIP/ prefix)
+    const formattedInterface = interfaceName.startsWith('PJSIP/')
+      ? interfaceName
+      : `PJSIP/${interfaceName}`;
+
+    try {
+      await this.amiService.queueAdd(
+        queue.name,
+        formattedInterface,
+        memberName,
+        penalty,
+        paused
+      );
+
+      this.logger.log(`✅ Added member ${formattedInterface} to queue ${queue.name}`);
+
+      return {
+        queue: queue.name,
+        interface: formattedInterface,
+        member_name: memberName || interfaceName,
+        penalty,
+        paused: paused === 1,
+        added: true
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to add member to queue: ${error.message}`);
+      throw new BadRequestException(`Failed to add member: ${error.message}`);
+    }
+  }
+
+  /**
+   * Remove member from queue
+   */
+  async removeMember(
+    tenantId: number | null,
+    displayName: string,
+    memberId: string
+  ): Promise<any> {
+    if (!this.amiService.isAmiConnected()) {
+      throw new BadRequestException('AMI not connected');
+    }
+
+    const queue = await this.findOne(tenantId, displayName);
+
+    // Format interface if needed
+    const formattedInterface = memberId.startsWith('PJSIP/')
+      ? memberId
+      : `PJSIP/${memberId}`;
+
+    try {
+      await this.amiService.queueRemove(queue.name, formattedInterface);
+
+      this.logger.log(`✅ Removed member ${formattedInterface} from queue ${queue.name}`);
+
+      return {
+        queue: queue.name,
+        interface: formattedInterface,
+        removed: true
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to remove member from queue: ${error.message}`);
+      throw new BadRequestException(`Failed to remove member: ${error.message}`);
+    }
+  }
+
+  /**
+   * Pause/Unpause member in queue
+   */
+  async pauseMember(
+    tenantId: number | null,
+    displayName: string,
+    memberId: string,
+    paused: boolean,
+    reason?: string
+  ): Promise<any> {
+    if (!this.amiService.isAmiConnected()) {
+      throw new BadRequestException('AMI not connected');
+    }
+
+    const queue = await this.findOne(tenantId, displayName);
+
+    // Format interface if needed
+    const formattedInterface = memberId.startsWith('PJSIP/')
+      ? memberId
+      : `PJSIP/${memberId}`;
+
+    try {
+      await this.amiService.queuePause(
+        queue.name,
+        formattedInterface,
+        paused,
+        reason
+      );
+
+      this.logger.log(
+        `✅ ${paused ? 'Paused' : 'Unpaused'} member ${formattedInterface} in queue ${queue.name}${reason ? ` (${reason})` : ''}`
+      );
+
+      return {
+        queue: queue.name,
+        interface: formattedInterface,
+        paused,
+        reason: reason || null
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to pause/unpause member: ${error.message}`);
+      throw new BadRequestException(`Failed to pause/unpause member: ${error.message}`);
+    }
   }
 }

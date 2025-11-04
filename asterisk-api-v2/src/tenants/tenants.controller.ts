@@ -34,6 +34,7 @@ import { UserRole } from '../common/enums/user-role.enum';
 import type { UserPayload } from '../common/interfaces/user-payload.interface';
 import { EndpointsService } from '../endpoints/endpoints.service';
 import { EndpointFilterDto } from '../endpoints/dto';
+import { QueuesService } from '../queues/queues.service';
 
 /**
  * Tenants Controller
@@ -63,6 +64,8 @@ export class TenantsController {
     private readonly tenantsService: TenantsService,
     @Inject(forwardRef(() => EndpointsService))
     private readonly endpointsService: EndpointsService,
+    @Inject(forwardRef(() => QueuesService))
+    private readonly queuesService: QueuesService,
   ) {}
 
   /**
@@ -228,6 +231,45 @@ export class TenantsController {
 
     // Get endpoints for this tenant
     return await this.endpointsService.findAll(tenantId, filter);
+  }
+
+  /**
+   * Get all queues for a tenant
+   *
+   * Returns all queues belonging to the specified tenant
+   */
+  @Get(':id/queues')
+  @ApiOperation({
+    summary: 'Get all queues for a tenant',
+    description: 'Retrieve all queues belonging to a specific tenant',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Queues retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: [
+          {
+            name: 't1_support',
+            tenantId: 1,
+            strategy: 'ringall',
+            timeout: 15,
+            maxlen: 20,
+          },
+        ],
+        timestamp: '2025-11-04T16:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async getTenantQueues(@Param('id', ParseIntPipe) tenantId: number) {
+    // Verify tenant exists
+    await this.tenantsService.findOne(tenantId);
+
+    // Get queues for this tenant
+    return await this.queuesService.findAll(tenantId);
   }
 
   /**

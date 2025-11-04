@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { QueuesController } from './queues.controller';
@@ -13,7 +13,7 @@ import { TenantsModule } from '../tenants/tenants.module';
     TypeOrmModule.forFeature([Queue]),
     AmiModule,
     CacheModule,
-    TenantsModule,
+    forwardRef(() => TenantsModule),
   ],
   controllers: [QueuesController],
   providers: [QueuesService],

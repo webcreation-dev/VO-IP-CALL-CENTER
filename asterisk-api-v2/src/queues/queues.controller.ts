@@ -41,10 +41,17 @@ export class QueuesController {
   @ApiOperation({ summary: 'Create new queue' })
   @ApiResponse({ status: 201, description: 'Queue created successfully' })
   async create(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Body() dto: CreateQueueDto,
   ) {
-    return await this.queuesService.create(tenantId, dto);
+    // SUPER_ADMIN: use tenantId from DTO, otherwise use from JWT
+    const effectiveTenantId = tenantId ?? dto.tenantId;
+
+    if (!effectiveTenantId) {
+      throw new Error('Tenant ID is required');
+    }
+
+    return await this.queuesService.create(effectiveTenantId, dto);
   }
 
   @Get()
@@ -181,5 +188,120 @@ export class QueuesController {
   ) {
     // TEST MODE
     await this.queuesService.remove(null, name);
+  }
+
+  // ========================================
+  // QUEUE MEMBERS MANAGEMENT
+  // ========================================
+
+  @Post(':name/members')
+  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @ApiOperation({
+    summary: 'Add member to queue',
+    description: 'Add an agent/endpoint as a member of the queue'
+  })
+  @ApiParam({ name: 'name', description: 'Queue name', example: 't1_support' })
+  @ApiResponse({
+    status: 201,
+    description: 'Member added successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          queue: 't1_support',
+          interface: 'PJSIP/t1_101',
+          member_name: '101',
+          added: true
+        },
+        timestamp: '2025-11-04T16:00:00.000Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or AMI not connected' })
+  @ApiResponse({ status: 404, description: 'Queue or endpoint not found' })
+  async addMember(
+    @Param('name') queueName: string,
+    @Body() body: { interface: string; memberName?: string; penalty?: number; paused?: boolean }
+  ) {
+    return await this.queuesService.addMember(
+      null,
+      queueName,
+      body.interface,
+      body.memberName,
+      body.penalty || 0,
+      body.paused ? 1 : 0
+    );
+  }
+
+  @Delete(':name/members/:memberId')
+  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @ApiOperation({
+    summary: 'Remove member from queue',
+    description: 'Remove an agent/endpoint from the queue'
+  })
+  @ApiParam({ name: 'name', description: 'Queue name', example: 't1_support' })
+  @ApiParam({ name: 'memberId', description: 'Member interface (e.g., PJSIP/t1_101 or just t1_101)', example: 't1_101' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member removed successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          queue: 't1_support',
+          interface: 'PJSIP/t1_101',
+          removed: true
+        },
+        timestamp: '2025-11-04T16:00:00.000Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or AMI not connected' })
+  @ApiResponse({ status: 404, description: 'Queue or member not found' })
+  async removeMember(
+    @Param('name') queueName: string,
+    @Param('memberId') memberId: string
+  ) {
+    return await this.queuesService.removeMember(null, queueName, memberId);
+  }
+
+  @Patch(':name/members/:memberId/pause')
+  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
+  @ApiOperation({
+    summary: 'Pause/Unpause queue member',
+    description: 'Pause or unpause an agent in the queue'
+  })
+  @ApiParam({ name: 'name', description: 'Queue name', example: 't1_support' })
+  @ApiParam({ name: 'memberId', description: 'Member interface', example: 't1_101' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member pause status updated',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          queue: 't1_support',
+          interface: 'PJSIP/t1_101',
+          paused: true,
+          reason: 'Break'
+        },
+        timestamp: '2025-11-04T16:00:00.000Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or AMI not connected' })
+  @ApiResponse({ status: 404, description: 'Queue or member not found' })
+  async pauseMember(
+    @Param('name') queueName: string,
+    @Param('memberId') memberId: string,
+    @Body() body: { paused: boolean; reason?: string }
+  ) {
+    return await this.queuesService.pauseMember(
+      null,
+      queueName,
+      memberId,
+      body.paused,
+      body.reason
+    );
   }
 }

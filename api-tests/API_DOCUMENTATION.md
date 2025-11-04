@@ -331,6 +331,12 @@
 **Auth**: Bearer Token requis
 **Params**: `name` - Nom de la queue
 
+
+1. GET /tenants/:id/queues - Pour lister les queues d'un tenant
+  2. POST /queues/:name/members - Pour ajouter un member/agent
+  3. DELETE /queues/:name/members/:memberId - Pour retirer un member
+  4. PATCH /queues/:name/members/:memberId - Pour pause/unpause
+
 ---
 
 ## 🔄 Architecture Multi-tenant

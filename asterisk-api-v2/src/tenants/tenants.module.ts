@@ -13,6 +13,7 @@ import { Queue } from 'src/queues/entities/queue.entity';
 import { Cdr } from 'src/cdr/entities/cdr.entity';
 import { TenantContextsModule } from '../tenant-contexts/tenant-contexts.module';
 import { EndpointsModule } from '../endpoints/endpoints.module';
+import { QueuesModule } from '../queues/queues.module';
 
 /**
  * Tenants Module
@@ -42,8 +43,9 @@ import { EndpointsModule } from '../endpoints/endpoints.module';
     CacheModule,
     TenantContextsModule,
 
-    // ForwardRef to avoid circular dependency with EndpointsModule
+    // ForwardRef to avoid circular dependencies
     forwardRef(() => EndpointsModule),
+    forwardRef(() => QueuesModule),
   ],
   controllers: [TenantsController],
   providers: [TenantsService],
