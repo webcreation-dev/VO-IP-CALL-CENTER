@@ -16,36 +16,35 @@ export class Tenant {
   @Column({ unique: true })
   name: string;
 
-  // COLONNES COMMENTÉES - N'EXISTENT PAS ENCORE DANS LA BASE
-  // @Column({ name: 'company_name', nullable: true })
-  // companyName: string;
+  @Column({ name: 'company_name', nullable: true })
+  companyName: string;
 
-  // @Column({ name: 'contact_email', nullable: true })
-  // contactEmail: string;
+  @Column({ name: 'contact_email', nullable: true })
+  contactEmail: string;
 
-  // @Column({ name: 'contact_phone', length: 50, nullable: true })
-  // contactPhone: string;
+  @Column({ name: 'contact_phone', length: 50, nullable: true })
+  contactPhone: string;
 
-  // @Column({ type: 'text', nullable: true })
-  // address: string;
+  @Column({ type: 'text', nullable: true })
+  address: string;
 
-  // @Column({ length: 100, nullable: true })
-  // city: string;
+  @Column({ length: 100, nullable: true })
+  city: string;
 
-  // @Column({ length: 100, nullable: true })
-  // country: string;
+  @Column({ length: 100, nullable: true })
+  country: string;
 
-  // @Column({ length: 50, default: 'UTC' })
-  // timezone: string;
+  @Column({ length: 50, default: 'UTC' })
+  timezone: string;
 
-  // @Column({ name: 'is_active', default: true })
-  // isActive: boolean;
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
-  // @Column({ name: 'max_endpoints', type: 'integer', default: 100 })
-  // maxEndpoints: number;
+  @Column({ name: 'max_endpoints', type: 'integer', default: 100 })
+  maxEndpoints: number;
 
-  // @Column({ name: 'max_queues', type: 'integer', default: 50 })
-  // maxQueues: number;
+  @Column({ name: 'max_queues', type: 'integer', default: 50 })
+  maxQueues: number;
 
   /**
    * Asterisk dialplan context for this tenant
@@ -55,15 +54,14 @@ export class Tenant {
   @Column({ length: 50, nullable: true })
   context: string;
 
-  // COLONNES COMMENTÉES - N'EXISTENT PAS ENCORE DANS LA BASE
-  // @Column({ name: 'dialplan_config', type: 'jsonb', nullable: true })
-  // dialplanConfig: DialplanConfig;
+  @Column({ name: 'dialplan_config', type: 'jsonb', nullable: true })
+  dialplanConfig: DialplanConfig;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  // @UpdateDateColumn({ name: 'updated_at' })
-  // updatedAt: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 
   // Relations will be added as we create other entities
   // @OneToMany(() => AppUser, (user) => user.tenant)

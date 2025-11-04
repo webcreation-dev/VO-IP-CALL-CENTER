@@ -35,11 +35,10 @@ export class ChannelsController {
   @ApiOperation({ summary: 'List active channels' })
   @ApiResponse({ status: 200, description: 'Channels retrieved' })
   async findAll(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Query() filter: ChannelFilterDto,
   ) {
-    // TEST MODE
-    return await this.channelsService.findAll(null, filter);
+    return await this.channelsService.findAll(tenantId, filter);
   }
 
   @Get(':channelId')
@@ -55,11 +54,9 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Originate an outbound call' })
   @ApiResponse({ status: 201, description: 'Call originated successfully' })
   async originate(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Body() dto: OriginateCallDto,
   ) {
-    // TEST MODE: use tenantId from DTO or default 1
-    const tenantId = dto.tenantId || 1;
     return await this.channelsService.originate(tenantId, dto);
   }
 

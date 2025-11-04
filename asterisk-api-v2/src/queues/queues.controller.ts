@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -40,20 +41,17 @@ export class QueuesController {
   @ApiOperation({ summary: 'Create new queue' })
   @ApiResponse({ status: 201, description: 'Queue created successfully' })
   async create(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Body() dto: CreateQueueDto,
   ) {
-    // TEST MODE: use tenantId from DTO or default 1
-    const tenantId = dto.tenantId || 1;
     return await this.queuesService.create(tenantId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all queues' })
   @ApiResponse({ status: 200, description: 'Queues retrieved successfully' })
-  async findAll(/* @CurrentTenant() tenantId: number | null */) {
-    // TEST MODE: return all queues
-    return await this.queuesService.findAll(null);
+  async findAll(@CurrentTenant() tenantId: number) {
+    return await this.queuesService.findAll(tenantId);
   }
 
   // ========================================
@@ -67,9 +65,10 @@ export class QueuesController {
     description: 'Enriched queues retrieved successfully',
     type: [EnrichedQueueDto],
   })
-  async getAllEnriched(/* @CurrentTenant() tenantId: number | null */) {
-    // TEST MODE: return all queues enriched
-    return await this.queuesService.findAllEnriched(null);
+  async getAllEnriched(
+    @CurrentTenant() tenantId: number,
+  ) {
+    return await this.queuesService.findAllEnriched(tenantId);
   }
 
   @Get('stats/global')
@@ -79,9 +78,8 @@ export class QueuesController {
     description: 'Global stats calculated successfully',
     type: GlobalQueueStatsDto,
   })
-  async getGlobalStats(/* @CurrentTenant() tenantId: number | null */) {
-    // TEST MODE: return global stats for all
-    return await this.queuesService.getGlobalStats(null);
+  async getGlobalStats(@CurrentTenant() tenantId: number) {
+    return await this.queuesService.getGlobalStats(tenantId);
   }
 
   @Get(':name')

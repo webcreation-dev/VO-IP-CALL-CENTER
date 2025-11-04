@@ -28,22 +28,20 @@ export class CdrController {
   @ApiOperation({ summary: 'List CDR records with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'CDR records retrieved' })
   async findAll(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Query() filter: CdrFilterDto,
   ) {
-    // TEST MODE: use tenantId from filter or null
-    return await this.cdrService.findAll(filter.tenantId || null, filter);
+    return await this.cdrService.findAll(tenantId, filter);
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get CDR statistics' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved' })
   async getStats(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Query() filter: CdrFilterDto,
   ) {
-    // TEST MODE
-    return await this.cdrService.getStats(filter.tenantId || null, filter);
+    return await this.cdrService.getStats(tenantId, filter);
   }
 
   @Get('export/csv')
@@ -52,11 +50,10 @@ export class CdrController {
   @ApiOperation({ summary: 'Export CDR records to CSV' })
   @ApiResponse({ status: 200, description: 'CSV file generated' })
   async exportCsv(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Query() filter: CdrFilterDto,
   ): Promise<string> {
-    // TEST MODE
-    return await this.cdrService.exportToCsv(filter.tenantId || null, filter);
+    return await this.cdrService.exportToCsv(tenantId, filter);
   }
 
   @Get(':id')

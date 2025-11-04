@@ -11,6 +11,7 @@ import { PsAuth } from '../endpoints/entities/ps-auth.entity';
 import { PsAor } from '../endpoints/entities/ps-aor.entity';
 import { Queue } from 'src/queues/entities/queue.entity';
 import { Cdr } from 'src/cdr/entities/cdr.entity';
+import { TenantContextsModule } from '../tenant-contexts/tenant-contexts.module';
 
 /**
  * Tenants Module
@@ -20,6 +21,7 @@ import { Cdr } from 'src/cdr/entities/cdr.entity';
  * Imports:
  * - TypeOrmModule: Tenant entity for database operations
  * - CacheModule: Cache service for performance optimization
+ * - TenantContextsModule: Manage multiple contexts per tenant
  *
  * Providers:
  * - TenantsService: Tenant management business logic
@@ -37,6 +39,7 @@ import { Cdr } from 'src/cdr/entities/cdr.entity';
 
     // External modules
     CacheModule,
+    TenantContextsModule,
   ],
   controllers: [TenantsController],
   providers: [TenantsService],

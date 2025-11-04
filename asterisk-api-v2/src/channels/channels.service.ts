@@ -66,18 +66,16 @@ export class ChannelsService {
    * Originate an outbound call
    */
   async originate(
-    tenantId: number | null,
+    tenantId: number,
     dto: OriginateCallDto,
   ): Promise<{ channelId: string }> {
-    // TEST MODE: use default tenantId if null
-    const effectiveTenantId = tenantId ?? 1;
-    const prefixedEndpoint = TenantPrefixUtil.addPrefix(effectiveTenantId, dto.endpoint);
+    const prefixedEndpoint = TenantPrefixUtil.addPrefix(tenantId, dto.endpoint);
     const endpoint = `PJSIP/${prefixedEndpoint}`;
     const context = dto.context || 'default';
     const timeout = dto.timeout || 30;
 
     const variables: Record<string, string> = {
-      TENANT_ID: effectiveTenantId.toString(),
+      TENANT_ID: tenantId.toString(),
       ...(dto.variables || {}),
     };
 

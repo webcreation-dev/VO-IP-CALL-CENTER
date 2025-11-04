@@ -69,9 +69,9 @@ export class AuthService {
     }
 
     // Validate tenantId for non-admin users
-    if (role !== UserRole.ADMIN && !tenantId) {
+    if (role !== UserRole.SUPER_ADMIN && !tenantId) {
       throw new BadRequestException(
-        'Tenant ID is required for non-admin users',
+        'Tenant ID is required for non-super-admin users',
       );
     }
 
@@ -81,14 +81,14 @@ export class AuthService {
     // Create user
     const user = this.userRepository.create({
       email,
-      password: hashedPassword,
+      passwordHash: hashedPassword,
       firstName,
       lastName,
       role,
-      tenantId: role === UserRole.ADMIN ? null : tenantId,
+      tenantId: role === UserRole.SUPER_ADMIN ? null : tenantId,
     });
 
-    // Save and return (password field is excluded by default)
+    // Save and return (passwordHash field is excluded by default)
     return await this.userRepository.save(user);
   }
 
@@ -151,11 +151,11 @@ export class AuthService {
    * @throws UnauthorizedException if credentials are invalid
    */
   async validateUser(email: string, password: string): Promise<AppUser> {
-    // Find user with password field (select: false by default)
+    // Find user with passwordHash field (select: false by default)
     const user = await this.userRepository
       .createQueryBuilder('user')
       .where('user.email = :email', { email })
-      .addSelect('user.password')
+      .addSelect('user.passwordHash')
       .getOne();
 
     if (!user) {
@@ -163,7 +163,7 @@ export class AuthService {
     }
 
     // Compare password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');

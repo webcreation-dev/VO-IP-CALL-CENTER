@@ -24,7 +24,7 @@ import { CreateEndpointDto, UpdateEndpointDto, EndpointFilterDto } from './dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
-
+ 
 /**
  * Endpoints Controller
  *
@@ -133,11 +133,10 @@ export class EndpointsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(
-    // @CurrentTenant() tenantId: number | null,
+    @CurrentTenant() tenantId: number,
     @Query() filter: EndpointFilterDto,
   ) {
-    // TEST MODE: return all endpoints (no tenant filter)
-    return await this.endpointsService.findAll(null, filter);
+    return await this.endpointsService.findAll(tenantId, filter);
   }
 
   /**
@@ -160,11 +159,10 @@ export class EndpointsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   async findOne(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    // TEST MODE: find by ID directly (username = ID)
-    return await this.endpointsService.findOne(null, username);
+    return await this.endpointsService.findOne(tenantId, username);
   }
 
   /**
@@ -204,11 +202,10 @@ export class EndpointsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   async getStatus(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    // TEST MODE: find by ID directly
-    return await this.endpointsService.findOneWithStatus(null, username);
+    return await this.endpointsService.findOneWithStatus(tenantId, username);
   }
 
   /**
@@ -232,12 +229,11 @@ export class EndpointsController {
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient role' })
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   async update(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
     @Body() dto: UpdateEndpointDto,
   ) {
-    // TEST MODE: update by ID directly
-    return await this.endpointsService.update(null, username, dto);
+    return await this.endpointsService.update(tenantId, username, dto);
   }
 
   /**
@@ -261,11 +257,10 @@ export class EndpointsController {
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient role' })
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   async remove(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    // TEST MODE: delete by ID directly
-    await this.endpointsService.remove(null, username);
+    await this.endpointsService.remove(tenantId, username);
   }
 
   /**
@@ -278,11 +273,10 @@ export class EndpointsController {
   })
   @ApiResponse({ status: 200, description: 'Enriched endpoints retrieved' })
   async findAllEnriched(
-    // @CurrentTenant() tenantId: number | null,
+    @CurrentTenant() tenantId: number,
     @Query() filter: EndpointFilterDto,
   ) {
-    // TEST MODE: get all endpoints enriched
-    return await this.endpointsService.findAllEnriched(null, filter);
+    return await this.endpointsService.findAllEnriched(tenantId, filter);
   }
 
   /**
@@ -302,11 +296,10 @@ export class EndpointsController {
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   @ApiResponse({ status: 503, description: 'AMI service unavailable' })
   async getDetails(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    // TEST MODE: get details by ID directly
-    return await this.endpointsService.getEndpointDetails(null, username);
+    return await this.endpointsService.getEndpointDetails(tenantId, username);
   }
 
   /**
@@ -327,10 +320,9 @@ export class EndpointsController {
   @ApiResponse({ status: 404, description: 'Endpoint not found' })
   @ApiResponse({ status: 503, description: 'AMI service unavailable' })
   async forceDisconnect(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    // TEST MODE: disconnect by ID directly
-    return await this.endpointsService.forceDisconnect(null, username);
+    return await this.endpointsService.forceDisconnect(tenantId, username);
   }
 }

@@ -23,10 +23,13 @@ export class AppUser {
   tenantId: number | null;
 
   @Column({ unique: true })
+  username: string;
+
+  @Column({ unique: true })
   email: string;
 
-  @Column({ select: false }) // Ne pas retourner le password dans les queries par défaut
-  password: string;
+  @Column({ name: 'password_hash', select: false }) // Ne pas retourner le password dans les queries par défaut
+  passwordHash: string;
 
   @Column({
     type: 'enum',
@@ -41,18 +44,19 @@ export class AppUser {
   @Column({ name: 'last_name', length: 100, nullable: true })
   lastName: string;
 
-  @Column({ length: 20, nullable: true })
-  phone: string;
-
-  // Reference to SIP endpoint (for agents)
-  @Column({ name: 'endpoint_id', length: 40, nullable: true })
-  endpointId: string;
+  // NOTE: Ces colonnes n'existent pas dans la DB actuelle - commentées
+  // @Column({ length: 20, nullable: true })
+  // phone: string;
+  //
+  // // Reference to SIP endpoint (for agents)
+  // @Column({ name: 'endpoint_id', length: 40, nullable: true })
+  // endpointId: string;
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
-  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
-  lastLoginAt: Date;
+  @Column({ name: 'last_login', type: 'timestamp', nullable: true })
+  lastLogin: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
@@ -65,6 +69,17 @@ export class AppUser {
     if (this.firstName && this.lastName) {
       return `${this.firstName} ${this.lastName}`;
     }
-    return this.firstName || this.lastName || this.email;
+    return this.firstName || this.lastName || this.username;
+  }
+
+  // Check if user is super admin
+  get isSuperAdmin(): boolean {
+    return this.role === UserRole.SUPER_ADMIN;
+  }
+
+  // Check if user can access a specific tenant
+  canAccessTenant(tenantId: number): boolean {
+    if (this.isSuperAdmin) return true;
+    return this.tenantId === tenantId;
   }
 }

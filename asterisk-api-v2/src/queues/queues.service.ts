@@ -728,17 +728,15 @@ export class QueuesService {
           this.amiService.off('managerevent', eventHandler);
           clearTimeout(timeoutHandle);
 
-          if (queueFound) {
-            resolve({
-              queue_name: queue.name,
-              display_name: displayName,
-              calls_count: calls.length,
-              calls: calls.sort((a, b) => a.position - b.position),
-              retrieved_at: new Date().toISOString(),
-            });
-          } else {
-            reject(new Error(`Queue "${displayName}" not found in Asterisk`));
-          }
+          // Return empty list instead of error if queue not found
+          resolve({
+            queue_name: queue.name,
+            display_name: displayName,
+            calls_count: calls.length,
+            calls: calls.sort((a, b) => a.position - b.position),
+            retrieved_at: new Date().toISOString(),
+            warning: !queueFound ? 'Queue not found in Asterisk or no active calls' : undefined,
+          });
         }
       };
 
@@ -747,17 +745,15 @@ export class QueuesService {
       // Timeout - safety fallback (declare before try/catch)
       timeoutHandle = setTimeout(() => {
         this.amiService.off('managerevent', eventHandler);
-        if (queueFound) {
-          resolve({
-            queue_name: queue.name,
-            display_name: displayName,
-            calls_count: calls.length,
-            calls: calls.sort((a, b) => a.position - b.position),
-            retrieved_at: new Date().toISOString(),
-          });
-        } else {
-          reject(new Error(`Queue "${displayName}" not found in Asterisk`));
-        }
+        // Return empty list instead of error if queue not found
+        resolve({
+          queue_name: queue.name,
+          display_name: displayName,
+          calls_count: calls.length,
+          calls: calls.sort((a, b) => a.position - b.position),
+          retrieved_at: new Date().toISOString(),
+          warning: !queueFound ? 'Queue not found in Asterisk or no active calls' : undefined,
+        });
       }, 3000);
 
       try {

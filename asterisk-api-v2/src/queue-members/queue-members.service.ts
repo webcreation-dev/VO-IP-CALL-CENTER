@@ -79,7 +79,8 @@ export class QueueMembersService {
   async findAll(tenantId: number | null, queueName: string): Promise<QueueMember[]> {
     // TEST MODE: use default tenantId if null
     const effectiveTenantId = tenantId ?? 1;
-    const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    // TEST MODE: Don't prefix for queue names in test
+    const prefixedQueue = queueName; // TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
 
     return await this.memberRepository.find({
       where: { tenantId: effectiveTenantId, queueName: prefixedQueue },
@@ -184,15 +185,13 @@ export class QueueMembersService {
    * GET /api/v1/queues/:queueName/members/enriched
    * Get all members with enriched endpoint data
    */
-  async findAllEnriched(tenantId: number | null, queueName: string): Promise<any[]> {
+  async findAllEnriched(tenantId: number, queueName: string): Promise<any[]> {
     try {
-      // TEST MODE: use default tenantId if null
-      const effectiveTenantId = tenantId ?? 1;
-      const prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+      const prefixedQueue = TenantPrefixUtil.addPrefix(tenantId, queueName);
 
       // 1. Get base members data from DB
       const members = await this.memberRepository.find({
-        where: { tenantId: effectiveTenantId, queueName: prefixedQueue },
+        where: { tenantId, queueName: prefixedQueue },
         order: { penalty: 'ASC', membername: 'ASC' },
       });
 
@@ -231,13 +230,19 @@ export class QueueMembersService {
           let endpointData: any = null;
           if (endpointId) {
             try {
-              // Remove tenant prefix from endpoint ID
-              const { name: unprefixedEndpointId } = TenantPrefixUtil.removePrefix(
-                endpointId,
-              );
+              let lookupId = endpointId;
+              
+              // Only remove prefix if it exists
+              if (TenantPrefixUtil.hasPrefix(endpointId)) {
+                const { name: unprefixedEndpointId } = TenantPrefixUtil.removePrefix(
+                  endpointId,
+                );
+                lookupId = unprefixedEndpointId;
+              }
+              
               endpointData = await this.endpointsService.findOne(
                 tenantId,
-                unprefixedEndpointId,
+                lookupId,
               );
             } catch (err) {
               this.logger.warn(

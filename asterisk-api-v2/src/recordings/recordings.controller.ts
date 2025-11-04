@@ -37,11 +37,9 @@ export class RecordingsController {
   @ApiOperation({ summary: 'Start recording a channel' })
   @ApiResponse({ status: 201, description: 'Recording started' })
   async startRecording(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Body() dto: StartRecordingDto,
   ) {
-    // TEST MODE
-    const tenantId = dto.tenantId || 1;
     return await this.recordingsService.startRecording(tenantId, dto);
   }
 
@@ -59,11 +57,10 @@ export class RecordingsController {
   @ApiOperation({ summary: 'List all recordings' })
   @ApiResponse({ status: 200, description: 'Recordings retrieved' })
   async findAll(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Query() filter: RecordingFilterDto,
   ) {
-    // TEST MODE
-    return await this.recordingsService.findAll(filter.tenantId || null, filter);
+    return await this.recordingsService.findAll(tenantId, filter);
   }
 
   @Get(':id')
@@ -71,11 +68,10 @@ export class RecordingsController {
   @ApiParam({ name: 'id', example: 1 })
   @ApiResponse({ status: 200, description: 'Recording details retrieved' })
   async findOne(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') id: number,
   ) {
-    // TEST MODE
-    return await this.recordingsService.findOne(null, id);
+    return await this.recordingsService.findOne(tenantId, id);
   }
 
   @Get(':id/download')
@@ -83,12 +79,10 @@ export class RecordingsController {
   @ApiParam({ name: 'id', example: 1 })
   @ApiResponse({ status: 200, description: 'Recording file downloaded' })
   async downloadRecording(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') id: number,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    // TEST MODE
-    const tenantId = null;
     const recording = await this.recordingsService.findOne(tenantId, id);
     const fileStream = await this.recordingsService.getFileStream(tenantId, id);
 
@@ -105,12 +99,10 @@ export class RecordingsController {
   @ApiParam({ name: 'id', example: 1 })
   @ApiResponse({ status: 200, description: 'Recording file streaming' })
   async streamRecording(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') id: number,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    // TEST MODE
-    const tenantId = null;
     const recording = await this.recordingsService.findOne(tenantId, id);
     const fileStream = await this.recordingsService.getFileStream(tenantId, id);
 
@@ -128,11 +120,10 @@ export class RecordingsController {
   @ApiParam({ name: 'id', example: 1 })
   @ApiResponse({ status: 204, description: 'Recording deleted' })
   async deleteRecording(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') id: number,
   ) {
-    // TEST MODE
-    await this.recordingsService.deleteRecording(null, id);
+    await this.recordingsService.deleteRecording(tenantId, id);
   }
 
   @Delete(':id/permanent')
@@ -142,10 +133,9 @@ export class RecordingsController {
   @ApiParam({ name: 'id', example: 1 })
   @ApiResponse({ status: 204, description: 'Recording permanently deleted' })
   async permanentlyDelete(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') id: number,
   ) {
-    // TEST MODE
-    await this.recordingsService.permanentlyDelete(null, id);
+    await this.recordingsService.permanentlyDelete(tenantId, id);
   }
 }

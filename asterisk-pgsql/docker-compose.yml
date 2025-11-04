@@ -1,29 +1,10 @@
 services:
-  api:
-    build: ../ # Pointe vers le dossier asterisk (parent)
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=asterisk
-      - DB_PASSWORD=Obelix
-      - DB_NAME=asterisk
-      - AMI_HOST=asterisk
-      - AMI_PORT=5038
-      - AMI_USER=admin
-      - AMI_PASSWORD=Sp33Dd14L
-    depends_on:
-      - db
-      - asterisk
-    restart: always
-    volumes:
-      - ../:/app # En développement pour hot-reload
-      - /app/node_modules # Exclure node_modules du volume
-      - ./etc/asterisk/extensions.conf:/etc/asterisk/extensions.conf # Partager extensions.conf avec Asterisk
+  # ============================================
+  # ASTERISK PBX
+  # ============================================
   asterisk:
     build: .
+    container_name: asterisk
     environment:
       - AST_MODULE_LOAD_PRIORITY=1
     volumes:
@@ -42,60 +23,144 @@ services:
       - "8088:8088" # HTTP
       - "8089:8089" # HTTPS / WSS
       - "10000-10200:10000-10200/udp" # RTP
+    depends_on:
+      api-db:
+        condition: service_healthy
     restart: always
+    networks:
+      - asterisk-network
     #network_mode: host
 
-  # Nouvelle API NestJS v2
-  api-v2:
-    build: ../asterisk-api-v2 # Pointe vers le dossier de la nouvelle API
-    ports:
-      - "3001:3001" # Port différent de l'ancienne API
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - API_PREFIX=api/v1
-      # Database - Utilise la même DB
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USERNAME=asterisk
-      - DB_PASSWORD=Obelix
-      - DB_NAME=asterisk
-      # AMI - Utilise le même Asterisk
-      - AMI_HOST=asterisk
-      - AMI_PORT=5038
-      - AMI_USER=admin
-      - AMI_PASSWORD=Sp33Dd14L
-      # ARI
-      - ARI_HOST=asterisk
-      - ARI_PORT=8088
-      - ARI_USER=callcenter-ivr
-      - ARI_PASSWORD=Secret123!
-      - ASTERISK_ARI_URL=http://asterisk:8088
-      - ASTERISK_ARI_USERNAME=callcenter-ivr
-      - ASTERISK_ARI_PASSWORD=Secret123!
-      # Redis/Cache
-      - REDIS_HOST=localhost
-      - REDIS_PORT=6379
-      # JWT
-      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-      - JWT_EXPIRATION=7d
-      # Bcrypt
-      - BCRYPT_ROUNDS=10
-    depends_on:
-      - db
-      - asterisk
-    restart: always
+  # ============================================
+  # ANCIENNE DATABASE ASTERISK - DÉSACTIVÉE
+  # Gardée pour référence, n'est plus utilisée
+  # ============================================
+  # db:
+  #   image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_IMAGE_VERSION:-12}
+  #   container_name: asterisk-postgres
+  #   environment:
+  #     POSTGRES_DB: "asterisk"
+  #     POSTGRES_USER: "asterisk"
+  #     POSTGRES_PASSWORD: "Obelix"
+  #   volumes:
+  #     - "./.pgdata:/var/lib/postgresql/data"
+  #     - "./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
+  #     - "./INIT_TOUT_EN_UN.sql:/docker-entrypoint-initdb.d/02-INIT_TOUT_EN_UN.sql:ro"
+  #   ports:
+  #     - "5432:5432"
+  #   restart: always
+  #   networks:
+  #     - asterisk-network
 
-  db:
-    image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_IMAGE_VERSION:-12}
+  # ============================================
+  # DATABASE UNIFIÉE (Asterisk + API)
+  # Utilisée par Asterisk (ODBC) ET le backend NestJS
+  # ============================================
+  api-db:
+    image: postgres:14
+    container_name: asterisk-api-postgres
     environment:
-      POSTGRES_DB: "asterisk"
-      POSTGRES_USER: "asterisk"
-      POSTGRES_PASSWORD: "Obelix"
+    
+      POSTGRES_DB: "asterisk_api"
+      POSTGRES_USER: "api_user"
+      POSTGRES_PASSWORD: "ApiSecurePass2025!"
     volumes:
-      - "./.pgdata:/var/lib/postgresql/data"
-      - "./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro"
-      - "./INIT_TOUT_EN_UN.sql:/docker-entrypoint-initdb.d/02-INIT_TOUT_EN_UN.sql:ro"
+      - "./api-pgdata:/var/lib/postgresql/data"
+      - "./init-api-db.sql:/docker-entrypoint-initdb.d/01-init-api-db.sql:ro"
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Port standard maintenant (ancien db désactivé)
     restart: always
+    networks:
+      - asterisk-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_user -d asterisk_api"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # REDIS (Cache pour statistiques temps réel)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: asterisk-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - asterisk-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ============================================
+  # BACKEND NESTJS API
+  # ============================================
+  backend:
+    build: ../asterisk-api-v2
+    container_name: asterisk-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_PREFIX: api/v1
+      # Base de données unifiée (Asterisk + API)
+      DB_HOST: api-db
+      DB_PORT: 5432
+      DB_NAME: asterisk_api
+      DB_USER: api_user
+      DB_PASSWORD: ApiSecurePass2025!
+      DB_POOL_SIZE: 20
+      # AMI Connection
+      AMI_HOST: asterisk
+      AMI_PORT: 5038
+      AMI_USER: admin
+      AMI_PASSWORD: Sp33Dd14L
+      # ARI Connection
+      ARI_HOST: asterisk
+      ARI_PORT: 8088
+      ARI_USER: callcenter-ivr
+      ARI_PASSWORD: Secret123!
+      ARI_WS_URL: ws://asterisk:8088/ari/events
+      ASTERISK_ARI_URL: http://asterisk:8088
+      ASTERISK_ARI_USERNAME: callcenter-ivr
+      ASTERISK_ARI_PASSWORD: Secret123!
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # JWT
+      JWT_SECRET: your-secret-key-min-32-chars-long-please-change-this
+      JWT_EXPIRES_IN: 1d
+      # Security
+      CORS_ORIGIN: http://localhost:3000,http://localhost:5173,http://localhost:3008
+      # Logging
+      LOG_LEVEL: debug
+      LOG_DIR: logs
+      # Swagger
+      SWAGGER_ENABLED: true
+      # Asterisk Paths
+      ASTERISK_SOUNDS_PATH: /var/lib/asterisk/sounds/custom
+      ASTERISK_RECORDINGS_PATH: /var/spool/asterisk/monitor
+    # PRODUCTION MODE: Use compiled code from image (no volume mount)
+    # volumes:
+    #   - "../asterisk-api-v2:/app"
+    #   - "/app/node_modules"
+    ports:
+      - "3001:3001"
+    depends_on:
+      api-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      asterisk:
+        condition: service_started
+    restart: always
+    networks:
+      - asterisk-network
+    # PRODUCTION MODE: Use CMD from Dockerfile (node dist/src/main.js)
+    # command: npm run start:dev
+
+networks:
+  asterisk-network:
+    driver: bridge

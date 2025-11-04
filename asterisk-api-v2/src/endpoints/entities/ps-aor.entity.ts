@@ -92,11 +92,10 @@ export class PsAor {
   @Column({ length: 200, nullable: true })
   mailboxes: string;
 
-  // COMMENTED - COLUMNS DON'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
-  // // Timestamps (added by migration, not part of original Asterisk table)
-  // @CreateDateColumn({ name: 'created_at', nullable: true })
-  // createdAt: Date;
-  //
-  // @UpdateDateColumn({ name: 'updated_at', nullable: true })
-  // updatedAt: Date;
+  // Timestamps (added by migration, not part of original Asterisk table)
+  @CreateDateColumn({ name: 'created_at', nullable: true })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', nullable: true })
+  updatedAt: Date;
 }

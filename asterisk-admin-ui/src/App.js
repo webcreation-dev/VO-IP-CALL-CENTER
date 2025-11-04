@@ -63,9 +63,16 @@ const apiCall = async (endpoint, method = 'GET', body = null) => {
     if (body) options.body = JSON.stringify(body);
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+    
+    // Handle 204 No Content (for DELETE operations)
+    if (response.status === 204) {
+      return { success: true, data: null };
+    }
+    
     const data = await response.json();
 
-    if (!response.ok) throw new Error(data.error || 'Erreur API');
+    // Support both old (data.error) and new (data.message) error formats
+    if (!response.ok) throw new Error(data.error || data.message || 'Erreur API');
     return data;
   } catch (error) {
     console.error('API Error:', error);
@@ -350,7 +357,7 @@ const TenantsManager = () => {
 
   const loadTenants = async () => {
     try {
-      const data = await apiCall('/api/tenants');
+      const data = await apiCall('/tenants');
       setTenants(data.data);
     } catch (error) {
       alert('Erreur chargement tenants');
@@ -361,9 +368,9 @@ const TenantsManager = () => {
     e.preventDefault();
     try {
       if (editingTenant) {
-        await apiCall(`/api/tenants/${editingTenant.id}`, 'PUT', formData);
+        await apiCall(`/tenants/${editingTenant.id}`, 'PATCH', formData);
       } else {
-        await apiCall('/api/tenants', 'POST', formData);
+        await apiCall('/tenants', 'POST', formData);
       }
       setShowModal(false);
       setFormData({ name: '' });
@@ -377,7 +384,7 @@ const TenantsManager = () => {
   const handleDelete = async id => {
     if (!window.confirm('Supprimer ce tenant ?')) return;
     try {
-      await apiCall(`/api/tenants/${id}`, 'DELETE');
+      await apiCall(`/tenants/${id}`, 'DELETE');
       loadTenants();
     } catch (error) {
       alert('Erreur lors de la suppression: ' + error.message);
@@ -533,7 +540,7 @@ const EndpointsManager = () => {
 
   const loadTenants = async () => {
     try {
-      const data = await apiCall('/api/tenants');
+      const data = await apiCall('/tenants');
       setTenants(data.data);
     } catch (error) {
       console.error('Erreur chargement tenants');
@@ -544,10 +551,11 @@ const EndpointsManager = () => {
     try {
       // Utiliser l'API enrichie pour avoir IP, Status, etc.
       const url = selectedTenant
-        ? `/api/endpoints/enriched?tenant_id=${selectedTenant}`
-        : '/api/endpoints/enriched';
+        ? `/endpoints/enriched/all?tenant_id=${selectedTenant}`
+        : '/endpoints/enriched/all';
       const data = await apiCall(url);
-      setEndpoints(data.data);
+      // API V2 retourne une structure paginée: { data: { data: [...], total, page, limit } }
+      setEndpoints(data.data?.data || data.data || []);
     } catch (error) {
       console.error('Erreur chargement endpoints');
     }
@@ -556,7 +564,7 @@ const EndpointsManager = () => {
   const handleSubmit = async e => {
     e.preventDefault();
     try {
-      await apiCall('/api/endpoints', 'POST', formData);
+      await apiCall('/endpoints', 'POST', formData);
       setShowModal(false);
       setFormData({
         tenant_id: '',
@@ -573,7 +581,7 @@ const EndpointsManager = () => {
   const handleDelete = async id => {
     if (!window.confirm('Supprimer cet endpoint ?')) return;
     try {
-      await apiCall(`/api/endpoints/${id}`, 'DELETE');
+      await apiCall(`/endpoints/${id}`, 'DELETE');
       loadEndpoints();
     } catch (error) {
       alert('Erreur lors de la suppression');
@@ -586,7 +594,7 @@ const EndpointsManager = () => {
     setLoadingDetails(true);
 
     try {
-      const data = await apiCall(`/api/endpoints/${endpoint.id}/details`);
+      const data = await apiCall(`/endpoints/${endpoint.id}/details`);
       setEndpointDetails(data.data);
     } catch (error) {
       alert('Erreur lors du chargement des détails: ' + error.message);
@@ -607,7 +615,7 @@ const EndpointsManager = () => {
     }
 
     try {
-      await apiCall(`/api/endpoints/${endpointId}/disconnect`, 'POST');
+      await apiCall(`/endpoints/${endpointId}/disconnect`, 'POST');
       alert(`Endpoint "${endpointId}" déconnecté avec succès`);
 
       // Recharger les endpoints et fermer le modal
@@ -659,7 +667,7 @@ const EndpointsManager = () => {
             <div>
               <p className="text-green-600 text-sm font-semibold uppercase tracking-wide">Disponibles</p>
               <p className="text-3xl font-bold text-green-800 mt-2">
-                {endpoints.filter(e => e.registered && e.active_channels_ami === 0 && e.device_state === 'Not in use').length}
+                {endpoints.filter(e => e.registered && e.active_channels === 0 && e.device_state === 'Not in use').length}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
@@ -673,7 +681,7 @@ const EndpointsManager = () => {
             <div>
               <p className="text-blue-600 text-sm font-semibold uppercase tracking-wide">En appel</p>
               <p className="text-3xl font-bold text-blue-800 mt-2">
-                {endpoints.filter(e => e.active_channels_ami > 0).length}
+                {endpoints.filter(e => e.active_channels > 0).length}
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
@@ -799,10 +807,10 @@ const EndpointsManager = () => {
               {endpoints.filter(endpoint => {
                 // Filtre par statut
                 if (statusFilter !== 'all') {
-                  if (statusFilter === 'available' && !(endpoint.registered && endpoint.active_channels_ami === 0 && endpoint.device_state === 'Not in use')) {
+                  if (statusFilter === 'available' && !(endpoint.registered && endpoint.active_channels === 0 && endpoint.device_state === 'Not in use')) {
                     return false;
                   }
-                  if (statusFilter === 'in_call' && !(endpoint.active_channels_ami > 0)) {
+                  if (statusFilter === 'in_call' && !(endpoint.active_channels > 0)) {
                     return false;
                   }
                   if (statusFilter === 'online' && !endpoint.registered) {
@@ -853,7 +861,7 @@ const EndpointsManager = () => {
                           </div>
                         );
                       }
-                      if (endpoint.active_channels_ami > 0) {
+                      if (endpoint.active_channels > 0) {
                         return (
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
@@ -905,9 +913,9 @@ const EndpointsManager = () => {
                     {endpoint.context}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {endpoint.active_channels_ami > 0 ? (
+                    {endpoint.active_channels > 0 ? (
                       <span className="px-3 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800">
-                        {endpoint.active_channels_ami} en cours
+                        {endpoint.active_channels} en cours
                       </span>
                     ) : (
                       <span className="text-gray-400 text-xs">-</span>
@@ -1046,7 +1054,7 @@ const EndpointsManager = () => {
                   <div>
                     <p className="text-sm text-blue-700 font-semibold">Appels actifs</p>
                     <p className="text-lg font-bold text-blue-900">
-                      {endpointDetails.active_channels_ami || 0}
+                      {endpointDetails.active_channels || endpointDetails.ami_details?.active_channels || 0}
                     </p>
                   </div>
                   <div>
@@ -1237,6 +1245,7 @@ const QueuesManager = () => {
   const [queues, setQueues] = useState([]);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [members, setMembers] = useState([]);
+  const [waitingCalls, setWaitingCalls] = useState([]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedAgents, setSelectedAgents] = useState([]);
   const [availableEndpoints, setAvailableEndpoints] = useState([]);
@@ -1272,7 +1281,7 @@ const QueuesManager = () => {
 
   const loadTenants = async () => {
     try {
-      const data = await apiCall('/api/tenants');
+      const data = await apiCall('/tenants');
       setTenants(data.data || []);
     } catch (error) {
       console.error('Erreur chargement tenants');
@@ -1281,7 +1290,8 @@ const QueuesManager = () => {
 
   const loadQueues = async () => {
     try {
-      const data = await apiCall(`/api/queues?tenant_id=${selectedTenant}`);
+      // Utiliser l'endpoint enrichi pour avoir toutes les stats AMI en temps réel
+      const data = await apiCall(`/queues/enriched?tenant_id=${selectedTenant}`);
       setQueues(data.data);
     } catch (error) {
       console.error('Erreur chargement queues');
@@ -1290,8 +1300,9 @@ const QueuesManager = () => {
 
   const loadAvailableEndpoints = async () => {
     try {
-      const data = await apiCall(`/api/endpoints?tenant_id=${selectedTenant}`);
-      setAvailableEndpoints(data.data || []);
+      const data = await apiCall(`/endpoints?tenant_id=${selectedTenant}`);
+      // API V2 retourne une structure paginée: { data: { data: [...], total, page, limit } }
+      setAvailableEndpoints(data.data?.data || data.data || []);
     } catch (error) {
       console.error('Erreur chargement endpoints');
       setAvailableEndpoints([]);
@@ -1300,10 +1311,20 @@ const QueuesManager = () => {
 
   const loadMembers = async queueName => {
     try {
-      const data = await apiCall(`/api/queues/${queueName}/members`);
+      const data = await apiCall(`/queues/${queueName}/members/enriched`);
       setMembers(data.data);
     } catch (error) {
       console.error('Erreur chargement membres');
+    }
+  };
+
+  const loadWaitingCalls = async queueName => {
+    try {
+      const data = await apiCall(`/queues/${queueName}/calls`);
+      setWaitingCalls(data.data.calls || []);
+    } catch (error) {
+      console.error('Erreur chargement appels en attente');
+      setWaitingCalls([]);
     }
   };
 
@@ -1311,11 +1332,10 @@ const QueuesManager = () => {
     try {
       const action = paused ? 'unpause' : 'pause';
       await apiCall(
-        `/api/queues/${queueName}/members/${encodeURIComponent(
+        `/queues/${queueName}/members/${encodeURIComponent(
           memberInterface
         )}/${action}`,
-        'PUT',
-        { reason: 'Pause manuelle' }
+        'PATCH'
       );
       loadMembers(queueName);
     } catch (error) {
@@ -1330,9 +1350,10 @@ const QueuesManager = () => {
       for (const endpointId of selectedAgents) {
         const endpoint = availableEndpoints.find(ep => ep.id === endpointId);
         if (endpoint) {
-          await apiCall(`/api/queues/${selectedQueue}/members`, 'POST', {
-            interface: `PJSIP/${endpoint.id}`,
-            membername: endpoint.id
+          await apiCall(`/queues/${selectedQueue}/members`, 'POST', {
+            tenantId: endpoint.tenantId || selectedTenant,
+            endpointName: endpoint.id,
+            penalty: 0
           });
         }
       }
@@ -1349,7 +1370,7 @@ const QueuesManager = () => {
     if (!window.confirm('Retirer cet agent ?')) return;
     try {
       await apiCall(
-        `/api/queues/${selectedQueue}/members/${encodeURIComponent(
+        `/queues/${selectedQueue}/members/${encodeURIComponent(
           memberInterface
         )}`,
         'DELETE'
@@ -1367,7 +1388,7 @@ const QueuesManager = () => {
         ...queueForm,
         tenant_id: selectedTenant
       };
-      await apiCall('/api/queues', 'POST', queueData);
+      await apiCall('/queues', 'POST', queueData);
       setShowCreateQueue(false);
       setQueueForm({
         name: '',
@@ -1388,7 +1409,7 @@ const QueuesManager = () => {
   const handleEditQueue = async e => {
     e.preventDefault();
     try {
-      await apiCall(`/api/queues/${queueForm.name}`, 'PUT', queueForm);
+      await apiCall(`/queues/${queueForm.name}`, 'PATCH', queueForm);
       setShowEditQueue(false);
       loadQueues();
       alert('Queue modifiée avec succès !');
@@ -1400,7 +1421,7 @@ const QueuesManager = () => {
   const handleDeleteQueue = async queueName => {
     if (!window.confirm(`Supprimer définitivement la queue "${queueName}" ?`)) return;
     try {
-      await apiCall(`/api/queues/${queueName}`, 'DELETE');
+      await apiCall(`/queues/${queueName}`, 'DELETE');
       if (selectedQueue === queueName) {
         setSelectedQueue(null);
       }
@@ -1484,10 +1505,27 @@ const QueuesManager = () => {
                 }`}
               >
                 <div
-                  onClick={() => setSelectedQueue(queue.name)}
+                  onClick={() => {
+                    setSelectedQueue(queue.name);
+                    loadMembers(queue.name);
+                    loadWaitingCalls(queue.name);
+                  }}
                   className="cursor-pointer"
                 >
-                  <div className="font-bold text-lg">{queue.name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-bold text-lg">{queue.name}</div>
+                    {queue.visual_state && queue.visual_state !== 'idle' && (
+                      <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                        queue.visual_state === 'critical' ? 'bg-red-500 text-white animate-pulse' :
+                        queue.visual_state === 'busy' ? 'bg-orange-500 text-white' :
+                        queue.visual_state === 'active' ? 'bg-green-500 text-white' : ''
+                      }`}>
+                        {queue.visual_state === 'critical' ? '🔥 CRITIQUE' :
+                         queue.visual_state === 'busy' ? '⚠️ CHARGÉ' :
+                         queue.visual_state === 'active' ? '✓ ACTIF' : ''}
+                      </span>
+                    )}
+                  </div>
                   <div
                     className={`text-sm mt-1 ${
                       selectedQueue === queue.name
@@ -1495,7 +1533,8 @@ const QueuesManager = () => {
                         : 'text-gray-500'
                     }`}
                   >
-                    {queue.strategy} • {queue.member_count} agents
+                    {queue.strategy} • {queue.members_total || queue.member_count || 0} agents
+                    {queue.calls_waiting > 0 && ` • ${queue.calls_waiting} en attente`}
                   </div>
                 </div>
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -1530,7 +1569,7 @@ const QueuesManager = () => {
             <>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-gray-900">
-                  Agents de {selectedQueue}
+                  Queue: {selectedQueue}
                 </h2>
                 <button
                   onClick={() => {
@@ -1543,6 +1582,66 @@ const QueuesManager = () => {
                   Ajouter Agent
                 </button>
               </div>
+
+              {/* Statistiques en temps réel de la queue */}
+              {(() => {
+                const currentQueue = queues.find(q => q.name === selectedQueue);
+                return currentQueue && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
+                      <p className="text-xs text-blue-600 font-semibold uppercase">En attente</p>
+                      <p className="text-2xl font-bold text-blue-900">{currentQueue.calls_waiting || 0}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                      <p className="text-xs text-green-600 font-semibold uppercase">Disponibles</p>
+                      <p className="text-2xl font-bold text-green-900">{currentQueue.members_available || 0}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-xl border border-yellow-200">
+                      <p className="text-xs text-yellow-600 font-semibold uppercase">En appel</p>
+                      <p className="text-2xl font-bold text-yellow-900">{currentQueue.members_in_call || 0}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200">
+                      <p className="text-xs text-purple-600 font-semibold uppercase">Complétés</p>
+                      <p className="text-2xl font-bold text-purple-900">{currentQueue.calls_completed || 0}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-xl border border-red-200">
+                      <p className="text-xs text-red-600 font-semibold uppercase">Abandonnés</p>
+                      <p className="text-2xl font-bold text-red-900">{currentQueue.calls_abandoned || 0}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Appels en attente */}
+              {waitingCalls.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">
+                    📞 Appels en attente ({waitingCalls.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {waitingCalls.map((call, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl border border-orange-200"
+                      >
+                        <div>
+                          <div className="font-bold text-gray-900">
+                            Position {call.position} - {call.caller_id_name || call.caller_id_num}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {call.caller_id_num} • Attente: {Math.floor(call.wait_time / 60)}m {call.wait_time % 60}s
+                          </div>
+                        </div>
+                        <div className="text-orange-600 font-bold">
+                          ⏱️ {call.wait_time}s
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Agents ({members.length})</h3>
               <div className="space-y-4">
                 {members.map(member => (
                   <div
@@ -1554,25 +1653,26 @@ const QueuesManager = () => {
                         className={`w-4 h-4 rounded-full shadow-lg ${
                           member.paused
                             ? 'bg-yellow-500'
-                            : member.available
+                            : (member.available || member.detailed_status === 'available')
                             ? 'bg-green-500'
                             : 'bg-red-500'
                         } animate-pulse`}
                         title={
                           member.paused
                             ? 'En pause'
-                            : member.available
+                            : (member.available || member.detailed_status === 'available')
                             ? 'Disponible'
                             : 'Déconnecté'
                         }
                       ></div>
                       <div>
                         <div className="font-bold text-gray-900">
-                          {member.membername}
+                          {member.member_name || member.membername}
                         </div>
                         <div className="text-sm text-gray-600">
                           {member.interface} • Priorité: {member.penalty}
-                          {member.in_call > 0 && ' • 📞 En appel'}
+                          {(member.in_call || member.detailed_status === 'in_call') && ' • 📞 En appel'}
+                          {member.calls_taken > 0 && ` • ${member.calls_taken} appels traités`}
                         </div>
                       </div>
                     </div>

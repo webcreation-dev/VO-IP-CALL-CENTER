@@ -189,7 +189,7 @@ export class EndpointsService {
    * @returns Paginated endpoints with metadata
    */
   async findAll(
-    tenantId: number | null,
+    tenantId: number,
     filter?: EndpointFilterDto,
   ): Promise<{ data: PsEndpoint[]; total: number; page: number; limit: number }> {
     const page = filter?.page || 1;
@@ -268,20 +268,11 @@ export class EndpointsService {
    * @returns Endpoint
    * @throws NotFoundException if endpoint not found
    */
-  async findOne(tenantId: number | null, displayName: string): Promise<PsEndpoint> {
-    // TEST MODE: if tenantId is null, search by ID directly (no prefix)
-    let endpoint: PsEndpoint | null;
-    
-    if (tenantId === null) {
-      endpoint = await this.endpointRepository.findOne({
-        where: { id: displayName }, // Use displayName param as direct ID
-      });
-    } else {
-      const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
-      endpoint = await this.endpointRepository.findOne({
-        where: { id: prefixedId, tenantId },
-      });
-    }
+  async findOne(tenantId: number, displayName: string): Promise<PsEndpoint> {
+    const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
+    const endpoint = await this.endpointRepository.findOne({
+      where: { id: prefixedId, tenantId },
+    });
 
     if (!endpoint) {
       throw new NotFoundException(
@@ -299,7 +290,7 @@ export class EndpointsService {
    * @param displayName - Endpoint display name
    * @returns Endpoint with status
    */
-  async findOneWithStatus(tenantId: number | null, displayName: string) {
+  async findOneWithStatus(tenantId: number, displayName: string) {
     const endpoint = await this.findOne(tenantId, displayName);
 
     // Try to get real-time status from AMI
@@ -349,7 +340,7 @@ export class EndpointsService {
    * @returns All endpoints with AMI enrichment
    */
   async findAllEnriched(
-    tenantId: number | null,
+    tenantId: number,
     filter?: EndpointFilterDto,
   ) {
     // Get all endpoints from DB
@@ -400,7 +391,7 @@ export class EndpointsService {
   /**
    * ADDED - Get endpoint with complete AMI details (like old project)
    */
-  async getEndpointDetails(tenantId: number | null, displayName: string) {
+  async getEndpointDetails(tenantId: number, displayName: string) {
     const endpoint = await this.findOne(tenantId, displayName);
     
     try {
@@ -433,7 +424,7 @@ export class EndpointsService {
   /**
    * ADDED - Force disconnect an endpoint (like old project)
    */
-  async forceDisconnect(tenantId: number | null, displayName: string) {
+  async forceDisconnect(tenantId: number, displayName: string) {
     const endpoint = await this.findOne(tenantId, displayName);
     
     try {
@@ -474,7 +465,7 @@ export class EndpointsService {
    * @returns Updated endpoint
    */
   async update(
-    tenantId: number | null,
+    tenantId: number,
     displayName: string,
     dto: UpdateEndpointDto,
   ): Promise<PsEndpoint> {
@@ -555,7 +546,7 @@ export class EndpointsService {
    * @param tenantId - Tenant ID
    * @param displayName - Endpoint display name
    */
-  async remove(tenantId: number | null, displayName: string): Promise<void> {
+  async remove(tenantId: number, displayName: string): Promise<void> {
     // Check if endpoint exists first
     const endpoint = await this.findOne(tenantId, displayName);
     const prefixedId = endpoint.id; // Use actual ID from found endpoint

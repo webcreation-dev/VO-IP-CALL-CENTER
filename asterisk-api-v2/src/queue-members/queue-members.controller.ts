@@ -37,12 +37,10 @@ export class QueueMembersController {
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiResponse({ status: 201, description: 'Member added successfully' })
   async addMember(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
     @Body() dto: AddMemberDto,
   ) {
-    // TEST MODE: use tenantId from DTO or default 1
-    const tenantId = dto.tenantId || 1;
     return await this.membersService.addMember(tenantId, queueName, dto);
   }
 
@@ -51,11 +49,10 @@ export class QueueMembersController {
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiResponse({ status: 200, description: 'Members retrieved' })
   async findAll(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
   ) {
-    // TEST MODE
-    return await this.membersService.findAll(null, queueName);
+    return await this.membersService.findAll(tenantId, queueName);
   }
 
   @Get('enriched')
@@ -67,11 +64,10 @@ export class QueueMembersController {
     type: [EnrichedMemberDto],
   })
   async getAllEnriched(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
   ) {
-    // TEST MODE
-    return await this.membersService.findAllEnriched(null, queueName);
+    return await this.membersService.findAllEnriched(tenantId, queueName);
   }
 
   @Patch(':memberName/pause')
@@ -81,12 +77,11 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member paused' })
   async pause(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {
-    // TEST MODE
-    await this.membersService.pause(null, queueName, memberName);
+    await this.membersService.pause(tenantId, queueName, memberName);
     return { message: 'Member paused successfully' };
   }
 
@@ -97,12 +92,11 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member unpaused' })
   async unpause(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {
-    // TEST MODE
-    await this.membersService.unpause(null, queueName, memberName);
+    await this.membersService.unpause(tenantId, queueName, memberName);
     return { message: 'Member unpaused successfully' };
   }
 
@@ -113,14 +107,14 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member updated' })
   async update(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
     @Body() dto: UpdateMemberDto,
   ) {
     if (dto.penalty !== undefined) {
       await this.membersService.updatePenalty(
-        null,
+        tenantId,
         queueName,
         memberName,
         dto.penalty,
@@ -137,11 +131,10 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 204, description: 'Member removed' })
   async remove(
-    // @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {
-    // TEST MODE
-    await this.membersService.removeMember(null, queueName, memberName);
+    await this.membersService.removeMember(tenantId, queueName, memberName);
   }
 }

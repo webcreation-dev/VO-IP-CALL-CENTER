@@ -15,6 +15,7 @@ import { Cdr } from '../cdr/entities/cdr.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { CacheService } from '../core/cache/cache.service';
+import { TenantContextsService } from '../tenant-contexts/tenant-contexts.service';
 import {
   generateContextName,
   generateUniqueContextName,
@@ -56,6 +57,7 @@ export class TenantsService {
     @InjectRepository(Cdr)
     private readonly cdrRepository: Repository<Cdr>,
     private readonly cacheService: CacheService,
+    private readonly tenantContextsService: TenantContextsService,
   ) {}
 
   /**
@@ -97,35 +99,41 @@ export class TenantsService {
     //   ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
     //   : { ...DEFAULT_DIALPLAN_CONFIG };
 
-    // Create tenant - SIMPLIFIED FOR TESTING (missing DB columns)
+    // Use provided dialplan config or defaults
+    const dialplanConfig: DialplanConfig = dto.dialplanConfig
+      ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
+      : { ...DEFAULT_DIALPLAN_CONFIG };
+
+    // Create tenant with ALL columns
     const tenant = this.tenantRepository.create({
       name: dto.name,
-      // companyName: dto.companyName,  // COLUMN MISSING IN DB
-      // contactEmail: dto.contactEmail,  // COLUMN MISSING IN DB
-      // contactPhone: dto.contactPhone,  // COLUMN MISSING IN DB
-      // address: dto.address,  // COLUMN MISSING IN DB
-      // city: dto.city,  // COLUMN MISSING IN DB
-      // country: dto.country,  // COLUMN MISSING IN DB
-      // timezone: dto.timezone || 'UTC',  // COLUMN MISSING IN DB
-      // maxEndpoints: dto.maxEndpoints || 100,  // COLUMN MISSING IN DB
-      // maxQueues: dto.maxQueues || 50,  // COLUMN MISSING IN DB
+      companyName: dto.companyName,
+      contactEmail: dto.contactEmail,
+      contactPhone: dto.contactPhone,
+      address: dto.address,
+      city: dto.city,
+      country: dto.country,
+      timezone: dto.timezone || 'UTC',
+      maxEndpoints: dto.maxEndpoints || 100,
+      maxQueues: dto.maxQueues || 50,
       context: contextName,
-      // dialplanConfig: dialplanConfig,  // COLUMN MISSING IN DB
-      // isActive: true,  // COLUMN MISSING IN DB
+      dialplanConfig: dialplanConfig,
+      isActive: true,
     });
 
     const saved = await this.tenantRepository.save(tenant);
 
-    // COMMENTED - Extensions table missing columns - UNCOMMENT FOR PRODUCTION
-    // // Generate default extensions
-    // await this.generateDefaultExtensions(saved.id, contextName, dialplanConfig);
-
-    // Invalidate cache
-    await this.cacheService.del('tenants:list');
+    // Create primary context automatically
+    await this.tenantContextsService.createPrimaryContext(saved.id);
 
     this.logger.log(
       `Created tenant: ${dto.name} (ID: ${saved.id}, Context: ${contextName})`,
     );
+    this.logger.log(`Created primary context: ${contextName}`);
+
+    // Invalidate cache
+    await this.cacheService.del('tenants:list');
+
     return saved;
   }
 
@@ -155,11 +163,10 @@ export class TenantsService {
     // Query database
     const query = this.tenantRepository.createQueryBuilder('tenant');
 
-    // COMMENTED - COLUMN MISSING IN DB
-    // // Filter by active status unless includeInactive is true
-    // if (!includeInactive) {
-    //   query.where('tenant.is_active = :isActive', { isActive: true });
-    // }
+    // Filter by active status unless includeInactive is true
+    if (!includeInactive) {
+      query.where('tenant.is_active = :isActive', { isActive: true });
+    }
 
     query.orderBy('tenant.name', 'ASC');
 

@@ -75,11 +75,10 @@ export class PsAuth {
   @Column({ name: 'nonce_lifetime', type: 'integer', nullable: true, default: 32 })
   nonceLifetime: number;
 
-  // COMMENTED - COLUMNS DON'T EXIST IN DB - UNCOMMENT FOR PRODUCTION
-  // // Timestamps (added by migration, not part of original Asterisk table)
-  // @CreateDateColumn({ name: 'created_at', nullable: true })
-  // createdAt: Date;
-  //
-  // @UpdateDateColumn({ name: 'updated_at', nullable: true })
-  // updatedAt: Date;
+  // Timestamps (added by migration, not part of original Asterisk table)
+  @CreateDateColumn({ name: 'created_at', nullable: true })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', nullable: true })
+  updatedAt: Date;
 }

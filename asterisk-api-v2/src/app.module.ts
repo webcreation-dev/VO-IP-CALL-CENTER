@@ -84,15 +84,14 @@ import { IvrModule } from './ivr/ivr.module';
     AppService,
 
     // Global Guards (applied in order)
-    // TEMPORARILY DISABLED FOR TESTING - RE-ENABLE AFTER MIGRATION COMPLETE
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: JwtAuthGuard, // 1. JWT authentication (respects @Public())
-    // },
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: RolesGuard, // 2. Role-based access control (after JWT auth)
-    // },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard, // 1. JWT authentication (respects @Public())
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard, // 2. Role-based access control (after JWT auth)
+    },
 
     // Global Interceptors
     {
