@@ -18,6 +18,9 @@ import TenantsPage from '@/pages/tenants/TenantsPage';
 // Users
 import UsersPage from '@/pages/users/UsersPage';
 
+// Contexts
+import ContextsPage from '@/pages/contexts/ContextsPage';
+
 // Create QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,12 +73,7 @@ function App() {
             {/* Contexts */}
             <Route
               path="/contexts"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold">Gestion des Contextes</h2>
-                  <p className="text-gray-600 mt-2">Module en cours de développement...</p>
-                </div>
-              }
+              element={<ContextsPage />}
             />
 
             {/* Endpoints */}

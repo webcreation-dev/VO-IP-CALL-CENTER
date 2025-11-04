@@ -60,7 +60,7 @@ services:
     image: postgres:14
     container_name: asterisk-api-postgres
     environment:
-    
+
       POSTGRES_DB: "asterisk_api"
       POSTGRES_USER: "api_user"
       POSTGRES_PASSWORD: "ApiSecurePass2025!"
@@ -138,7 +138,7 @@ services:
       LOG_LEVEL: debug
       LOG_DIR: logs
       # Swagger
-      SWAGGER_ENABLED: true
+      SWAGGER_ENABLED: "true"
       # Asterisk Paths
       ASTERISK_SOUNDS_PATH: /var/lib/asterisk/sounds/custom
       ASTERISK_RECORDINGS_PATH: /var/spool/asterisk/monitor
