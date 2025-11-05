@@ -1,3 +1,134 @@
+⏺ 🏗️ Architecture Multi-Tenant Complète - Asterisk API v2
+
+  1️⃣ Architecture Multi-Tenant et Gestion des Contextes
+
+  Le système implémente une isolation complète par tenant utilisant le pattern de nommage
+  t{tenantId}_{resourceName}. Chaque tenant possède au minimum un contexte primaire créé
+  automatiquement lors de sa création (par exemple company1_context pour le tenant "company1"), mais
+   peut avoir plusieurs contextes additionnels pour des cas d'usage spécifiques. Par exemple, un
+  tenant peut avoir un contexte principal pour les appels internes (company1_context), un contexte
+  IVR (company1_ivr), un contexte pour les appels externes (company1_external), et un contexte pour
+  les conférences (company1_conference). Cette séparation permet une gestion granulaire des 
+  permissions et du routage : les endpoints peuvent être configurés pour démarrer dans un contexte
+  spécifique, et le dialplan peut transférer un appel d'un contexte à un autre selon la logique
+  métier. Dans PostgreSQL, la table tenant_contexts stocke tous ces contextes avec les champs
+  tenant_id, name, description, et is_primary, ce qui permet de tracer facilement tous les contextes
+   d'un tenant et de les gérer via l'API avec des endpoints dédiés.
+
+  2️⃣ Dialplan Dynamique via Asterisk Realtime
+
+  Le dialplan est entièrement dynamique et stocké dans PostgreSQL grâce à la technologie Asterisk 
+  Realtime configurée avec ODBC. Au lieu d'avoir un fichier extensions.conf statique, toutes les
+  règles de routage sont dans la table extensions avec les colonnes context, exten, priority, app,
+  et appdata. Lorsqu'un appel arrive dans Asterisk, le moteur de dialplan interroge directement 
+  PostgreSQL via la connexion ODBC pour récupérer les extensions correspondantes dans le bon
+  contexte. Par exemple, si un endpoint t1_101 enregistré dans le contexte company1_context compose
+  le numéro 102, Asterisk exécute une requête SQL du type SELECT * FROM extensions WHERE context = 
+  'company1_context' AND exten = '102' ORDER BY priority, récupère les lignes (priority 1: Dial,
+  priority 2: Voicemail, etc.), et les exécute séquentiellement. Cette approche permet de modifier 
+  le routage sans redémarrer Asterisk : dès qu'une extension est ajoutée via l'API avec un POST
+  /extensions, elle est immédiatement disponible pour le prochain appel. Le backend NestJS gère la
+  création/modification/suppression des extensions tout en respectant l'isolation par tenant en
+  vérifiant que le contexte appartient bien au tenant de l'utilisateur connecté.
+
+  3️⃣ Endpoints PJSIP et Isolation Multi-Tenant
+
+  Les endpoints SIP utilisent le protocole PJSIP (la stack SIP moderne d'Asterisk) et sont stockés
+  dans trois tables liées : ps_endpoints (configuration endpoint), ps_auths (authentification), et
+  ps_aors (Address of Record pour l'enregistrement). Chaque endpoint porte un identifiant unique 
+  préfixé par le tenant : par exemple, l'utilisateur "101" du tenant 1 devient t1_101 dans Asterisk.
+   Dans ps_endpoints, l'endpoint t1_101 est configuré avec le champ context = 'company1_context', ce
+   qui signifie que tous les appels sortants de cet endpoint commencent dans ce contexte. L'API
+  NestJS, via le service EndpointsService, crée ces trois entités de manière atomique dans une 
+  transaction : quand on fait POST /endpoints avec {username: "101", password: "SecurePass", 
+  context: "company1_context"}, le backend crée simultanément l'endpoint t1_101 dans ps_endpoints,
+  l'auth t1_101 dans ps_auths avec le hash du password, et l'AoR t1_101 dans ps_aors avec
+  max_contacts=1. Grâce au Realtime PJSIP, dès que l'endpoint s'enregistre sur Asterisk, le serveur
+  lit sa configuration depuis PostgreSQL en temps réel, sans besoin de reload.
+
+  4️⃣ Queues (Files d'Attente) et Membres
+
+  Les queues suivent le même pattern de préfixage : la queue "support" du tenant 1 devient
+  t1_support dans Asterisk. Elles sont stockées dans la table queues avec des champs comme strategy
+  (ringall, leastrecent, fewestcalls), timeout, retry, maxlen, et wrapuptime. Les membres de la 
+  queue sont dans la table queue_members avec les colonnes queue_name, interface, membername,
+  penalty, et paused. Par exemple, pour ajouter l'endpoint t1_101 à la queue t1_support, on insère
+  une ligne avec {queue_name: 't1_support', interface: 'PJSIP/t1_101', membername: '101', penalty: 
+  0}. Contrairement aux endpoints PJSIP qui sont chargés via Realtime, les queues nécessitent 
+  parfois un reload car Asterisk les charge en mémoire au démarrage. L'API expose donc un endpoint
+  POST /queues/:name/reload qui exécute la commande AMI module reload app_queue.so pour recharger
+  uniquement le module des queues sans redémarrer Asterisk. Les statistiques des queues (calls
+  waiting, members available, holdtime) sont récupérées en temps réel via AMI avec les commandes
+  QueueStatus et QueueSummary, ce qui permet à l'API de fournir des endpoints enrichis comme GET
+  /queues/enriched qui combine données PostgreSQL + statistiques AMI.
+
+  5️⃣ Flux d'Appel Complet et Routage Multi-Contexte
+
+  Prenons un scénario complet : un client appelle le numéro DID +33123456789 qui est mappé à un menu
+   IVR du tenant 1. Voici le flux : 1) L'appel arrive sur Asterisk dans un contexte d'entrée
+  générique, 2) Asterisk consulte la table ivr_did_mappings pour trouver le menu IVR associé au DID,
+   3) L'appel est transféré dans le contexte company1_ivr où le dialplan joue le fichier audio de
+  bienvenue stocké dans ivr_menus.welcome_sound, 4) L'appelant tape "1" pour le support, 5) Le
+  dialplan consulte ivr_options pour trouver l'action associée au digit "1" (type: 'queue', target:
+  'support'), 6) L'appel est transféré dans company1_context et placé dans la queue t1_support avec
+  l'application Queue(t1_support,t,,,60), 7) Asterisk consulte queue_members pour trouver les agents
+   disponibles (t1_101, t1_102), 8) La stratégie "ringall" fait sonner tous les endpoints
+  simultanément via Dial(PJSIP/t1_101&PJSIP/t1_102), 9) L'agent 101 répond, la conversation
+  commence, 10) Si l'agent veut transférer vers l'agent 103, le dialplan exécute Transfer en restant
+   dans company1_context, garantissant qu'il ne peut jamais atteindre les endpoints d'un autre
+  tenant. L'isolation est complète car chaque tenant a ses propres contextes, et le dialplan
+  interdit explicitement les sauts inter-contextes entre tenants différents.
+
+  6️⃣ Synchronisation Temps Réel : AMI, ARI et Enrichissement
+
+  L'API maintient une synchronisation bidirectionnelle entre PostgreSQL (source de vérité) et
+  Asterisk (runtime) via deux interfaces : AMI (Asterisk Manager Interface) pour le monitoring et le
+   contrôle, et ARI (Asterisk REST Interface) pour la gestion avancée des canaux. Le backend NestJS
+  se connecte à AMI (port 5038) dès le démarrage et écoute les événements en temps réel (PeerStatus,
+   QueueMemberAdded, QueueCallerJoin, etc.) pour mettre à jour les caches Redis et notifier les
+  clients WebSocket. Par exemple, quand un endpoint t1_101 s'enregistre, Asterisk envoie un
+  événement AMI PeerStatus que le backend capte et utilise pour mettre à jour le statut dans Redis
+  avec TTL de 60 secondes. Les endpoints enrichis (GET /endpoints/enriched/all) combinent les
+  données de PostgreSQL avec l'état en direct d'AMI en exécutant PJSIPShowEndpoints, parsant la
+  réponse, et fusionnant les données : on obtient ainsi {id: 't1_101', displayName: '101', callerid:
+   'John Doe', deviceState: 'Not in use', contact: 'sip:101@192.168.1.10:5060', latency: '15ms'}.
+  Pour les queues, GET /queues/support/details fusionne queues (config PostgreSQL), queue_members
+  (membres), et QueueStatus AMI (stats temps réel : calls=3, members=5, holdtime=45s). ARI est
+  utilisé pour les opérations de contrôle d'appel : originate (POST /channels/originate),
+  hold/unhold, mute, transfer, permettant au frontend de créer des softphones web ou des interfaces
+  de supervision.
+
+  7️⃣ Avantages et Limitations de cette Architecture
+
+  Cette architecture offre des avantages majeurs : 1) Isolation parfaite - chaque tenant est dans sa
+   bulle, impossible d'interférer avec un autre, 2) Évolutivité - ajouter un nouveau tenant ne
+  nécessite qu'une insertion en base, pas de modification de configuration Asterisk, 3) Flexibilité
+  - chaque tenant peut avoir son propre dialplan, ses propres stratégies de queue, ses propres menus
+   IVR, sans impacter les autres, 4) Monitoring granulaire - les statistiques sont séparées par
+  tenant, facilitant la facturation et le SLA, 5) Configuration dynamique - modifier une extension
+  ou un endpoint se fait via API REST sans éditer de fichiers, 6) Haute disponibilité - PostgreSQL
+  peut être répliqué, Asterisk peut être en cluster avec la base comme source de vérité partagée.
+  Les limitations incluent : 1) Performance - Asterisk doit interroger PostgreSQL pour chaque lookup
+   d'extension (mitigé par le caching Asterisk), 2) Complexité - déboguer un problème d'appel
+  nécessite de comprendre le flow API → PostgreSQL → ODBC → Asterisk → AMI, 3) Reload des queues -
+  contrairement aux endpoints, les queues ne sont pas fully realtime et nécessitent parfois un
+  reload, 4) Scalabilité horizontale - avec Realtime, tous les Asterisk doivent pointer vers le même
+   PostgreSQL (solvable avec read-replicas), 5) Vendor lock-in - cette architecture est spécifique à
+   Asterisk avec Realtime, migrer vers un autre PBX nécessiterait une refonte complète.
+
+  ---
+  En résumé : l'API crée une couche d'abstraction RESTful au-dessus d'Asterisk, où PostgreSQL est la
+   source de vérité, Asterisk Realtime lit la config en temps réel, AMI fournit le monitoring, et le
+   préfixage par tenant garantit l'isolation. Le résultat est un PBX multi-tenant moderne, 
+  programmable via API, avec une séparation complète des données comparable aux solutions cloud
+  comme Twilio ou Vonage, mais self-hosted et open-source.
+
+
+  
+
+  
+
+
 # API Documentation - Asterisk Call Center Backend
 
 **Base URL**: `http://localhost:3001/api/v1`

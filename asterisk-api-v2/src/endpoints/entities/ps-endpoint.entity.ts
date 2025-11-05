@@ -106,6 +106,68 @@ export class PsEndpoint {
   @Column({ name: 'mailboxes', length: 100, nullable: true })
   mailboxes: string;
 
+  // ========== WebRTC Support Fields ==========
+
+  // Enable WebRTC support (shortcut that enables multiple WebRTC options)
+  @Column({ length: 3, nullable: true, default: 'no' })
+  webrtc: string;
+
+  // Use AVPF (Audio-Visual Profile with Feedback) for better real-time performance
+  @Column({ name: 'use_avpf', length: 3, nullable: true, default: 'no' })
+  useAvpf: string;
+
+  // Media encryption type (none, sdes, dtls)
+  @Column({ name: 'media_encryption', length: 20, nullable: true })
+  mediaEncryption: string;
+
+  // DTLS certificate verification method (no, fingerprint, certificate)
+  @Column({ name: 'dtls_verify', length: 20, nullable: true })
+  dtlsVerify: string;
+
+  // DTLS setup role (active, passive, actpass)
+  @Column({ name: 'dtls_setup', length: 20, nullable: true })
+  dtlsSetup: string;
+
+  // Path to DTLS certificate file
+  @Column({ name: 'dtls_cert_file', length: 200, nullable: true })
+  dtlsCertFile: string;
+
+  // Path to DTLS private key file
+  @Column({ name: 'dtls_private_key', length: 200, nullable: true })
+  dtlsPrivateKey: string;
+
+  // Path to DTLS CA file
+  @Column({ name: 'dtls_ca_file', length: 200, nullable: true })
+  dtlsCaFile: string;
+
+  // Enable RTP/RTCP multiplexing (required for WebRTC)
+  @Column({ name: 'rtcp_mux', length: 3, nullable: true, default: 'no' })
+  rtcpMux: string;
+
+  // Enable symmetric RTP (send RTP to source address of incoming RTP)
+  @Column({ name: 'rtp_symmetric', length: 3, nullable: true, default: 'no' })
+  rtpSymmetric: string;
+
+  // Force rport (use received address/port in Via for responses)
+  @Column({ name: 'force_rport', length: 3, nullable: true, default: 'no' })
+  forceRport: string;
+
+  // Rewrite Contact header with source address/port
+  @Column({ name: 'rewrite_contact', length: 3, nullable: true, default: 'no' })
+  rewriteContact: string;
+
+  // Method to identify endpoint (username, auth_username, ip, header)
+  @Column({ name: 'identify_by', length: 80, nullable: true, default: 'username' })
+  identifyBy: string;
+
+  // Enable bundle (media stream multiplexing for WebRTC)
+  @Column({ length: 3, nullable: true, default: 'no' })
+  bundle: string;
+
+  // Enable session timers
+  @Column({ length: 3, nullable: true, default: 'yes' })
+  timers: string;
+
   // Endpoint device state (computed by Asterisk, not stored)
   // This will be enriched from AMI real-time data
 

@@ -94,7 +94,12 @@ export class EndpointsService {
       );
     }
 
-    // Generate prefixed ID
+    // Detect WebRTC endpoint (transport-wss)
+    const isWebRTC = dto.transport === 'transport-wss';
+
+    // Generate prefixed ID for multi-tenant isolation
+    // ALL endpoints (WebRTC and non-WebRTC) use prefixed IDs
+    // Tenant isolation is guaranteed by the prefix in the ID
     const prefixedId = TenantPrefixUtil.addPrefix(tenantId, dto.username);
 
     // Check if endpoint already exists
@@ -114,41 +119,59 @@ export class EndpointsService {
     await queryRunner.startTransaction();
 
     try {
-      // Create endpoint
+      // Create endpoint with WebRTC-specific settings
       const endpoint = this.endpointRepository.create({
         id: prefixedId,
-        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
         tenantId,
         transport: dto.transport || 'transport-udp',
-        aors: prefixedId, // Reference to AoR
-        auth: prefixedId, // Reference to Auth
+        aors: prefixedId, // Reference to AoR (always prefixed)
+        auth: prefixedId, // Reference to Auth (always prefixed)
         context: dto.context || 'default',
         disallow: 'all',
-        allow: dto.codecs || 'ulaw,alaw',
-        directMedia: dto.directMedia || 'yes',
+        allow: dto.codecs || (isWebRTC ? 'opus,ulaw,alaw,g722' : 'ulaw,alaw'),
+        directMedia: isWebRTC ? 'no' : (dto.directMedia || 'yes'),
         dtmfMode: dto.dtmfMode || 'rfc4733',
-        callerid: dto.callerid,
+        callerid: dto.callerid || (isWebRTC ? `"WebRTC User ${dto.username}" <${dto.username}>` : undefined),
         mailboxes: dto.mailboxes,
+
+        // WebRTC-specific fields
+        ...(isWebRTC && {
+          webrtc: 'yes',
+          useAvpf: 'yes',
+          mediaEncryption: 'dtls',
+          dtlsVerify: 'fingerprint',
+          dtlsSetup: 'actpass',
+          iceSupport: 'yes',
+          rtcpMux: 'yes',
+          rtpSymmetric: 'yes',
+          forceRport: 'yes',
+          rewriteContact: 'yes',
+          dtlsCertFile: '/var/lib/asterisk/keys/fullchain.pem',
+          dtlsPrivateKey: '/var/lib/asterisk/keys/privkey.pem',
+          identifyBy: 'username', // CRITICAL: Asterisk matches by auth.username (without prefix)
+          bundle: 'yes',
+          timers: 'yes',
+        }),
       });
       await queryRunner.manager.save(endpoint);
 
       // Create auth
       const auth = this.authRepository.create({
-        id: prefixedId,
-        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
+        id: prefixedId, // Auth ID is prefixed (e.g., 't1_203')
         tenantId,
         authType: 'userpass',
-        username: dto.username,
+        username: dto.username, // CRITICAL: Username is NOT prefixed (e.g., '203')
         password: dto.password,
+        realm: 'asterisk', // CRITICAL: Must match Asterisk's default realm
       });
       await queryRunner.manager.save(auth);
 
       // Create AoR
       const aor = this.aorRepository.create({
         id: prefixedId,
-        // displayName: dto.username,  // COLUMN DOESN'T EXIST IN DB
         tenantId,
         maxContacts: dto.maxContacts || 1,
+        removeExisting: isWebRTC ? 'yes' : 'no', // WebRTC endpoints should remove existing contacts
         mailboxes: dto.mailboxes,
       });
       await queryRunner.manager.save(aor);
