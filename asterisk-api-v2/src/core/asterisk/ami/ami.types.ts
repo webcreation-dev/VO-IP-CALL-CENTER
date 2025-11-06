@@ -104,3 +104,14 @@ export enum DeviceState {
   RINGINUSE = 'Ring+Inuse',
   ONHOLD = 'On Hold',
 }
+
+/**
+ * PJSIP Transport Info
+ */
+export interface TransportInfo {
+  id: string;
+  protocol: string;
+  bind: string;
+  externalMediaAddress?: string;
+  externalSignalingAddress?: string;
+}

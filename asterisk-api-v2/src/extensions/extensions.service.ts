@@ -135,8 +135,12 @@ export class ExtensionsService {
     const query = this.extensionRepository.createQueryBuilder('extension');
 
     // Tenant isolation
-    query.where('extension.tenantId = :tenantId', { tenantId });
+    //query.where('extension.tenantId = :tenantId', { tenantId: tenantId ?? -1 });
 
+    if (tenantId !== null) {
+      query.where('extension.tenantId = :tenantId', { tenantId });
+    }
+    
     // Apply filters
     if (filter?.context) {
       query.andWhere('extension.context = :context', {

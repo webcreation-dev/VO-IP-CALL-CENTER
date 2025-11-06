@@ -126,6 +126,9 @@ export class TenantsService {
     // Create primary context automatically
     await this.tenantContextsService.createPrimaryContext(saved.id);
 
+    // Generate default extensions based on dialplan config
+    await this.generateDefaultExtensions(saved.id, contextName, dialplanConfig);
+
     this.logger.log(
       `Created tenant: ${dto.name} (ID: ${saved.id}, Context: ${contextName})`,
     );
@@ -415,6 +418,7 @@ export class TenantsService {
    * @param config - Dialplan configuration
    * @private
    */
+
   private async generateDefaultExtensions(
     tenantId: number,
     context: string,
@@ -431,7 +435,7 @@ export class TenantsService {
           exten: config.internalDialPattern,
           priority: 1,
           app: 'Dial',
-          appdata: `PJSIP/\${EXTEN},${config.internalDialTimeout}`,
+          appdata: `PJSIP/t${tenantId}_\${EXTEN},${config.internalDialTimeout}`,
         },
         {
           tenantId,

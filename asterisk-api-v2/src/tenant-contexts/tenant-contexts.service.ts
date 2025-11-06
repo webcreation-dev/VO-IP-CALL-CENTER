@@ -82,6 +82,11 @@ export class TenantContextsService {
    * Find all contexts for a tenant
    */
   async findAll(tenantId: number): Promise<TenantContext[]> {
+    if (!tenantId || tenantId === -1) {
+      return await this.tenantContextRepo.find({
+        order: { isPrimary: 'DESC', name: 'ASC' },
+      });
+    }
     return await this.tenantContextRepo.find({
       where: { tenantId },
       order: { isPrimary: 'DESC', name: 'ASC' },

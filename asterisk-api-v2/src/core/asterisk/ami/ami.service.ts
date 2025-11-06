@@ -7,6 +7,7 @@ import {
   QueueStatusResult,
   QueueMember,
   EndpointStatusResult,
+  TransportInfo,
 } from './ami.types';
 import { AMI_ACTIONS, AMI_EVENTS, AMI_TIMEOUTS } from './ami.constants';
 
@@ -566,5 +567,90 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
     } catch {
       return false;
     }
+  }
+
+  // ========================================
+  // PJSIP TRANSPORT OPERATIONS
+  // ========================================
+
+  /**
+   * Get configured PJSIP transports
+   * Uses CLI command since there's no dedicated AMI action for transports
+   *
+   * @returns Array of configured transports
+   */
+  async getPJSIPTransports(): Promise<TransportInfo[]> {
+    try {
+      const output = await this.executeCommand('pjsip show transports');
+      return this.parseTransportsCliOutput(output);
+    } catch (error) {
+      this.logger.error('Failed to get PJSIP transports:', error.message);
+      throw new Error('Failed to retrieve PJSIP transports from Asterisk');
+    }
+  }
+
+  /**
+   * Parse CLI output from "pjsip show transports"
+   *
+   * Expected format:
+   * Transport:  <transport-udp>
+   *  type                   : transport
+   *  protocol               : udp
+   *  bind                   : 0.0.0.0:5060
+   *  external_media_address : 161.97.106.134
+   *  external_signaling_address: 161.97.106.134
+   *
+   * @param output - CLI output string
+   * @returns Parsed transport information
+   */
+  private parseTransportsCliOutput(output: string): TransportInfo[] {
+    const transports: TransportInfo[] = [];
+    const lines = output.split('\n');
+    let currentTransport: Partial<TransportInfo> | null = null;
+
+    for (const line of lines) {
+      // Match "Transport:  <name>" pattern
+      const transportMatch = line.match(/Transport:\s+<(.+?)>/);
+      if (transportMatch) {
+        // Save previous transport if exists
+        if (currentTransport?.id && currentTransport?.protocol && currentTransport?.bind) {
+          transports.push(currentTransport as TransportInfo);
+        }
+        // Start new transport
+        currentTransport = { id: transportMatch[1] };
+        continue;
+      }
+
+      // Match "key : value" pattern
+      const kvMatch = line.match(/^\s*(\w+)\s*:\s*(.+)$/);
+      if (kvMatch && currentTransport) {
+        const [, key, value] = kvMatch;
+        const trimmedKey = key.trim();
+        const trimmedValue = value.trim();
+
+        switch (trimmedKey) {
+          case 'protocol':
+            currentTransport.protocol = trimmedValue;
+            break;
+          case 'bind':
+            currentTransport.bind = trimmedValue;
+            break;
+          case 'external_media_address':
+            currentTransport.externalMediaAddress = trimmedValue;
+            break;
+          case 'external_signaling_address':
+            currentTransport.externalSignalingAddress = trimmedValue;
+            break;
+        }
+      }
+    }
+
+    // Save last transport
+    if (currentTransport?.id && currentTransport?.protocol && currentTransport?.bind) {
+      transports.push(currentTransport as TransportInfo);
+    }
+
+    this.logger.log(`Found ${transports.length} PJSIP transport(s): ${transports.map(t => t.id).join(', ')}`);
+    return transports;
   }
 }

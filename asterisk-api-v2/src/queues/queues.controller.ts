@@ -37,7 +37,7 @@ export class QueuesController {
   constructor(private readonly queuesService: QueuesService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Create new queue' })
   @ApiResponse({ status: 201, description: 'Queue created successfully' })
   async create(
@@ -146,7 +146,7 @@ export class QueuesController {
   }
 
   @Post(':name/reload')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Reload a specific queue configuration' })
   @ApiParam({ name: 'name', description: 'Queue name', example: 'support' })
   @ApiResponse({
@@ -163,7 +163,7 @@ export class QueuesController {
   }
 
   @Patch(':name')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Update queue' })
   @ApiParam({ name: 'name', description: 'Queue name', example: 'support' })
   @ApiResponse({ status: 200, description: 'Queue updated successfully' })
@@ -177,7 +177,7 @@ export class QueuesController {
   }
 
   @Delete(':name')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete queue' })
   @ApiParam({ name: 'name', description: 'Queue name', example: 'support' })
@@ -195,7 +195,7 @@ export class QueuesController {
   // ========================================
 
   @Post(':name/members')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN,UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({
     summary: 'Add member to queue',
     description: 'Add an agent/endpoint as a member of the queue'
