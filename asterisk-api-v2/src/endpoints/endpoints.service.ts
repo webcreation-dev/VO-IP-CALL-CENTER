@@ -21,6 +21,12 @@ import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CacheService } from '../core/cache/cache.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TenantPrefixUtil } from '../common/utils/tenant-prefix.util';
+import {
+  getStartingNumberFromPattern,
+  isNumberInPattern,
+  getMaxNumberFromPattern,
+} from '../common/utils/dialplan-pattern.util';
+import { generateRandomUsername } from '../common/utils/random-username.util';
 
 /**
  * Endpoints Service
@@ -97,19 +103,25 @@ export class EndpointsService {
     // Detect WebRTC endpoint (transport-wss)
     const isWebRTC = dto.transport === 'transport-wss';
 
-    // Generate prefixed ID for multi-tenant isolation
-    // ALL endpoints (WebRTC and non-WebRTC) use prefixed IDs
-    // Tenant isolation is guaranteed by the prefix in the ID
-    const prefixedId = TenantPrefixUtil.addPrefix(tenantId, dto.username);
+    // Generate the next agent number based on tenant's dialplan pattern
+    const agentNumber = await this.getNextAgentNumber(tenantId);
 
-    // Check if endpoint already exists
+    // Generate prefixed ID for multi-tenant isolation
+    // Format: t{tenantId}_{agentNumber}
+    // Example: t1_1000, t1_1001, t2_2000, t2_2001
+    const prefixedId = TenantPrefixUtil.addPrefix(
+      tenantId,
+      agentNumber.toString(),
+    );
+
+    // Check if endpoint already exists (should not happen with auto-increment)
     const existing = await this.endpointRepository.findOne({
       where: { id: prefixedId },
     });
 
     if (existing) {
       throw new ConflictException(
-        `Endpoint with username "${dto.username}" already exists`,
+        `Endpoint with ID "${prefixedId}" already exists`,
       );
     }
 
@@ -131,7 +143,7 @@ export class EndpointsService {
         allow: dto.codecs || (isWebRTC ? 'opus,ulaw,alaw,g722' : 'ulaw,alaw'),
         directMedia: isWebRTC ? 'no' : (dto.directMedia || 'yes'),
         dtmfMode: dto.dtmfMode || 'rfc4733',
-        callerid: dto.callerid || (isWebRTC ? `"WebRTC User ${dto.username}" <${dto.username}>` : undefined),
+        callerid: dto.callerid || (isWebRTC ? `"WebRTC Agent ${agentNumber}" <${agentNumber}>` : undefined),
         mailboxes: dto.mailboxes,
 
         // WebRTC-specific fields
@@ -155,12 +167,43 @@ export class EndpointsService {
       });
       await queryRunner.manager.save(endpoint);
 
-      // Create auth
+      // Generate random username for SIP authentication
+      // CRITICAL: Username is NOT prefixed and is randomly generated
+      // This provides better security and avoids conflicts
+      let randomUsername = generateRandomUsername();
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      // Ensure username uniqueness (retry if collision detected)
+      while (retryCount < maxRetries) {
+        const existingAuth = await this.authRepository.findOne({
+          where: { username: randomUsername },
+        });
+
+        if (!existingAuth) {
+          break; // Username is unique
+        }
+
+        // Collision detected, generate a new one
+        this.logger.warn(
+          `Username collision detected: ${randomUsername}. Retrying... (${retryCount + 1}/${maxRetries})`,
+        );
+        randomUsername = generateRandomUsername();
+        retryCount++;
+      }
+
+      if (retryCount >= maxRetries) {
+        throw new ConflictException(
+          'Failed to generate unique username after multiple attempts',
+        );
+      }
+
+      // Create auth with random username
       const auth = this.authRepository.create({
-        id: prefixedId, // Auth ID is prefixed (e.g., 't1_203')
+        id: prefixedId, // Auth ID is prefixed (e.g., 't1_1000')
         tenantId,
         authType: 'userpass',
-        username: dto.username, // CRITICAL: Username is NOT prefixed (e.g., '203')
+        username: randomUsername, // CRITICAL: Random username, NOT prefixed
         password: dto.password,
         realm: 'asterisk', // CRITICAL: Must match Asterisk's default realm
       });
@@ -193,9 +236,15 @@ export class EndpointsService {
       );
 
       this.logger.log(
-        `Created endpoint: ${dto.username} (ID: ${prefixedId}) for tenant ${tenantId}`,
+        `Created endpoint: Agent ${agentNumber} (ID: ${prefixedId}, Username: ${randomUsername}) for tenant ${tenantId}`,
       );
-      return endpoint;
+
+      // Return endpoint with the generated username so clients can use it
+      return {
+        ...endpoint,
+        generatedUsername: randomUsername, // Add generated username to response
+        agentNumber, // Add agent number for reference
+      } as any;
     } catch (error) {
       // Rollback on error
       await queryRunner.rollbackTransaction();
@@ -205,6 +254,108 @@ export class EndpointsService {
       // Release query runner
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Get the next available agent number for a tenant
+   *
+   * Logic:
+   * 1. Retrieve the tenant's dialplanConfig.internalDialPattern
+   * 2. Find all existing endpoints for the tenant
+   * 3. Extract the numeric part from their IDs (after removing tenant prefix)
+   * 4. If no endpoints exist, use the pattern's starting number
+   * 5. Otherwise, increment the highest agent number
+   * 6. Validate that the new number doesn't exceed the pattern's maximum
+   *
+   * @param tenantId - Tenant ID
+   * @returns The next available agent number
+   * @throws BadRequestException if pattern is exhausted
+   *
+   * @example
+   * // Tenant 1, pattern "_1XXX", no existing endpoints
+   * getNextAgentNumber(1) // => 1000
+   *
+   * // Tenant 1, pattern "_1XXX", max endpoint is t1_1005
+   * getNextAgentNumber(1) // => 1006
+   */
+  private async getNextAgentNumber(tenantId: number): Promise<number> {
+    // Get tenant to access dialplanConfig
+    const tenant = await this.tenantsService.findOne(tenantId);
+
+    // Get the internal dial pattern (default to "_1XXX" if not set)
+    const pattern =
+      tenant.dialplanConfig?.internalDialPattern || '_1XXX';
+
+    // Get the starting number from the pattern
+    const startingNumber = getStartingNumberFromPattern(pattern);
+    const maxNumber = getMaxNumberFromPattern(pattern);
+
+    // Find all endpoints for this tenant
+    const endpoints = await this.endpointRepository.find({
+      where: { tenantId },
+      select: ['id'], // Only need the ID field
+    });
+
+    // If no endpoints exist, start with the pattern's starting number
+    if (endpoints.length === 0) {
+      this.logger.log(
+        `No existing endpoints for tenant ${tenantId}. Starting at ${startingNumber} (pattern: ${pattern})`,
+      );
+      return startingNumber;
+    }
+
+    // Extract agent numbers from endpoint IDs
+    // Example: "t1_1001" -> 1001
+    const agentNumbers: number[] = [];
+
+    for (const endpoint of endpoints) {
+      try {
+        // Remove the tenant prefix (e.g., "t1_" from "t1_1001")
+        const { name } = TenantPrefixUtil.removePrefix(endpoint.id);
+
+        // Parse the numeric part
+        const agentNumber = parseInt(name, 10);
+
+        // Only include valid numbers that match the pattern
+        if (!isNaN(agentNumber) && isNumberInPattern(agentNumber, pattern)) {
+          agentNumbers.push(agentNumber);
+        }
+      } catch (error) {
+        // Skip endpoints with invalid IDs
+        this.logger.warn(
+          `Skipping endpoint with invalid ID format: ${endpoint.id}`,
+        );
+      }
+    }
+
+    // If no valid agent numbers found, start fresh
+    if (agentNumbers.length === 0) {
+      this.logger.log(
+        `No valid agent numbers found for tenant ${tenantId}. Starting at ${startingNumber}`,
+      );
+      return startingNumber;
+    }
+
+    // Find the maximum agent number
+    const maxAgentNumber = Math.max(...agentNumbers);
+
+    // Increment to get the next number
+    const nextNumber = maxAgentNumber + 1;
+
+    // Validate that we haven't exceeded the pattern's maximum
+    if (nextNumber > maxNumber) {
+      throw new BadRequestException(
+        `Agent number range exhausted for pattern ${pattern}. ` +
+          `Maximum allowed is ${maxNumber}, but next would be ${nextNumber}. ` +
+          `Please contact administrator to adjust the dialplan pattern.`,
+      );
+    }
+
+    this.logger.log(
+      `Next agent number for tenant ${tenantId}: ${nextNumber} (pattern: ${pattern}, max existing: ${maxAgentNumber})`,
+    );
+
+    return nextNumber;
   }
 
   /**

@@ -18,16 +18,20 @@ import {
  * - ps_auths (authentication)
  * - ps_aors (address of record)
  *
+ * Auto-generation:
+ * - Agent ID: Auto-incremented based on tenant's dialplan pattern (e.g., t1_1000, t1_1001)
+ * - Username: Randomly generated for SIP authentication (e.g., a7k9m2p8n4x6v1b3c5d7e9f2g4h6j1k3)
+ *
  * Validation:
- * - username: required, 3-40 characters, alphanumeric + underscore
+ * - displayName: optional, human-friendly name for UI
  * - password: required, 6-80 characters (SIP password)
  * - callerid: optional, valid CallerID format
  *
  * @example
  * {
- *   "username": "101",
  *   "password": "SecurePassword123",
- *   "callerid": "John Doe <101>",
+ *   "displayName": "Sales Agent 1",
+ *   "callerid": "Sales Agent <1000>",
  *   "context": "default",
  *   "transport": "transport-udp",
  *   "codecs": "ulaw,alaw,g722",
@@ -43,20 +47,17 @@ export class CreateEndpointDto {
   @IsOptional()
   tenantId?: number;
 
-  @ApiProperty({
-    description: 'Endpoint username (unique within tenant, will be prefixed)',
-    example: '101',
-    minLength: 3,
-    maxLength: 40,
+  @ApiPropertyOptional({
+    description:
+      'Display name for UI purposes (optional, does not affect SIP authentication). ' +
+      'Agent ID and SIP username are auto-generated.',
+    example: 'Sales Agent 1',
+    maxLength: 100,
   })
-  @IsString({ message: 'Username must be a string' })
-  @IsNotEmpty({ message: 'Username is required' })
-  @MinLength(3, { message: 'Username must be at least 3 characters' })
-  @MaxLength(40, { message: 'Username must not exceed 40 characters' })
-  @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username must contain only letters, numbers, and underscores',
-  })
-  username: string;
+  @IsString({ message: 'Display name must be a string' })
+  @IsOptional()
+  @MaxLength(100, { message: 'Display name must not exceed 100 characters' })
+  displayName?: string;
 
   @ApiProperty({
     description: 'SIP authentication password',
