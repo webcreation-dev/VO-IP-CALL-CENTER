@@ -322,7 +322,7 @@ async cloneToTenant(
       action: condition.action as any,
       priority: condition.priority,
       is_active: condition.is_active,
-    });
+    });                                                                                                             
   }
 
   return this.ivrService.findMenuById(Number(newMenu.id), dto.target_tenant_id);

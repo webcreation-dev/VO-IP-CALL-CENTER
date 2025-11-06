@@ -339,3 +339,4 @@ L'intégration du module **ENDPOINTS** est **100% COMPLÈTE et HARMONISÉE**.
 **Date:** 2025-11-03  
 **Durée totale:** ~3h (incluant fix AMI + harmonisation)
 
+

@@ -325,3 +325,4 @@ write = system,call,agent,user,config,command,reporting,originate,message
 **Dernière mise à jour:** 2025-11-03  
 **Temps total:** ~2h (incluant diagnostic AMI)
 
+
