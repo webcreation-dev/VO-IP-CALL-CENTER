@@ -231,13 +231,13 @@ export class MetadataController {
   }
 
   /**
-   * Get available PJSIP transports
+   * Get available PJSIP transports from Asterisk
    */
   @Get('transports/available')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get available PJSIP transports',
-    description: 'Retrieve list of available PJSIP transports from Asterisk with their configuration',
+    description: 'Retrieve actual configured PJSIP transports from Asterisk instead of static protocol list',
   })
   @ApiQuery({
     name: 'lang',
@@ -249,9 +249,24 @@ export class MetadataController {
   @ApiResponse({
     status: 200,
     description: 'Available transports retrieved successfully',
-    type: [EnumValueDto],
     schema: {
       example: [
+        {
+          key: 'transport-udp',
+          label: { en: 'transport-udp', fr: 'transport-udp' },
+          description: {
+            en: 'UDP transport on 0.0.0.0:5060',
+            fr: 'Transport UDP sur 0.0.0.0:5060',
+          },
+          metadata: {
+            protocol: 'udp',
+            bind: '0.0.0.0:5060',
+            externalMediaAddress: '161.97.106.134',
+            externalSignalingAddress: '161.97.106.134',
+            order: 1,
+          },
+          numericValue: 0,
+        },
         {
           key: 'transport-wss',
           label: { en: 'transport-wss', fr: 'transport-wss' },
@@ -262,16 +277,16 @@ export class MetadataController {
           metadata: {
             protocol: 'wss',
             bind: '0.0.0.0:8089',
-            externalMediaAddress: '192.168.1.100',
-            externalSignalingAddress: '192.168.1.100',
-            order: 1,
+            externalMediaAddress: '161.97.106.134',
+            externalSignalingAddress: '161.97.106.134',
+            order: 5,
           },
-          numericValue: 0,
+          numericValue: 1,
         },
       ],
     },
   })
-  getAvailableTransports(@Query('lang') lang: 'en' | 'fr' = 'en') {
+  async getAvailableTransports(@Query('lang') lang: 'en' | 'fr' = 'en') {
     return this.metadataService.getAvailableTransports(lang);
   }
 }

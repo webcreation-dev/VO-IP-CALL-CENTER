@@ -73,12 +73,8 @@ export class TenantContextsController {
   async findAll(@CurrentTenant() tenantId: number | null) {
     // If tenantId is null (admin), we'd need to fetch all contexts
     // For now, let's require tenant isolation
-    if (!tenantId) {
-      // Admin user - would need a method to get all contexts across all tenants
-      // For now, return empty array or implement getAllContexts in service
-      return [];
-    }
-    return await this.contextsService.findAll(tenantId);
+
+    return await this.contextsService.findAll(tenantId ?? -1);
   }
 
   /**

@@ -195,7 +195,7 @@ export class QueuesController {
   // ========================================
 
   @Post(':name/members')
-  @Roles(UserRole.SUPER_ADMIN,UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({
     summary: 'Add member to queue',
     description: 'Add an agent/endpoint as a member of the queue'
