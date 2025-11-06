@@ -555,6 +555,10 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
       Command: command,
     });
 
+    // Debug logging
+    this.logger.debug(`executeCommand result type: ${typeof result}, isArray: ${Array.isArray(result)}`);
+    this.logger.debug(`result.data type: ${typeof result?.data}, isArray: ${Array.isArray(result?.data)}`);
+
     // Handle different response formats from AMI
     if (typeof result === 'string') {
       return result;
@@ -562,7 +566,9 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
 
     // If data is an array, join it into a string
     if (Array.isArray(result.data)) {
-      return result.data.join('\n');
+      const joined = result.data.join('\n');
+      this.logger.debug(`Joined array data into string of length ${joined.length}`);
+      return joined;
     }
 
     // If data is a string, return it
@@ -571,7 +577,24 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
     }
 
     // Fallback to output or empty string
-    return result.output || '';
+    const fallback = result.output || '';
+    this.logger.debug(`Using fallback, type: ${typeof fallback}, isArray: ${Array.isArray(fallback)}`);
+
+    // If fallback is an array, join it
+    if (Array.isArray(fallback)) {
+      const joined = fallback.join('\n');
+      this.logger.debug(`Joined fallback array into string of length ${joined.length}`);
+      return joined;
+    }
+
+    // If fallback is a string, return it
+    if (typeof fallback === 'string') {
+      return fallback;
+    }
+
+    // If fallback is an object, convert to string
+    this.logger.warn(`Unexpected fallback type: ${typeof fallback}, converting to empty string`);
+    return '';
   }
 
   /**
@@ -599,6 +622,7 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
   async getPJSIPTransports(): Promise<TransportInfo[]> {
     try {
       const output = await this.executeCommand('pjsip show transports');
+      this.logger.debug(`AMI raw output for 'pjsip show transports':\n${output}`);
       return this.parseTransportsCliOutput(output);
     } catch (error) {
       this.logger.error('Failed to get PJSIP transports:', error.message);
@@ -609,13 +633,12 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
   /**
    * Parse CLI output from "pjsip show transports"
    *
-   * Expected format:
-   * Transport:  <transport-udp>
-   *  type                   : transport
-   *  protocol               : udp
-   *  bind                   : 0.0.0.0:5060
-   *  external_media_address : 161.97.106.134
-   *  external_signaling_address: 161.97.106.134
+   * Expected format (tabular):
+   * Transport:  <TransportId........>  <Type>  <cos>  <tos>  <BindAddress....................>
+   * ==========================================================================================
+   *
+   * Transport:  transport-udp             udp      0      0  0.0.0.0:5060
+   * Transport:  transport-wss             wss      0      0  0.0.0.0:8089
    *
    * @param output - CLI output string
    * @returns Parsed transport information
@@ -623,48 +646,30 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
   private parseTransportsCliOutput(output: string): TransportInfo[] {
     const transports: TransportInfo[] = [];
     const lines = output.split('\n');
-    let currentTransport: Partial<TransportInfo> | null = null;
 
     for (const line of lines) {
-      // Match "Transport:  <name>" pattern
-      const transportMatch = line.match(/Transport:\s+<(.+?)>/);
-      if (transportMatch) {
-        // Save previous transport if exists
-        if (currentTransport?.id && currentTransport?.protocol && currentTransport?.bind) {
-          transports.push(currentTransport as TransportInfo);
-        }
-        // Start new transport
-        currentTransport = { id: transportMatch[1] };
+      // Skip header lines, empty lines, and separator lines
+      if (!line.trim() || line.includes('TransportId') || line.includes('====') || line.includes('Objects found')) {
         continue;
       }
 
-      // Match "key : value" pattern
-      const kvMatch = line.match(/^\s*(\w+)\s*:\s*(.+)$/);
-      if (kvMatch && currentTransport) {
-        const [, key, value] = kvMatch;
-        const trimmedKey = key.trim();
-        const trimmedValue = value.trim();
+      // Match tabular format: "Transport:  <name>  <protocol>  <cos>  <tos>  <bind>"
+      // Example: "Transport:  transport-udp             udp      0      0  0.0.0.0:5060"
+      const match = line.match(/^Transport:\s+(\S+)\s+(\S+)\s+\d+\s+\d+\s+(.+)$/);
 
-        switch (trimmedKey) {
-          case 'protocol':
-            currentTransport.protocol = trimmedValue;
-            break;
-          case 'bind':
-            currentTransport.bind = trimmedValue;
-            break;
-          case 'external_media_address':
-            currentTransport.externalMediaAddress = trimmedValue;
-            break;
-          case 'external_signaling_address':
-            currentTransport.externalSignalingAddress = trimmedValue;
-            break;
-        }
+      if (match) {
+        const [, id, protocol, bind] = match;
+
+        transports.push({
+          id: id.trim(),
+          protocol: protocol.trim(),
+          bind: bind.trim(),
+          // These fields are not available in the tabular format
+          // They would need a separate "pjsip show transport <name>" command
+          externalMediaAddress: undefined,
+          externalSignalingAddress: undefined,
+        });
       }
-    }
-
-    // Save last transport
-    if (currentTransport?.id && currentTransport?.protocol && currentTransport?.bind) {
-      transports.push(currentTransport as TransportInfo);
     }
 
     this.logger.log(`Found ${transports.length} PJSIP transport(s): ${transports.map(t => t.id).join(', ')}`);
