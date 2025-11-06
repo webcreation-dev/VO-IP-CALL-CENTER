@@ -61,7 +61,7 @@ export class EndpointsController {
    * Requires admin or tenant_admin role
    */
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Create new endpoint',
     description:
