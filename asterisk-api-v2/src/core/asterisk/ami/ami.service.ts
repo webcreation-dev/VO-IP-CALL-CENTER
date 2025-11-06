@@ -554,7 +554,24 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
       Action: AMI_ACTIONS.COMMAND,
       Command: command,
     });
-    return result.data || result.output || '';
+
+    // Handle different response formats from AMI
+    if (typeof result === 'string') {
+      return result;
+    }
+
+    // If data is an array, join it into a string
+    if (Array.isArray(result.data)) {
+      return result.data.join('\n');
+    }
+
+    // If data is a string, return it
+    if (typeof result.data === 'string') {
+      return result.data;
+    }
+
+    // Fallback to output or empty string
+    return result.output || '';
   }
 
   /**

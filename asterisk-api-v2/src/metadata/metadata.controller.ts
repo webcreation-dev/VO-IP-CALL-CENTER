@@ -9,7 +9,7 @@ import {
 } from '@nestjs/swagger';
 
 import { MetadataService } from './metadata.service';
-import { EnumCategoryDto, EnumCategorySummaryDto } from './dto';
+import { EnumCategoryDto, EnumCategorySummaryDto, EnumValueDto } from './dto';
 
 @ApiTags('Metadata')
 @ApiBearerAuth()
@@ -228,5 +228,50 @@ export class MetadataController {
   })
   getAvailableCategories() {
     return this.metadataService.getAvailableCategories();
+  }
+
+  /**
+   * Get available PJSIP transports
+   */
+  @Get('transports/available')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available PJSIP transports',
+    description: 'Retrieve list of available PJSIP transports from Asterisk with their configuration',
+  })
+  @ApiQuery({
+    name: 'lang',
+    required: false,
+    enum: ['en', 'fr'],
+    description: 'Response language',
+    example: 'en',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available transports retrieved successfully',
+    type: [EnumValueDto],
+    schema: {
+      example: [
+        {
+          key: 'transport-wss',
+          label: { en: 'transport-wss', fr: 'transport-wss' },
+          description: {
+            en: 'WSS transport on 0.0.0.0:8089',
+            fr: 'Transport WSS sur 0.0.0.0:8089',
+          },
+          metadata: {
+            protocol: 'wss',
+            bind: '0.0.0.0:8089',
+            externalMediaAddress: '192.168.1.100',
+            externalSignalingAddress: '192.168.1.100',
+            order: 1,
+          },
+          numericValue: 0,
+        },
+      ],
+    },
+  })
+  getAvailableTransports(@Query('lang') lang: 'en' | 'fr' = 'en') {
+    return this.metadataService.getAvailableTransports(lang);
   }
 }
