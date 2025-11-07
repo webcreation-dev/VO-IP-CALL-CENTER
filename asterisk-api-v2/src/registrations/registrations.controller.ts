@@ -238,6 +238,35 @@ export class RegistrationsController {
   }
 
   /**
+   * Get registration statuses directly from Asterisk AMI (no file access)
+   * Simple endpoint that returns current registration status from 'pjsip show registrations'
+   */
+  @Get('status/ami')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get registration statuses from AMI',
+    description: 'Retrieve current registration status directly from Asterisk (pjsip show registrations)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Registration statuses retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 'operator_trunk-reg-0',
+          server_uri: 'sip:197.234.218.195:25060',
+          auth: 'operator_trunk-oauth',
+          status: 'Registered',
+          expiration: 'exp. 3589s',
+        },
+      ],
+    },
+  })
+  async getRegistrationStatusesFromAMI() {
+    return this.registrationsService.getAllRegistrationStatusesFromAMI();
+  }
+
+  /**
    * Get registration status (for backward compatibility with metadata controller)
    */
   @Get('status/all')

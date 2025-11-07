@@ -265,4 +265,18 @@ export class RegistrationsService {
       throw new InternalServerErrorException(`Failed to force registration: ${error.message}`);
     }
   }
+
+  /**
+   * Get all registration statuses directly from AMI (without file access)
+   * This is useful when backend cannot access Asterisk config files
+   */
+  async getAllRegistrationStatusesFromAMI(): Promise<RegistrationStatus[]> {
+    try {
+      const registrations = await this.amiService.getPJSIPRegistrations();
+      return registrations.map(reg => this.parseRegistrationStatus(reg));
+    } catch (error) {
+      this.logger.error(`Failed to get registration statuses from AMI: ${error.message}`);
+      throw new InternalServerErrorException('Failed to retrieve registration statuses from Asterisk');
+    }
+  }
 }
