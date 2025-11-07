@@ -60,12 +60,11 @@ services:
     image: postgres:14
     container_name: asterisk-api-postgres
     environment:
-
       POSTGRES_DB: "asterisk_api"
       POSTGRES_USER: "api_user"
       POSTGRES_PASSWORD: "ApiSecurePass2025!"
     volumes:
-      - "./api-pgdata:/var/lib/postgresql/data"
+      - asterisk-api-pgdata:/var/lib/postgresql/data
       - "./init-api-db.sql:/docker-entrypoint-initdb.d/01-init-api-db.sql:ro"
     ports:
       - "5432:5432"  # Port standard maintenant (ancien db désactivé)
@@ -98,75 +97,79 @@ services:
   # ============================================
   # BACKEND NESTJS API
   # ============================================
-  backend:
-    build: ../asterisk-api-v2
-    container_name: asterisk-backend
-    environment:
-      NODE_ENV: production
-      PORT: 3001
-      API_PREFIX: api/v1
-      # Base de données unifiée (Asterisk + API)
-      DB_HOST: api-db
-      DB_PORT: 5432
-      DB_NAME: asterisk_api
-      DB_USER: api_user
-      DB_PASSWORD: ApiSecurePass2025!
-      DB_POOL_SIZE: 20
-      # AMI Connection
-      AMI_HOST: asterisk
-      AMI_PORT: 5038
-      AMI_USER: admin
-      AMI_PASSWORD: Sp33Dd14L
-      # ARI Connection
-      ARI_HOST: asterisk
-      ARI_PORT: 8088
-      ARI_USER: callcenter-ivr
-      ARI_PASSWORD: Secret123!
-      ARI_WS_URL: ws://asterisk:8088/ari/events
-      ASTERISK_ARI_URL: http://asterisk:8088
-      ASTERISK_ARI_USERNAME: callcenter-ivr
-      ASTERISK_ARI_PASSWORD: Secret123!
-      # Redis
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      # JWT
-      JWT_SECRET: your-secret-key-min-32-chars-long-please-change-this
-      JWT_EXPIRES_IN: 1d
-      # Security
-      CORS_ORIGIN: http://localhost:3000,http://localhost:5173,http://localhost:3008
-      # Logging
-      LOG_LEVEL: debug
-      LOG_DIR: logs
-      # Swagger
-      SWAGGER_ENABLED: "true"
-      # Asterisk Paths
-      ASTERISK_SOUNDS_PATH: /var/lib/asterisk/sounds/custom
-      ASTERISK_RECORDINGS_PATH: /var/spool/asterisk/monitor
-      # Asterisk Config Path (for managing pjsip_wizard.conf)
-      ASTERISK_CONFIG_PATH: /etc/asterisk
-      ASTERISK_RELOAD_TIMEOUT: 5000
-    # PRODUCTION MODE: Use compiled code from image (no volume mount)
-    volumes:
-      # Mount Asterisk config directory to allow API to manage SIP trunks
-      - "./etc/asterisk:/etc/asterisk"
-    # volumes:
-    #   - "../asterisk-api-v2:/app"
-    #   - "/app/node_modules"
-    ports:
-      - "3001:3001"
-    depends_on:
-      api-db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      asterisk:
-        condition: service_started
-    restart: always
-    networks:
-      - asterisk-network
-    # PRODUCTION MODE: Use CMD from Dockerfile (node dist/src/main.js)
-    # command: npm run start:dev
+  # backend:
+  #   build: ../asterisk-api-v2
+  #   container_name: asterisk-backend
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 3001
+  #     API_PREFIX: api/v1
+  #     # Base de données unifiée (Asterisk + API)
+  #     DB_HOST: api-db
+  #     DB_PORT: 5432
+  #     DB_NAME: asterisk_api
+  #     DB_USER: api_user
+  #     DB_PASSWORD: ApiSecurePass2025!
+  #     DB_POOL_SIZE: 20
+  #     # AMI Connection
+  #     AMI_HOST: asterisk
+  #     AMI_PORT: 5038
+  #     AMI_USER: admin
+  #     AMI_PASSWORD: Sp33Dd14L
+  #     # ARI Connection
+  #     ARI_HOST: asterisk
+  #     ARI_PORT: 8088
+  #     ARI_USER: callcenter-ivr
+  #     ARI_PASSWORD: Secret123!
+  #     ARI_WS_URL: ws://asterisk:8088/ari/events
+  #     ASTERISK_ARI_URL: http://asterisk:8088
+  #     ASTERISK_ARI_USERNAME: callcenter-ivr
+  #     ASTERISK_ARI_PASSWORD: Secret123!
+  #     # Redis
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     # JWT
+  #     JWT_SECRET: your-secret-key-min-32-chars-long-please-change-this
+  #     JWT_EXPIRES_IN: 1d
+  #     # Security
+  #     CORS_ORIGIN: http://localhost:3000,http://localhost:5173,http://localhost:3008
+  #     # Logging
+  #     LOG_LEVEL: debug
+  #     LOG_DIR: logs
+  #     # Swagger
+  #     SWAGGER_ENABLED: "true"
+  #     # Asterisk Paths
+  #     ASTERISK_SOUNDS_PATH: /var/lib/asterisk/sounds/custom
+  #     ASTERISK_RECORDINGS_PATH: /var/spool/asterisk/monitor
+  #     # Asterisk Config Path (for managing pjsip_wizard.conf)
+  #     ASTERISK_CONFIG_PATH: /etc/asterisk
+  #     ASTERISK_RELOAD_TIMEOUT: 5000
+  #   # PRODUCTION MODE: Use compiled code from image (no volume mount)
+  #   volumes:
+  #     # Mount Asterisk config directory to allow API to manage SIP trunks
+  #     - "./etc/asterisk:/etc/asterisk"
+  #   # volumes:
+  #   #   - "../asterisk-api-v2:/app"
+  #   #   - "/app/node_modules"
+  #   ports:
+  #     - "3001:3001"
+  #   depends_on:
+  #     api-db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     asterisk:
+  #       condition: service_started
+  #   restart: always
+  #   networks:
+  #     - asterisk-network
+  #   # PRODUCTION MODE: Use CMD from Dockerfile (node dist/src/main.js)
+  #   # command: npm run start:dev
 
 networks:
   asterisk-network:
     driver: bridge
+
+volumes:
+  asterisk-api-pgdata:
+    driver: local
