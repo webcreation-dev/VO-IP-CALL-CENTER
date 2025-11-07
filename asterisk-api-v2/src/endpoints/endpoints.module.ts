@@ -11,6 +11,7 @@ import { PsAor } from './entities/ps-aor.entity';
 import { AmiModule } from '../core/asterisk/ami/ami.module';
 import { CacheModule } from '../core/cache/cache.module';
 import { TenantsModule } from '../tenants/tenants.module';
+import { RolesModule } from '../roles/roles.module';
 
 /**
  * Endpoints Module
@@ -22,6 +23,7 @@ import { TenantsModule } from '../tenants/tenants.module';
  * - AmiModule: AMI service for Asterisk integration (status, reload)
  * - CacheModule: Cache service for performance optimization
  * - TenantsModule: Tenants service for limit validation
+ * - RolesModule: Roles service for role validation
  *
  * Providers:
  * - EndpointsService: Endpoint management business logic with transactions
@@ -43,6 +45,7 @@ import { TenantsModule } from '../tenants/tenants.module';
 
     // ForwardRef to avoid circular dependency with TenantsModule
     forwardRef(() => TenantsModule),
+    forwardRef(() => RolesModule),
   ],
   controllers: [EndpointsController],
   providers: [EndpointsService],

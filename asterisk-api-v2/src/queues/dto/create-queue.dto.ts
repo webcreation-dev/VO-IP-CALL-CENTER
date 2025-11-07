@@ -10,7 +10,11 @@ import {
   Min,
   Max,
   Matches,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { QueueRoutingDto } from './queue-routing.dto';
 
 export enum QueueStrategy {
   RINGALL = 'ringall',
@@ -123,4 +127,31 @@ export class CreateQueueDto {
   @IsOptional()
   @Min(1)
   servicelevel?: number;
+
+  @ApiProperty({
+    description: 'Dialplan context for queue routing (must belong to tenant)',
+    example: 't1_default',
+    maxLength: 128,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  context: string;
+
+  @ApiPropertyOptional({
+    description: 'Extension routing rules to automatically create dialplan entries for this queue',
+    type: [QueueRoutingDto],
+    example: [
+      {
+        extensionPattern: '_3XXX',
+        priority: 1,
+        queueOptions: 't',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QueueRoutingDto)
+  routingRules?: QueueRoutingDto[];
 }

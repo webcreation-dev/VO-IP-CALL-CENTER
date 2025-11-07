@@ -103,8 +103,9 @@ export class Queue {
   @Column({ name: 'periodic_announce_frequency', type: 'integer', nullable: true })
   periodicAnnounceFrequency: number;
 
-  // Context
-  @Column({ length: 128, nullable: true })
+  // Context (REQUIRED for dialplan routing)
+  // Must match tenant's context for proper call routing
+  @Column({ length: 128, nullable: false })
   context: string;
 
   // Announce

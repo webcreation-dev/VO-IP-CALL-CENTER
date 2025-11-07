@@ -134,8 +134,8 @@ export class TenantsService {
     );
     this.logger.log(`Created primary context: ${contextName}`);
 
-    // Invalidate cache
-    await this.cacheService.del('tenants:list');
+    // Invalidate cache - delete all list variants
+    await this.cacheService.delPattern('tenants:list:*');
 
     return saved;
   }
@@ -268,8 +268,8 @@ export class TenantsService {
 
     const updated = await this.tenantRepository.save(tenant);
 
-    // Invalidate cache
-    await this.cacheService.del('tenants:list');
+    // Invalidate cache - delete all list variants and specific tenant
+    await this.cacheService.delPattern('tenants:list:*');
     await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
 
     this.logger.log(`Updated tenant: ${id}`);
@@ -299,7 +299,7 @@ export class TenantsService {
     await this.tenantRepository.remove(tenant);
 
     // Invalidate cache
-    await this.cacheService.del('tenants:list');
+    await this.cacheService.delPattern('tenants:list:*');
     await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
 
     this.logger.log(`Soft deleted tenant: ${id}`);
@@ -320,7 +320,7 @@ export class TenantsService {
     await this.tenantRepository.remove(tenant);
 
     // Invalidate cache
-    await this.cacheService.del('tenants:list');
+    await this.cacheService.delPattern('tenants:list:*');
     await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
 
     this.logger.log(`Hard deleted tenant: ${id}`);

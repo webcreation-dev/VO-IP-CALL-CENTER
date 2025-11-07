@@ -126,6 +126,25 @@ export class AriService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Obtenir une variable d'un channel
+   */
+  async getChannelVar(channelId: string, varName: string): Promise<{ value: string }> {
+    try {
+      return await this.client.channels.getChannelVar({ channelId, variable: varName });
+    } catch (error) {
+      this.logger.error(`Erreur get channel var ${varName} sur ${channelId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Alias pour hangupChannel (pour compatibilité)
+   */
+  async hangup(channelId: string, reason?: string): Promise<void> {
+    return this.hangupChannel(channelId, reason);
+  }
+
+  /**
    * Lister tous les channels actifs
    */
   async getChannels(): Promise<any[]> {

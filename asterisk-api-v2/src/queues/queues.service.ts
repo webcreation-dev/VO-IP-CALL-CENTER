@@ -3,14 +3,17 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 
 import { Queue } from './entities/queue.entity';
 import { CreateQueueDto } from './dto/create-queue.dto';
 import { UpdateQueueDto } from './dto/update-queue.dto';
+import { Extension } from '../core/database/entities/extension.entity';
+import { Tenant } from '../core/database/entities/tenant.entity';
 
 import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CacheService } from '../core/cache/cache.service';
@@ -25,13 +28,21 @@ export class QueuesService {
   constructor(
     @InjectRepository(Queue)
     private readonly queueRepository: Repository<Queue>,
+    @InjectRepository(Extension)
+    private readonly extensionRepository: Repository<Extension>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepository: Repository<Tenant>,
+    private readonly dataSource: DataSource,
     private readonly amiService: AmiService,
     private readonly cacheService: CacheService,
     private readonly tenantsService: TenantsService,
   ) {}
 
   async create(tenantId: number, dto: CreateQueueDto): Promise<Queue> {
-    // Check tenant limits
+    // STEP 1: Validate context belongs to tenant (CRITICAL SECURITY)
+    await this.validateContextOwnership(tenantId, dto.context);
+
+    // STEP 2: Check tenant limits
     const count = await this.queueRepository.count({ where: { tenantId } });
     const hasReachedLimit = await this.tenantsService.hasReachedQueueLimit(
       tenantId,
@@ -46,7 +57,7 @@ export class QueuesService {
 
     const prefixedName = TenantPrefixUtil.addPrefix(tenantId, dto.name);
 
-    // Check if queue already exists
+    // STEP 3: Check if queue already exists
     const existing = await this.queueRepository.findOne({
       where: { tenantId, name: prefixedName },
     });
@@ -57,37 +68,109 @@ export class QueuesService {
       );
     }
 
-    const queue = this.queueRepository.create({
-      tenantId,
-      name: prefixedName,
-      strategy: dto.strategy || 'ringall',
-      timeout: dto.timeout || 15,
-      retry: dto.retry || 5,
-      maxlen: dto.maxlen || 0,
-      wrapuptime: dto.wrapuptime || 0,
-      musiconhold: dto.musicclass,
-      servicelevel: dto.servicelevel || 60,
-    });
+    // STEP 4: Use transaction to create queue + extensions atomically
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const saved = await this.queueRepository.save(queue);
-
-    await this.cacheService.del(
-      CacheService.generateKey('queues', String(tenantId), 'list'),
-    );
-
-    this.logger.log(
-      `Created queue: ${dto.name} (${prefixedName}) for tenant ${tenantId}`,
-    );
-
-    // Auto-reload queue in Asterisk after creation
     try {
-      await this.reloadQueue(tenantId, dto.name);
-      this.logger.log(`✅ Queue ${prefixedName} automatically reloaded in Asterisk`);
-    } catch (error) {
-      this.logger.warn(`⚠️ Failed to auto-reload queue ${prefixedName}: ${error.message}`);
-    }
+      // Create queue with context
+      const queue = this.queueRepository.create({
+        tenantId,
+        name: prefixedName,
+        context: dto.context, // REQUIRED field
+        strategy: dto.strategy || 'ringall',
+        timeout: dto.timeout || 15,
+        retry: dto.retry || 5,
+        maxlen: dto.maxlen || 0,
+        wrapuptime: dto.wrapuptime || 0,
+        musiconhold: dto.musicclass,
+        servicelevel: dto.servicelevel || 60,
+      });
 
-    return saved;
+      const saved = await queryRunner.manager.save(queue);
+
+      // STEP 5: Create routing extensions if specified
+      if (dto.routingRules && dto.routingRules.length > 0) {
+        const extensions: Extension[] = [];
+
+        for (const rule of dto.routingRules) {
+          // Check if extension already exists
+          const existingExt = await queryRunner.manager.findOne(Extension, {
+            where: {
+              tenantId,
+              context: dto.context,
+              exten: rule.extensionPattern,
+              priority: rule.priority || 1,
+            },
+          });
+
+          if (existingExt) {
+            throw new ConflictException(
+              `Extension "${rule.extensionPattern}" at priority ${rule.priority || 1} already exists in context "${dto.context}"`,
+            );
+          }
+
+          // Create extension that routes to this queue
+          const extension = this.extensionRepository.create({
+            tenantId,
+            context: dto.context,
+            exten: rule.extensionPattern,
+            priority: rule.priority || 1,
+            app: 'Queue',
+            appdata: `${prefixedName}${rule.queueOptions ? ',' + rule.queueOptions : ''}`,
+          });
+
+          extensions.push(extension);
+        }
+
+        if (extensions.length > 0) {
+          await queryRunner.manager.save(Extension, extensions);
+          this.logger.log(
+            `Created ${extensions.length} routing extension(s) for queue ${prefixedName}`,
+          );
+        }
+      }
+
+      // Commit transaction
+      await queryRunner.commitTransaction();
+
+      // STEP 6: Clear cache
+      await this.cacheService.del(
+        CacheService.generateKey('queues', String(tenantId), 'list'),
+      );
+      // Also clear extensions cache since we may have created extensions
+      await this.cacheService.del(
+        CacheService.generateKey('extensions', String(tenantId), 'list'),
+      );
+
+      this.logger.log(
+        `Created queue: ${dto.name} (${prefixedName}) for tenant ${tenantId} in context ${dto.context}`,
+      );
+
+      // STEP 7: Auto-reload in Asterisk AFTER successful DB commit
+      try {
+        await this.reloadQueue(tenantId, dto.name);
+        this.logger.log(
+          `✅ Queue ${prefixedName} automatically reloaded in Asterisk`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `⚠️ Failed to auto-reload queue ${prefixedName}: ${error.message}`,
+        );
+        // Don't fail the request if reload fails - queue is already in DB
+      }
+
+      return saved;
+    } catch (error) {
+      // Rollback transaction on any error
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to create queue: ${error.message}`);
+      throw error;
+    } finally {
+      // Release query runner
+      await queryRunner.release();
+    }
   }
 
   async findAll(tenantId: number | null): Promise<Queue[]> {
@@ -167,6 +250,11 @@ export class QueuesService {
     dto: UpdateQueueDto,
   ): Promise<Queue> {
     const queue = await this.findOne(tenantId, displayName);
+
+    // If changing context, validate ownership
+    if (dto.context && dto.context !== queue.context && tenantId !== null) {
+      await this.validateContextOwnership(tenantId, dto.context);
+    }
 
     Object.assign(queue, dto);
 
@@ -943,6 +1031,38 @@ export class QueuesService {
     } catch (error) {
       this.logger.error(`❌ Failed to pause/unpause member: ${error.message}`);
       throw new BadRequestException(`Failed to pause/unpause member: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate that a context belongs to the tenant
+   *
+   * Security check to ensure cross-tenant access is prevented.
+   * Each tenant has a primary context, and queues must be created in that context.
+   *
+   * @param tenantId - Tenant ID
+   * @param context - Context name
+   * @throws NotFoundException if tenant not found
+   * @throws ForbiddenException if context doesn't belong to tenant
+   * @private
+   */
+  private async validateContextOwnership(
+    tenantId: number,
+    context: string,
+  ): Promise<void> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant ${tenantId} not found`);
+    }
+
+    // Check if context matches tenant's context
+    if (tenant.context !== context) {
+      throw new ForbiddenException(
+        `Context '${context}' does not belong to your tenant. Expected: '${tenant.context}'`,
+      );
     }
   }
 }

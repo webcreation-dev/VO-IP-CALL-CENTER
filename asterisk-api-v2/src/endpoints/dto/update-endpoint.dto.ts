@@ -5,6 +5,8 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsInt,
+  IsPositive,
 } from 'class-validator';
 
 /**
@@ -110,4 +112,13 @@ export class UpdateEndpointDto {
   @IsOptional()
   @MaxLength(100)
   mailboxes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Endpoint role ID for permission management',
+    example: 1,
+  })
+  @IsInt({ message: 'Role ID must be an integer' })
+  @IsPositive({ message: 'Role ID must be a positive number' })
+  @IsOptional()
+  roleId?: number;
 }

@@ -20,6 +20,7 @@ import { EndpointFilterDto } from './dto/endpoint-filter.dto';
 import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CacheService } from '../core/cache/cache.service';
 import { TenantsService } from '../tenants/tenants.service';
+import { RolesService } from '../roles/roles.service';
 import { TenantPrefixUtil } from '../common/utils/tenant-prefix.util';
 import {
   getStartingNumberFromPattern,
@@ -70,6 +71,8 @@ export class EndpointsService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => TenantsService))
     private readonly tenantsService: TenantsService,
+    @Inject(forwardRef(() => RolesService))
+    private readonly rolesService: RolesService,
   ) {}
 
   /**
@@ -98,6 +101,17 @@ export class EndpointsService {
       throw new BadRequestException(
         'Tenant has reached maximum endpoints limit',
       );
+    }
+
+    // Validate role if provided
+    if (dto.roleId) {
+      try {
+        await this.rolesService.findOne(tenantId, dto.roleId);
+      } catch (error) {
+        throw new BadRequestException(
+          `Role with ID ${dto.roleId} not found for tenant ${tenantId}`,
+        );
+      }
     }
 
     // Detect WebRTC endpoint (transport-wss)
@@ -145,6 +159,7 @@ export class EndpointsService {
         dtmfMode: dto.dtmfMode || 'rfc4733',
         callerid: dto.callerid || (isWebRTC ? `"WebRTC Agent ${agentNumber}" <${agentNumber}>` : undefined),
         mailboxes: dto.mailboxes,
+        roleId: dto.roleId, // Assign role if provided
 
         // WebRTC-specific fields
         ...(isWebRTC && {
@@ -675,12 +690,29 @@ export class EndpointsService {
     const endpoint = await this.findOne(tenantId, displayName);
     const prefixedId = endpoint.id; // Use actual ID from found endpoint
 
+    // Validate role if provided
+    if (dto.roleId !== undefined) {
+      if (dto.roleId !== null) {
+        try {
+          await this.rolesService.findOne(tenantId, dto.roleId);
+        } catch (error) {
+          throw new BadRequestException(
+            `Role with ID ${dto.roleId} not found for tenant ${tenantId}`,
+          );
+        }
+      }
+    }
+
     // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      // Track if role changed for logging
+      const roleChanged = dto.roleId !== undefined && endpoint.roleId !== dto.roleId;
+      const oldRoleId = endpoint.roleId;
+
       // Update endpoint
       if (dto.context !== undefined) endpoint.context = dto.context;
       if (dto.transport !== undefined) endpoint.transport = dto.transport;
@@ -689,8 +721,16 @@ export class EndpointsService {
       if (dto.dtmfMode !== undefined) endpoint.dtmfMode = dto.dtmfMode;
       if (dto.callerid !== undefined) endpoint.callerid = dto.callerid;
       if (dto.mailboxes !== undefined) endpoint.mailboxes = dto.mailboxes;
+      if (dto.roleId !== undefined) endpoint.roleId = dto.roleId;
 
       await queryRunner.manager.save(endpoint);
+
+      // Log role change for audit purposes
+      if (roleChanged) {
+        this.logger.log(
+          `Endpoint ${prefixedId} role changed: ${oldRoleId || 'none'} → ${dto.roleId || 'none'}`,
+        );
+      }
 
       // Update auth if password changed
       if (dto.password !== undefined) {

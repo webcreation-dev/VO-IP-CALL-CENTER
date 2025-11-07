@@ -1,0 +1,43 @@
+{
+  "id": "technical_support",
+  "name": "Support technique multi-niveaux",
+  "description": "Structure de support avec escalade N1, N2, N3 et architecte technique",
+  "roles": [
+    {
+      "name": "support_n1",
+      "displayName": "Support N1",
+      "description": "Support de premier niveau - Triage et problèmes simples",
+      "level": 3,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": false,
+      "canCallHigherLevel": true
+    },
+    {
+      "name": "support_n2",
+      "displayName": "Support N2",
+      "description": "Support technique intermédiaire",
+      "level": 5,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": true
+    },
+    {
+      "name": "support_n3",
+      "displayName": "Support N3 - Expert",
+      "description": "Expert technique pour problèmes complexes",
+      "level": 7,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": false
+    },
+    {
+      "name": "technical_architect",
+      "displayName": "Architecte Technique",
+      "description": "Architecte système - Escalade critique uniquement",
+      "level": 10,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": true
+    }
+  ]
+}

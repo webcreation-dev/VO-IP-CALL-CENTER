@@ -6,6 +6,8 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsInt,
+  IsPositive,
 } from 'class-validator';
 
 /**
@@ -152,4 +154,13 @@ export class CreateEndpointDto {
   @IsOptional()
   @MaxLength(100, { message: 'Mailboxes must not exceed 100 characters' })
   mailboxes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Endpoint role ID for permission management',
+    example: 1,
+  })
+  @IsInt({ message: 'Role ID must be an integer' })
+  @IsPositive({ message: 'Role ID must be a positive number' })
+  @IsOptional()
+  roleId?: number;
 }

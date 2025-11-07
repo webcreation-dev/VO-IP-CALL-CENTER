@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
 
 @Injectable()
 export class TenantContextsService {
+  private readonly logger = new Logger(TenantContextsService.name);
+
   constructor(
     @InjectRepository(TenantContext)
     private readonly tenantContextRepo: Repository<TenantContext>,
@@ -154,8 +156,59 @@ export class TenantContextsService {
       throw new BadRequestException('Cannot change tenant owner');
     }
 
+    // Track permission changes for logging
+    const permissionsChanged = 'dialplanConfig' in updates;
+    const oldConfig = permissionsChanged ? { ...context.dialplanConfig } : {};
+
     Object.assign(context, updates);
-    return await this.tenantContextRepo.save(context);
+    const savedContext = await this.tenantContextRepo.save(context);
+
+    // Log permission changes
+    if (permissionsChanged) {
+      this.logPermissionChanges(context.name, oldConfig, context.dialplanConfig);
+    }
+
+    return savedContext;
+  }
+
+  /**
+   * Log permission configuration changes for audit
+   */
+  private logPermissionChanges(
+    contextName: string,
+    oldConfig: Record<string, any>,
+    newConfig: Record<string, any>,
+  ): void {
+    const changes: string[] = [];
+
+    // Check allowInterContext change
+    if (oldConfig?.allowInterContext !== newConfig?.allowInterContext) {
+      changes.push(
+        `allowInterContext: ${oldConfig?.allowInterContext} → ${newConfig?.allowInterContext}`,
+      );
+    }
+
+    // Check allowedContexts array change
+    const oldContexts = oldConfig?.allowedContexts || [];
+    const newContexts = newConfig?.allowedContexts || [];
+
+    if (JSON.stringify(oldContexts) !== JSON.stringify(newContexts)) {
+      const added = newContexts.filter((c: string) => !oldContexts.includes(c));
+      const removed = oldContexts.filter((c: string) => !newContexts.includes(c));
+
+      if (added.length > 0) {
+        changes.push(`Added allowed contexts: ${added.join(', ')}`);
+      }
+      if (removed.length > 0) {
+        changes.push(`Removed allowed contexts: ${removed.join(', ')}`);
+      }
+    }
+
+    if (changes.length > 0) {
+      this.logger.log(
+        `Context ${contextName} permission changes: ${changes.join('; ')}`,
+      );
+    }
   }
 
   /**
@@ -178,5 +231,92 @@ export class TenantContextsService {
     return await this.tenantContextRepo.count({
       where: { tenantId },
     });
+  }
+
+  /**
+   * Update inter-context permissions for a specific context
+   *
+   * @param id - Context ID
+   * @param allowInterContext - Whether to enable inter-context calls
+   * @param allowedContexts - Array of context names allowed to call
+   */
+  async updateInterContextPermissions(
+    id: number,
+    allowInterContext: boolean,
+    allowedContexts: string[] = [],
+  ): Promise<TenantContext> {
+    const context = await this.findOne(id);
+
+    const updatedConfig = {
+      ...context.dialplanConfig,
+      allowInterContext,
+      allowedContexts: allowInterContext ? allowedContexts : [],
+    };
+
+    return this.update(id, { dialplanConfig: updatedConfig });
+  }
+
+  /**
+   * Add allowed context for inter-context calling
+   *
+   * @param id - Source context ID
+   * @param targetContextName - Target context name to allow
+   */
+  async addAllowedContext(id: number, targetContextName: string): Promise<TenantContext> {
+    const context = await this.findOne(id);
+    const config = context.dialplanConfig || {};
+    const currentAllowed = config.allowedContexts || [];
+
+    // Check if already allowed
+    if (currentAllowed.includes(targetContextName)) {
+      this.logger.warn(
+        `Context ${context.name} already allows calls to ${targetContextName}`,
+      );
+      return context;
+    }
+
+    // Verify target context exists
+    const targetExists = await this.tenantContextRepo.findOne({
+      where: { name: targetContextName },
+    });
+
+    if (!targetExists) {
+      throw new BadRequestException(
+        `Target context ${targetContextName} does not exist`,
+      );
+    }
+
+    const updatedConfig = {
+      ...config,
+      allowInterContext: true,
+      allowedContexts: [...currentAllowed, targetContextName],
+    };
+
+    return this.update(id, { dialplanConfig: updatedConfig });
+  }
+
+  /**
+   * Remove allowed context from inter-context calling
+   *
+   * @param id - Source context ID
+   * @param targetContextName - Target context name to remove
+   */
+  async removeAllowedContext(id: number, targetContextName: string): Promise<TenantContext> {
+    const context = await this.findOne(id);
+    const config = context.dialplanConfig || {};
+    const currentAllowed = config.allowedContexts || [];
+
+    const updatedAllowed = currentAllowed.filter(
+      (c: string) => c !== targetContextName,
+    );
+
+    const updatedConfig = {
+      ...config,
+      allowedContexts: updatedAllowed,
+      // Disable allowInterContext if no contexts are allowed
+      allowInterContext: updatedAllowed.length > 0,
+    };
+
+    return this.update(id, { dialplanConfig: updatedConfig });
   }
 }

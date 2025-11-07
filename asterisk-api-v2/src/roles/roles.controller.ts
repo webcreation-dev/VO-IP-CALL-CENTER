@@ -1,0 +1,147 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { RolesService } from './roles.service';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { TenantId } from '../auth/decorators/tenant-id.decorator';
+
+@ApiTags('Roles')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('roles')
+export class RolesController {
+  constructor(private readonly rolesService: RolesService) {}
+
+  @Post()
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Create a new role' })
+  @ApiResponse({ status: 201, description: 'Role created successfully' })
+  @ApiResponse({ status: 409, description: 'Role name or level already exists' })
+  create(
+    @TenantId() tenantId: number,
+    @Body() createRoleDto: CreateRoleDto,
+  ) {
+    const finalTenantId = createRoleDto.tenantId || tenantId;
+    return this.rolesService.create(finalTenantId, createRoleDto);
+  }
+
+  @Get()
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'AGENT')
+  @ApiOperation({ summary: 'Get all roles for tenant' })
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
+  @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
+  findAll(
+    @TenantId() tenantId: number,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    const active = activeOnly === 'true';
+    return this.rolesService.findAll(tenantId, active);
+  }
+
+  @Get('presets')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Get all available role presets' })
+  @ApiResponse({ status: 200, description: 'Presets retrieved successfully' })
+  getPresets() {
+    return this.rolesService.getPresets();
+  }
+
+  @Get('presets/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Get a specific preset by ID' })
+  @ApiResponse({ status: 200, description: 'Preset retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Preset not found' })
+  getPreset(@Param('id') id: string) {
+    return this.rolesService.getPreset(id);
+  }
+
+  @Post('presets/:id/apply')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Apply a preset to current tenant' })
+  @ApiResponse({ status: 201, description: 'Preset applied successfully' })
+  @ApiResponse({ status: 400, description: 'Tenant already has roles' })
+  @ApiResponse({ status: 404, description: 'Preset not found' })
+  applyPreset(
+    @TenantId() tenantId: number,
+    @Param('id') presetId: string,
+  ) {
+    return this.rolesService.applyPreset(tenantId, presetId);
+  }
+
+  @Get('statistics')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Get role statistics for tenant' })
+  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  getStatistics(@TenantId() tenantId: number) {
+    return this.rolesService.getStatistics(tenantId);
+  }
+
+  @Get(':id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'AGENT')
+  @ApiOperation({ summary: 'Get a specific role by ID' })
+  @ApiResponse({ status: 200, description: 'Role retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Role not found' })
+  findOne(
+    @TenantId() tenantId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.rolesService.findOne(tenantId, id);
+  }
+
+  @Get(':id/callable-roles')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Get roles that this role can call' })
+  @ApiResponse({ status: 200, description: 'Callable roles retrieved successfully' })
+  getCallableRoles(
+    @TenantId() tenantId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.rolesService.getCallableRoles(tenantId, id);
+  }
+
+  @Patch(':id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Update a role' })
+  @ApiResponse({ status: 200, description: 'Role updated successfully' })
+  @ApiResponse({ status: 404, description: 'Role not found' })
+  update(
+    @TenantId() tenantId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRoleDto: UpdateRoleDto,
+  ) {
+    return this.rolesService.update(tenantId, id, updateRoleDto);
+  }
+
+  @Delete(':id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @ApiOperation({ summary: 'Delete a role' })
+  @ApiResponse({ status: 200, description: 'Role deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Role is in use by endpoints' })
+  @ApiResponse({ status: 404, description: 'Role not found' })
+  remove(
+    @TenantId() tenantId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.rolesService.remove(tenantId, id);
+  }
+}

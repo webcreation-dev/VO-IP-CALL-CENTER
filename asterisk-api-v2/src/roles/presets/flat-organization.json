@@ -1,0 +1,16 @@
+{
+  "id": "flat_organization",
+  "name": "Organisation plate",
+  "description": "Tous les membres sont égaux sans hiérarchie - Idéal pour petites équipes ou startups",
+  "roles": [
+    {
+      "name": "member",
+      "displayName": "Membre",
+      "description": "Membre de l'équipe avec permissions égales",
+      "level": 5,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": true
+    }
+  ]
+}

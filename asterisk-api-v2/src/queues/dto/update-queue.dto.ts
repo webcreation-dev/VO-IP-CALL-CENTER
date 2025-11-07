@@ -95,4 +95,14 @@ export class UpdateQueueDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Dialplan context for queue routing (must belong to tenant)',
+    example: 't1_default',
+    maxLength: 128,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(128)
+  context?: string;
 }

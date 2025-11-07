@@ -1,0 +1,52 @@
+{
+  "id": "call_center_standard",
+  "name": "Centre d'appels standard",
+  "description": "Hiérarchie classique pour centre d'appels avec agents, team leaders, superviseurs, managers et directeurs",
+  "roles": [
+    {
+      "name": "agent",
+      "displayName": "Agent",
+      "description": "Agent de base gérant les appels clients",
+      "level": 1,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": false,
+      "canCallHigherLevel": false
+    },
+    {
+      "name": "team_leader",
+      "displayName": "Team Leader",
+      "description": "Responsable d'une petite équipe d'agents",
+      "level": 3,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": false
+    },
+    {
+      "name": "supervisor",
+      "displayName": "Superviseur",
+      "description": "Superviseur d'équipe avec accès monitoring",
+      "level": 5,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": false
+    },
+    {
+      "name": "manager",
+      "displayName": "Manager",
+      "description": "Manager de service ou département",
+      "level": 8,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": false
+    },
+    {
+      "name": "director",
+      "displayName": "Directeur",
+      "description": "Directeur du centre d'appels",
+      "level": 10,
+      "canCallSameLevel": true,
+      "canCallLowerLevel": true,
+      "canCallHigherLevel": true
+    }
+  ]
+}

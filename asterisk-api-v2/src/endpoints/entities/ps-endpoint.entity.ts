@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 
 import { Tenant } from '../../core/database/entities/tenant.entity';
+import { EndpointRole } from '../../roles/entities/endpoint-role.entity';
 
 /**
  * PsEndpoint Entity
@@ -167,6 +168,16 @@ export class PsEndpoint {
   // Enable session timers
   @Column({ length: 3, nullable: true, default: 'yes' })
   timers: string;
+
+  // ========== Role-Based Permissions ==========
+
+  // Role relationship for hierarchical permissions
+  @ManyToOne(() => EndpointRole, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'role_id' })
+  role: EndpointRole;
+
+  @Column({ name: 'role_id', type: 'integer', nullable: true })
+  roleId: number;
 
   // Endpoint device state (computed by Asterisk, not stored)
   // This will be enriched from AMI real-time data
