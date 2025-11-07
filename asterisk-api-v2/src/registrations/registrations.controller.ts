@@ -66,8 +66,10 @@ export class RegistrationsController {
   })
   @ApiResponse({ status: 409, description: 'SIP trunk already exists' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  async create(@Body() createRegistrationDto: CreateRegistrationDto) {
-    return this.registrationsService.create(createRegistrationDto);
+  async create(@Body() createRegistrationDto: CreateRegistrationDto, @Query('tenantId') tenantId?: number) {
+    // For now, default to tenant 1 if not provided (SUPER_ADMIN can create for any tenant)
+    const targetTenantId = tenantId || 1;
+    return this.registrationsService.create(createRegistrationDto, targetTenantId);
   }
 
   /**
