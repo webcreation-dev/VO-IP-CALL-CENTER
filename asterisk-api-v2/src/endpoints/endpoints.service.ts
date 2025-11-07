@@ -158,8 +158,8 @@ export class EndpointsService {
           rtpSymmetric: 'yes',
           forceRport: 'yes',
           rewriteContact: 'yes',
-          dtlsCertFile: '/etc/asterisk/certs/asterisk.crt',
-          dtlsPrivateKey: '/etc/asterisk/certs/asterisk.key',
+          dtlsCertFile: '/etc/asterisk/keys/fullchain.pem',
+          dtlsPrivateKey: '/etc/asterisk/keys/privkey.pem',
           identifyBy: 'username', // CRITICAL: Asterisk matches by auth.username (without prefix)
           bundle: 'yes',
           timers: 'yes',
