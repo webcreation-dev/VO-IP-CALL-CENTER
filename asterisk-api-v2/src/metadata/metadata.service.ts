@@ -158,6 +158,43 @@ export class MetadataService {
   }
 
   /**
+   * Get available PJSIP registrations from Asterisk
+   * Retrieves actual configured registrations
+   *
+   * @param lang - Language for labels
+   * @returns List of available registrations formatted as EnumValue[]
+   */
+  async getAvailableRegistrations(lang: Language = 'en'): Promise<EnumValue[]> {
+    try {
+      const registrations = await this.amiService.getPJSIPRegistrations();
+
+      return registrations.map((registration, index) => ({
+        key: registration.registration,
+        label: {
+          en: registration.registration,
+          fr: registration.registration,
+        },
+        description: {
+          en: `${registration.status} - ${registration.serverUri}`,
+          fr: `${registration.status} - ${registration.serverUri}`,
+        },
+        metadata: {
+          serverUri: registration.serverUri,
+          auth: registration.auth,
+          status: registration.status,
+          expiration: registration.expiration,
+          order: index,
+        },
+        numericValue: index,
+      }));
+    } catch (error) {
+      this.logger.warn(`Failed to get registrations from AMI: ${error.message}`);
+      // No fallback available for registrations, return empty array
+      return [];
+    }
+  }
+
+  /**
    * Get transport protocol order for sorting
    * Prioritizes common protocols
    */

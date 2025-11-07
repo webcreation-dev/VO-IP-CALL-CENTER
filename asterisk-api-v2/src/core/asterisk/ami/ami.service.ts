@@ -8,6 +8,7 @@ import {
   QueueMember,
   EndpointStatusResult,
   TransportInfo,
+  RegistrationInfo,
 } from './ami.types';
 import { AMI_ACTIONS, AMI_EVENTS, AMI_TIMEOUTS } from './ami.constants';
 
@@ -631,6 +632,23 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
   }
 
   /**
+   * Get PJSIP registrations from Asterisk by executing the CLI command
+   * "pjsip show registrations"
+   *
+   * @returns Array of configured registrations
+   */
+  async getPJSIPRegistrations(): Promise<RegistrationInfo[]> {
+    try {
+      const output = await this.executeCommand('pjsip show registrations');
+      this.logger.debug(`AMI raw output for 'pjsip show registrations':\n${output}`);
+      return this.parseRegistrationsCliOutput(output);
+    } catch (error) {
+      this.logger.error('Failed to get PJSIP registrations:', error.message);
+      throw new Error('Failed to retrieve PJSIP registrations from Asterisk');
+    }
+  }
+
+  /**
    * Parse CLI output from "pjsip show transports"
    *
    * Expected format (tabular):
@@ -674,5 +692,55 @@ async getEndpointStatus(endpointId: string): Promise<EndpointStatusResult> {
 
     this.logger.log(`Found ${transports.length} PJSIP transport(s): ${transports.map(t => t.id).join(', ')}`);
     return transports;
+  }
+
+  /**
+   * Parse the output of "pjsip show registrations" CLI command
+   *
+   * Example output:
+   * <Registration/ServerURI..............................>  <Auth....................>  <Status.......>
+   * ==========================================================================================
+   *
+   *  operator_trunk-reg-0/sip:197.234.218.195:25060          operator_trunk-oauth        Rejected          (exp. 57517s ago)
+   *
+   * @param output - CLI output string
+   * @returns Parsed registration information
+   */
+  private parseRegistrationsCliOutput(output: string): RegistrationInfo[] {
+    const registrations: RegistrationInfo[] = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      // Skip header lines, empty lines, and separator lines
+      if (!line.trim() || line.includes('Registration/ServerURI') || line.includes('====') || line.includes('Objects found')) {
+        continue;
+      }
+
+      // Match format: " registration/serverUri    auth    status (optional expiration)"
+      // Example: " operator_trunk-reg-0/sip:197.234.218.195:25060          operator_trunk-oauth        Rejected          (exp. 57517s ago)"
+      const match = line.match(/^\s*(\S+)\/(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/);
+
+      if (match) {
+        const [, registration, serverUri, auth, status, rest] = match;
+
+        // Extract expiration if present in parentheses
+        let expiration: string | undefined = undefined;
+        const expirationMatch = rest.match(/\((.*?)\)/);
+        if (expirationMatch) {
+          expiration = expirationMatch[1].trim();
+        }
+
+        registrations.push({
+          registration: registration.trim(),
+          serverUri: serverUri.trim(),
+          auth: auth.trim(),
+          status: status.trim(),
+          expiration,
+        });
+      }
+    }
+
+    this.logger.log(`Found ${registrations.length} PJSIP registration(s): ${registrations.map(r => r.registration).join(', ')}`);
+    return registrations;
   }
 }

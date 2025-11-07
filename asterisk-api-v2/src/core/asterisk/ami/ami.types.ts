@@ -115,3 +115,14 @@ export interface TransportInfo {
   externalMediaAddress?: string;
   externalSignalingAddress?: string;
 }
+
+/**
+ * PJSIP Registration Info
+ */
+export interface RegistrationInfo {
+  registration: string;
+  serverUri: string;
+  auth: string;
+  status: string;
+  expiration?: string;
+}
