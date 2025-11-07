@@ -289,47 +289,4 @@ export class MetadataController {
   async getAvailableTransports(@Query('lang') lang: 'en' | 'fr' = 'en') {
     return this.metadataService.getAvailableTransports(lang);
   }
-
-  /**
-   * Get available PJSIP registrations from Asterisk
-   */
-  @Get('registrations')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get available PJSIP registrations',
-    description: 'Retrieve actual configured PJSIP registrations from Asterisk',
-  })
-  @ApiQuery({
-    name: 'lang',
-    required: false,
-    enum: ['en', 'fr'],
-    description: 'Response language',
-    example: 'en',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Available registrations retrieved successfully',
-    schema: {
-      example: [
-        {
-          key: 'operator_trunk-reg-0',
-          label: { en: 'operator_trunk-reg-0', fr: 'operator_trunk-reg-0' },
-          description: {
-            en: 'Rejected - sip:197.234.218.195:25060',
-            fr: 'Rejected - sip:197.234.218.195:25060',
-          },
-          metadata: {
-            serverUri: 'sip:197.234.218.195:25060',
-            auth: 'operator_trunk-oauth',
-            status: 'Rejected',
-            expiration: 'exp. 57517s ago',
-          },
-          numericValue: 0,
-        },
-      ],
-    },
-  })
-  async getAvailableRegistrations(@Query('lang') lang: 'en' | 'fr' = 'en') {
-    return this.metadataService.getAvailableRegistrations(lang);
-  }
 }

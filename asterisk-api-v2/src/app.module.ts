@@ -19,6 +19,7 @@ import { LoggerModule } from './core/logger/logger.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
+import { RegistrationsModule } from './registrations/registrations.module';
 import { ExtensionsModule } from './extensions/extensions.module';
 import { QueuesModule } from './queues/queues.module';
 import { QueueMembersModule } from './queue-members/queue-members.module';
@@ -69,6 +70,7 @@ import { PermissionsModule } from './permissions/permissions.module';
     AuthModule,
     TenantsModule,
     EndpointsModule,
+    RegistrationsModule,
     ExtensionsModule,
     QueuesModule,
     QueueMembersModule,

@@ -1,0 +1,3 @@
+-- Migration SQL déjà exécutée avec succès
+-- Table sip_trunks créée le 2025-11-07
+-- Ne pas ré-exécuter ce fichier

@@ -142,7 +142,13 @@ services:
       # Asterisk Paths
       ASTERISK_SOUNDS_PATH: /var/lib/asterisk/sounds/custom
       ASTERISK_RECORDINGS_PATH: /var/spool/asterisk/monitor
+      # Asterisk Config Path (for managing pjsip_wizard.conf)
+      ASTERISK_CONFIG_PATH: /etc/asterisk
+      ASTERISK_RELOAD_TIMEOUT: 5000
     # PRODUCTION MODE: Use compiled code from image (no volume mount)
+    volumes:
+      # Mount Asterisk config directory to allow API to manage SIP trunks
+      - "./etc/asterisk:/etc/asterisk"
     # volumes:
     #   - "../asterisk-api-v2:/app"
     #   - "/app/node_modules"
