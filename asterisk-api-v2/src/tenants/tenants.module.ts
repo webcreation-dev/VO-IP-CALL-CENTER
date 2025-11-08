@@ -15,6 +15,7 @@ import { Cdr } from 'src/cdr/entities/cdr.entity';
 import { TenantContextsModule } from '../tenant-contexts/tenant-contexts.module';
 import { EndpointsModule } from '../endpoints/endpoints.module';
 import { QueuesModule } from '../queues/queues.module';
+import { AsteriskConfigModule } from '../core/asterisk-config/asterisk-config.module';
 
 /**
  * Tenants Module
@@ -43,6 +44,7 @@ import { QueuesModule } from '../queues/queues.module';
     // External modules
     CacheModule,
     TenantContextsModule,
+    AsteriskConfigModule,
 
     // ForwardRef to avoid circular dependencies
     forwardRef(() => EndpointsModule),

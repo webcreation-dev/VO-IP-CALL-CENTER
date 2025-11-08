@@ -13,6 +13,11 @@ RUN apt-get update && \
 COPY asterisk-init.sh /usr/local/bin/asterisk-init.sh
 RUN chmod +x /usr/local/bin/asterisk-init.sh
 
+# Copier les scripts de gestion dynamique des contextes
+COPY scripts/add-context.sh /usr/local/bin/add-context.sh
+COPY scripts/remove-context.sh /usr/local/bin/remove-context.sh
+RUN chmod +x /usr/local/bin/add-context.sh /usr/local/bin/remove-context.sh
+
 # Créer les répertoires et définir les permissions
 RUN mkdir -p /var/lib/asterisk/moh \
     /var/lib/asterisk/sounds/custom \

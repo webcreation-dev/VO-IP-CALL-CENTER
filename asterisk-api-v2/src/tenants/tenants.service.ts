@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, MoreThanOrEqual } from 'typeorm';
+import { Repository, Not, MoreThanOrEqual, DataSource } from 'typeorm';
 import { Tenant } from '../core/database/entities/tenant.entity';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { Extension } from '../core/database/entities/extension.entity';
@@ -17,6 +17,7 @@ import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { CacheService } from '../core/cache/cache.service';
 import { TenantContextsService } from '../tenant-contexts/tenant-contexts.service';
+import { AsteriskConfigService } from '../core/asterisk-config/asterisk-config.service';
 import {
   generateContextName,
   generateUniqueContextName,
@@ -61,6 +62,8 @@ export class TenantsService {
     private readonly cdrRepository: Repository<Cdr>,
     private readonly cacheService: CacheService,
     private readonly tenantContextsService: TenantContextsService,
+    private readonly asteriskConfigService: AsteriskConfigService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -87,59 +90,145 @@ export class TenantsService {
       throw new ConflictException(`Tenant with name "${dto.name}" already exists`);
     }
 
-    // SIMPLIFIED - Auto-generate context from tenant name (like old project)
-    let contextName: string = generateContextName(dto.name);
-    
-    // Ensure context is unique
-    const existingContexts = await this.getAllContextNames();
-    if (existingContexts.includes(contextName)) {
-      contextName = generateUniqueContextName(contextName, existingContexts);
-    }
-
-    // COMMENTED - Not needed for simplified version
-    // // Use provided dialplan config or defaults
-    // const dialplanConfig: DialplanConfig = dto.dialplanConfig
-    //   ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
-    //   : { ...DEFAULT_DIALPLAN_CONFIG };
-
     // Use provided dialplan config or defaults
     const dialplanConfig: DialplanConfig = dto.dialplanConfig
       ? { ...DEFAULT_DIALPLAN_CONFIG, ...dto.dialplanConfig }
       : { ...DEFAULT_DIALPLAN_CONFIG };
 
-    // Create tenant with ALL columns
-    const tenant = this.tenantRepository.create({
-      name: dto.name,
-      companyName: dto.companyName,
-      contactEmail: dto.contactEmail,
-      contactPhone: dto.contactPhone,
-      address: dto.address,
-      city: dto.city,
-      country: dto.country,
-      timezone: dto.timezone || 'UTC',
-      maxEndpoints: dto.maxEndpoints || 100,
-      maxQueues: dto.maxQueues || 50,
-      dialplanConfig: dialplanConfig,
-      isActive: true,
-    });
+    // TRANSACTION: Create tenant + context + extensions + Asterisk config
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const saved = await this.tenantRepository.save(tenant);
+    try {
+      // 1. Create tenant entity
+      const tenant = this.tenantRepository.create({
+        name: dto.name,
+        companyName: dto.companyName,
+        contactEmail: dto.contactEmail,
+        contactPhone: dto.contactPhone,
+        address: dto.address,
+        city: dto.city,
+        country: dto.country,
+        timezone: dto.timezone || 'UTC',
+        maxEndpoints: dto.maxEndpoints || 100,
+        maxQueues: dto.maxQueues || 50,
+        dialplanConfig: dialplanConfig,
+        isActive: true,
+      });
 
-    // Create primary context automatically (also creates default extensions)
-    const primaryContext = await this.tenantContextsService.createPrimaryContext(saved.id);
+      const savedTenant = await queryRunner.manager.save(Tenant, tenant);
 
-    // BUGFIX: Extensions are now created by createPrimaryContext, no need to create them twice
-    // await this.generateDefaultExtensions(saved.id, primaryContext.name, dialplanConfig);
+      // 2. Create primary context within the transaction
+      const contextName = `t${savedTenant.id}_default`;
+      const context = this.tenantContextRepository.create({
+        tenantId: savedTenant.id,
+        name: contextName,
+        description: 'Primary context',
+        isPrimary: true,
+        dialplanConfig: {
+          allowInbound: true,
+          allowOutbound: true,
+          allowInternal: true,
+          allowInterContext: false,
+        },
+      });
 
-    this.logger.log(
-      `Created tenant: ${dto.name} (ID: ${saved.id}, Primary Context: ${primaryContext.name})`,
-    );
-    this.logger.log(`Created primary context: ${primaryContext.name}`);
+      const savedContext = await queryRunner.manager.save(TenantContext, context);
 
-    // Invalidate cache - delete all list variants
-    await this.cacheService.delPattern('tenants:list:*');
+      // 3. Create default dialplan extensions within the transaction
+      // Extension _1XXX - Internal calls
+      await queryRunner.manager.save(Extension, [
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '_1XXX',
+          priority: 1,
+          app: 'NoOp',
+          appdata: 'Internal call to ${EXTEN}',
+        },
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '_1XXX',
+          priority: 2,
+          app: 'Dial',
+          appdata: `PJSIP/t${savedTenant.id}_\${EXTEN},20,TtWw`,
+        },
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '_1XXX',
+          priority: 3,
+          app: 'Hangup',
+          appdata: '',
+        },
+        // Extension 999 - Echo test
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '999',
+          priority: 1,
+          app: 'Answer',
+          appdata: '',
+        },
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '999',
+          priority: 2,
+          app: 'Echo',
+          appdata: '',
+        },
+        {
+          tenantId: savedTenant.id,
+          context: contextName,
+          exten: '999',
+          priority: 3,
+          app: 'Hangup',
+          appdata: '',
+        },
+      ]);
 
-    return saved;
+      this.logger.log(
+        `Created tenant: ${dto.name} (ID: ${savedTenant.id}, Primary Context: ${contextName})`,
+      );
+
+      // 4. COMMIT transaction - Everything succeeded
+      await queryRunner.commitTransaction();
+
+      // 5. Add context to Asterisk AFTER transaction commit
+      try {
+        await this.asteriskConfigService.addContext(contextName);
+        this.logger.log(`Added context ${contextName} to Asterisk`);
+      } catch (asteriskError) {
+        // Log error but don't rollback - data is already committed
+        this.logger.error(
+          `Failed to add context ${contextName} to Asterisk: ${asteriskError.message}. Tenant created but context not in Asterisk.`,
+          asteriskError.stack,
+        );
+        // You might want to implement a cleanup strategy here
+      }
+
+      // 4. Invalidate cache after successful commit
+      await this.cacheService.delPattern('tenants:list:*');
+
+      return savedTenant;
+
+    } catch (error) {
+      // ROLLBACK on any error (including Asterisk config failure)
+      await queryRunner.rollbackTransaction();
+
+      this.logger.error(
+        `Failed to create tenant: ${error.message}. Transaction rolled back.`,
+        error.stack,
+      );
+
+      throw error; // Re-throw to let the controller handle it
+    } finally {
+      // Release query runner
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -292,19 +381,37 @@ export class TenantsService {
   async remove(id: number): Promise<void> {
     const tenant = await this.findOne(id);
 
+    // Get all contexts for this tenant to remove from Asterisk
+    const contexts = await this.tenantContextRepository.find({
+      where: { tenantId: id },
+    });
+
+    // Remove all contexts from Asterisk (non-blocking)
+    for (const context of contexts) {
+      try {
+        await this.asteriskConfigService.removeContext(context.name);
+        this.logger.log(`Removed context ${context.name} from Asterisk`);
+      } catch (error) {
+        // Log but don't block deletion
+        this.logger.warn(
+          `Failed to remove context ${context.name} from Asterisk: ${error.message}`,
+        );
+      }
+    }
+
     // COMMENTED - COLUMN MISSING IN DB
     // // Soft delete: set is_active to false
     // tenant.isActive = false;
     // await this.tenantRepository.save(tenant);
-    
-    // For now, just delete directly (hard delete) since isActive column missing
+
+    // Hard delete tenant (CASCADE will handle related records)
     await this.tenantRepository.remove(tenant);
 
     // Invalidate cache
     await this.cacheService.delPattern('tenants:list:*');
     await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
 
-    this.logger.log(`Soft deleted tenant: ${id}`);
+    this.logger.log(`Deleted tenant ${id} and removed ${contexts.length} contexts from Asterisk`);
   }
 
   /**

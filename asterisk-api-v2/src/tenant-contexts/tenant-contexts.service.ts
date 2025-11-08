@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { ExtensionsService } from '../extensions/extensions.service';
+import { AsteriskConfigService } from '../core/asterisk-config/asterisk-config.service';
 
 @Injectable()
 export class TenantContextsService {
@@ -12,6 +13,7 @@ export class TenantContextsService {
     @InjectRepository(TenantContext)
     private readonly tenantContextRepo: Repository<TenantContext>,
     private readonly extensionsService: ExtensionsService,
+    private readonly asteriskConfigService: AsteriskConfigService,
   ) {}
 
   /**
@@ -48,7 +50,14 @@ export class TenantContextsService {
       },
     });
 
-    return await this.tenantContextRepo.save(context);
+    const savedContext = await this.tenantContextRepo.save(context);
+
+    // Add context to Asterisk extensions.conf
+    await this.asteriskConfigService.addContext(contextName);
+
+    this.logger.log(`Created secondary context: ${contextName}`);
+
+    return savedContext;
   }
 
   /**
@@ -83,6 +92,9 @@ export class TenantContextsService {
 
     // Create default dialplan extensions for this context
     await this.createDefaultDialplan(tenantId, contextName);
+
+    // Add context to Asterisk extensions.conf
+    await this.asteriskConfigService.addContext(contextName);
 
     this.logger.log(`Created primary context with default dialplan: ${contextName}`);
 
@@ -292,7 +304,13 @@ export class TenantContextsService {
       throw new BadRequestException('Cannot delete the primary context');
     }
 
+    // Remove from PostgreSQL
     await this.tenantContextRepo.remove(context);
+
+    // Remove from Asterisk (non-blocking)
+    await this.asteriskConfigService.removeContext(context.name);
+
+    this.logger.log(`Removed context: ${context.name}`);
   }
 
   /**
