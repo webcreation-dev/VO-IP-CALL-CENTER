@@ -102,6 +102,34 @@ declare -a MODULES=(
 # "05-registrations:Registrations:$SCRIPT_DIR/05-registrations/test-registrations.sh"
 # "06-ivr:IVR:$SCRIPT_DIR/06-ivr/test-ivr.sh"
 
+##############################################################################
+# CLEANUP GLOBAL - Supprimer toutes les données au début
+##############################################################################
+
+section "CLEANUP GLOBAL - Suppression des données existantes"
+
+# S'assurer que le token est disponible
+if [ -f "/tmp/asterisk-api-token.sh" ]; then
+    source /tmp/asterisk-api-token.sh
+fi
+
+if [ -n "$TOKEN" ]; then
+    # Récupérer tous les tenants et les supprimer
+    TENANTS=$(curl -s -X GET "$API_URL/tenants" -H "Authorization: Bearer $TOKEN")
+    TENANT_IDS=$(echo "$TENANTS" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+
+    if [ -n "$TENANT_IDS" ]; then
+        for TID in $TENANT_IDS; do
+            curl -s -X DELETE "$API_URL/tenants/$TID" -H "Authorization: Bearer $TOKEN" > /dev/null 2>&1
+        done
+        info "Données existantes supprimées ($( echo "$TENANT_IDS" | wc -w) tenants)"
+    else
+        info "Aucune donnée existante à supprimer"
+    fi
+else
+    info "Token non disponible - cleanup ignoré"
+fi
+
 # Exécuter chaque module
 for module in "${MODULES[@]}"; do
     IFS=: read -r module_id module_name script_path <<< "$module"

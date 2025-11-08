@@ -197,15 +197,31 @@ else
 fi
 
 ##############################################################################
-# CLEANUP - Supprimer le tenant de test
+# FINAL - Créer des endpoints permanents pour vérification Asterisk
 ##############################################################################
 
-section "CLEANUP - Suppression du tenant de test"
+section "FINAL - Création d'endpoints permanents"
 
-curl -s -X DELETE "$API_URL/tenants/$TENANT_ID" \
-  -H "Authorization: Bearer $TOKEN" > /dev/null
+# Créer 3 endpoints WebRTC pour tests Asterisk
+for i in 201 202 203; do
+    FINAL_ENDPOINT=$(curl -s -X POST "$API_URL/endpoints" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{
+        \"displayName\": \"Agent $i\",
+        \"password\": \"webrtc$i\",
+        \"transport\": \"transport-wss\",
+        \"context\": \"t${TENANT_ID}_default\",
+        \"tenantId\": $TENANT_ID
+      }")
 
-success "Tenant de test supprimé"
+    FINAL_ID=$(echo "$FINAL_ENDPOINT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [ -n "$FINAL_ID" ]; then
+        info "Endpoint permanent créé: $FINAL_ID"
+    fi
+done
+
+success "3 endpoints permanents créés pour vérification Asterisk"
 
 ##############################################################################
 # RAPPORT

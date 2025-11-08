@@ -214,15 +214,46 @@ else
 fi
 
 ##############################################################################
-# CLEANUP - Supprimer le tenant de test
+# FINAL - Créer des queues permanentes pour vérification Asterisk
 ##############################################################################
 
-section "CLEANUP - Suppression du tenant de test"
+section "FINAL - Création de queues permanentes"
 
-curl -s -X DELETE "$API_URL/tenants/$TENANT_ID" \
-  -H "Authorization: Bearer $TOKEN" > /dev/null
+# Créer 2 queues pour tests Asterisk
+QUEUE_SALES=$(curl -s -X POST "$API_URL/queues" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"name\": \"sales\",
+    \"strategy\": \"ringall\",
+    \"timeout\": 30,
+    \"maxlen\": 0,
+    \"context\": \"t${TENANT_ID}_default\",
+    \"tenantId\": $TENANT_ID
+  }")
 
-success "Tenant de test supprimé"
+QUEUE_SUPPORT=$(curl -s -X POST "$API_URL/queues" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"name\": \"support\",
+    \"strategy\": \"rrmemory\",
+    \"timeout\": 60,
+    \"maxlen\": 10,
+    \"context\": \"t${TENANT_ID}_default\",
+    \"tenantId\": $TENANT_ID
+  }")
+
+SALES_NAME=$(echo "$QUEUE_SALES" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+SUPPORT_NAME=$(echo "$QUEUE_SUPPORT" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [ -n "$SALES_NAME" ] && [ -n "$SUPPORT_NAME" ]; then
+    info "Queue permanente créée: $SALES_NAME"
+    info "Queue permanente créée: $SUPPORT_NAME"
+    success "2 queues permanentes créées pour vérification Asterisk"
+else
+    failure "Échec création queues permanentes"
+fi
 
 ##############################################################################
 # RAPPORT
