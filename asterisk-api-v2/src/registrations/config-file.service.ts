@@ -4,9 +4,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { SipTrunkRegistration } from './interfaces/registration.interface';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { SipTrunk } from './entities/sip-trunk.entity';
+
+const execPromise = promisify(exec);
 
 /**
  * Service to manage pjsip_wizard.conf file
@@ -54,15 +58,28 @@ export class ConfigFileService {
   }
 
   /**
-   * Read the pjsip_wizard.conf file
+   * Read the pjsip_wizard.conf file from Docker container
    */
   async readConfigFile(): Promise<string> {
     try {
-      return await fs.readFile(this.wizardFile, 'utf-8');
+      const tempPath = `/tmp/pjsip_wizard_read_${Date.now()}.conf`;
+
+      // Copy from Docker container to temp file
+      await execPromise(`docker cp asterisk:${this.wizardFile} ${tempPath}`);
+      const content = await fs.readFile(tempPath, 'utf-8');
+      await fs.unlink(tempPath);
+
+      return content;
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error.message?.includes('No such file or directory') || error.code === 'ENOENT') {
         this.logger.warn(`Config file not found at ${this.wizardFile}, creating empty file`);
-        await fs.writeFile(this.wizardFile, '', 'utf-8');
+
+        // Create empty file in Docker container
+        const tempPath = `/tmp/pjsip_wizard_init_${Date.now()}.conf`;
+        await fs.writeFile(tempPath, '', 'utf-8');
+        await execPromise(`docker cp ${tempPath} asterisk:${this.wizardFile}`);
+        await fs.unlink(tempPath);
+
         return '';
       }
       throw new InternalServerErrorException(
@@ -268,7 +285,7 @@ export class ConfigFileService {
   }
 
   /**
-   * Write registrations map back to config file
+   * Write registrations map back to config file in Docker container
    */
   async writeConfigFile(registrations: Map<string, SipTrunkRegistration>): Promise<void> {
     try {
@@ -285,10 +302,15 @@ export class ConfigFileService {
 
       const content = sections.join('\n\n') + '\n';
 
-      // Atomic write: write to temp file, then rename
-      const tempFile = `${this.wizardFile}.tmp`;
+      // Write to local temp file
+      const tempFile = `/tmp/pjsip_wizard_${Date.now()}.conf`;
       await fs.writeFile(tempFile, content, 'utf-8');
-      await fs.rename(tempFile, this.wizardFile);
+
+      // Copy to Docker container
+      await execPromise(`docker cp ${tempFile} asterisk:${this.wizardFile}`);
+
+      // Cleanup temp file
+      await fs.unlink(tempFile);
 
       this.logger.log(`Successfully wrote ${registrations.size} registrations to config file`);
     } catch (error) {
@@ -300,13 +322,17 @@ export class ConfigFileService {
   }
 
   /**
-   * Create a backup of the current config file
+   * Create a backup of the current config file in Docker container
    */
   async backupConfig(): Promise<void> {
     try {
       const backupFile = `${this.wizardFile}.backup`;
-      const content = await fs.readFile(this.wizardFile, 'utf-8');
-      await fs.writeFile(backupFile, content, 'utf-8');
+
+      // Create backup inside Docker container
+      await execPromise(
+        `docker exec asterisk cp ${this.wizardFile} ${backupFile} 2>/dev/null || true`,
+      );
+
       this.logger.debug(`Created backup at ${backupFile}`);
     } catch (error) {
       this.logger.warn(`Failed to create backup: ${error.message}`);
@@ -583,11 +609,17 @@ export class ConfigFileService {
    * Write content directly to file
    */
   private async writeFile(content: string): Promise<void> {
-    const tempFile = `${this.wizardFile}.tmp`;
+    // Write to local temp file
+    const tempFile = `/tmp/pjsip_wizard_write_${Date.now()}.conf`;
 
     try {
       await fs.writeFile(tempFile, content, 'utf-8');
-      await fs.rename(tempFile, this.wizardFile);
+
+      // Copy to Docker container
+      await execPromise(`docker cp ${tempFile} asterisk:${this.wizardFile}`);
+
+      // Cleanup temp file
+      await fs.unlink(tempFile);
     } catch (error) {
       try {
         await fs.unlink(tempFile);

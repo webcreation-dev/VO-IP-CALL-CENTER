@@ -10,6 +10,7 @@ import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { AmiModule } from '../core/asterisk/ami/ami.module';
 import { CacheModule } from '../core/cache/cache.module';
 import { TenantsModule } from '../tenants/tenants.module';
+import { SoundsModule } from '../sounds/sounds.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { TenantsModule } from '../tenants/tenants.module';
     AmiModule,
     CacheModule,
     forwardRef(() => TenantsModule),
+    SoundsModule,
   ],
   controllers: [QueuesController],
   providers: [QueuesService],

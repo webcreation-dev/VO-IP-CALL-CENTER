@@ -84,6 +84,29 @@ fi
 
 success "Tenant créé avec ID: $TENANT_ID"
 
+# Créer une classe MoH pour tester available-moh endpoint
+info "Création d'une classe MoH pour les tests..."
+MOH_RESPONSE=$(curl -s -X POST "$API_URL/moh/classes" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"name\": \"test_queue_music\",
+    \"mode\": \"files\",
+    \"directory\": \"/var/lib/asterisk/sounds/custom/t${TENANT_ID}/moh\",
+    \"format\": \"wav\",
+    \"sort\": \"random\",
+    \"description\": \"Test MoH class for queue tests\",
+    \"tenantId\": $TENANT_ID
+  }")
+
+MOH_CLASS_NAME=$(echo "$MOH_RESPONSE" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [ -n "$MOH_CLASS_NAME" ]; then
+    info "Classe MoH créée: $MOH_CLASS_NAME"
+else
+    info "Classe MoH non créée (test available-moh pourrait échouer)"
+fi
+
 ##############################################################################
 # TEST 1: POST /queues - Créer une file d'attente
 ##############################################################################
@@ -118,7 +141,7 @@ fi
 
 section "TEST 2: Lister toutes les files d'attente"
 
-RESPONSE=$(curl -s -X GET "$API_URL/queues" \
+RESPONSE=$(curl -s -X GET "$API_URL/queues?tenantId=$TENANT_ID" \
   -H "Authorization: Bearer $TOKEN")
 
 if echo "$RESPONSE" | grep -q "$QUEUE_NAME"; then
@@ -211,6 +234,37 @@ if echo "$RESPONSE" | grep -q "404\|not found\|Not Found"; then
     success "File supprimée"
 else
     failure "Échec suppression file"
+fi
+
+##############################################################################
+# TEST 8: GET /queues/available-moh - Classes MoH disponibles
+##############################################################################
+
+section "TEST 8: Obtenir classes MoH disponibles pour queues"
+
+# Ce test vérifie que l'endpoint renvoie la liste des classes MoH
+# disponibles pour assignment aux queues du tenant
+AVAILABLE_MOH_RESPONSE=$(curl -s -X GET "$API_URL/queues/available-moh?tenantId=$TENANT_ID" \
+  -H "Authorization: Bearer $TOKEN")
+
+# Vérifier que la réponse contient un champ data avec un tableau
+if echo "$AVAILABLE_MOH_RESPONSE" | grep -q '"data":\['; then
+    success "Endpoint available-moh répond correctement"
+
+    # Compter le nombre de classes disponibles dans le champ data
+    MOH_COUNT=$(echo "$AVAILABLE_MOH_RESPONSE" | grep -o '"id":[0-9]*' | wc -l)
+    info "Classes MoH disponibles: $MOH_COUNT"
+
+    # Si des classes existent, vérifier le format
+    if [ "$MOH_COUNT" -gt 0 ]; then
+        FULL_NAME=$(echo "$AVAILABLE_MOH_RESPONSE" | grep -o "\"fullName\":\"t${TENANT_ID}_[^\"]*\"" | head -1)
+        if [ -n "$FULL_NAME" ]; then
+            info "Format correct: $FULL_NAME"
+        fi
+    fi
+else
+    failure "Endpoint available-moh ne répond pas correctement"
+    echo "Réponse: $AVAILABLE_MOH_RESPONSE"
 fi
 
 ##############################################################################

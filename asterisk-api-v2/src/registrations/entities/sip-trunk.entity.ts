@@ -74,6 +74,32 @@ export class SipTrunk {
   @Column({ name: 'support_path', type: 'boolean', default: false })
   supportPath: boolean;
 
+  // Routing Configuration
+  @Column({
+    name: 'destination_type',
+    type: 'varchar',
+    length: 20,
+    nullable: true
+  })
+  destinationType: string | null;
+
+  @Column({
+    name: 'destination_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true
+  })
+  destinationId: string | null;
+
+  @Column({
+    name: 'did_pattern',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    default: '_X.'
+  })
+  didPattern: string | null;
+
   // Metadata
   @Column({ name: 'display_name', type: 'varchar', length: 100, nullable: true })
   displayName: string | null;

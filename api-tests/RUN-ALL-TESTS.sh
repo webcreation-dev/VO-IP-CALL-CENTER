@@ -97,10 +97,12 @@ declare -a MODULES=(
     "02-contexts:Contexts:$SCRIPT_DIR/02-contexts/test-contexts.sh"
     "03-endpoints:Endpoints:$SCRIPT_DIR/03-endpoints/test-endpoints.sh"
     "04-queues:Queues:$SCRIPT_DIR/04-queues/test-queues.sh"
+    "05-registrations:SIP Registrations:$SCRIPT_DIR/05-registrations/test-registrations.sh"
+    "07-sounds:Sound Files:$SCRIPT_DIR/07-sounds/test-sounds.sh"
+    "08-moh:Music on Hold:$SCRIPT_DIR/08-moh/test-moh.sh"
 )
 
 # Modules à créer plus tard :
-# "05-registrations:Registrations:$SCRIPT_DIR/05-registrations/test-registrations.sh"
 # "06-ivr:IVR:$SCRIPT_DIR/06-ivr/test-ivr.sh"
 
 ##############################################################################

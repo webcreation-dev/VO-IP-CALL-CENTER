@@ -170,4 +170,30 @@ export class CreateRegistrationDto {
   @IsBoolean()
   @IsOptional()
   support_path?: boolean = false;
+
+  @ApiPropertyOptional({
+    description: 'Destination type for incoming calls (queue, extension, ivr)',
+    example: 'queue',
+    enum: ['queue', 'extension', 'ivr'],
+  })
+  @IsString()
+  @IsOptional()
+  destination_type?: string;
+
+  @ApiPropertyOptional({
+    description: 'Destination identifier (queue name, extension number, ivr menu id)',
+    example: 'support',
+  })
+  @IsString()
+  @IsOptional()
+  destination_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'DID pattern to match incoming calls (Asterisk dialplan pattern)',
+    example: '_X.',
+    default: '_X.',
+  })
+  @IsString()
+  @IsOptional()
+  did_pattern?: string = '_X.';
 }

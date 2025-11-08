@@ -29,12 +29,16 @@ import { GlobalQueueStatsDto } from './dto/global-stats.dto';
 import { QueueDetailsDto } from './dto/queue-details.dto';
 import { QueueCallsDto } from './dto/queue-calls.dto';
 import { QueueReloadResultDto } from './dto/queue-reload.dto';
+import { MohService } from '../sounds/moh.service';
 
 @ApiTags('Queues')
 @ApiBearerAuth()
 @Controller('queues')
 export class QueuesController {
-  constructor(private readonly queuesService: QueuesService) {}
+  constructor(
+    private readonly queuesService: QueuesService,
+    private readonly mohService: MohService,
+  ) {}
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN, UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
@@ -57,7 +61,12 @@ export class QueuesController {
   @Get()
   @ApiOperation({ summary: 'List all queues' })
   @ApiResponse({ status: 200, description: 'Queues retrieved successfully' })
-  async findAll(@CurrentTenant() tenantId: number) {
+  async findAll(
+    @CurrentTenant() currentTenantId: number | null,
+    @Query('tenantId') queryTenantId?: string,
+  ) {
+    // SUPER_ADMIN can specify tenantId via query, otherwise use JWT tenantId
+    const tenantId = queryTenantId ? parseInt(queryTenantId, 10) : currentTenantId;
     return await this.queuesService.findAll(tenantId);
   }
 
@@ -87,6 +96,53 @@ export class QueuesController {
   })
   async getGlobalStats(@CurrentTenant() tenantId: number) {
     return await this.queuesService.getGlobalStats(tenantId);
+  }
+
+  /**
+   * Get available Music on Hold classes for queues
+   * IMPORTANT: This route MUST be before @Get(':name') to avoid conflicts
+   */
+  @Get('available-moh')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get available MoH classes',
+    description: 'Get all available Music on Hold classes that can be assigned to queues',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available MoH classes retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'company_music',
+          fullName: 't1_company_music',
+          description: 'Company background music',
+          mode: 'files',
+        },
+      ],
+    },
+  })
+  async getAvailableMoh(
+    @CurrentTenant() currentTenantId: number | null,
+    @Query('tenantId') queryTenantId?: string,
+  ) {
+    // SUPER_ADMIN can specify tenantId via query, otherwise use JWT tenantId
+    const tenantId = queryTenantId ? parseInt(queryTenantId, 10) : currentTenantId;
+
+    if (!tenantId) {
+      return [];
+    }
+
+    const mohClasses = await this.mohService.getAvailableForTenant(tenantId);
+    return mohClasses.map(mohClass => ({
+      id: mohClass.id,
+      name: mohClass.name,
+      fullName: `t${mohClass.tenantId}_${mohClass.name}`,
+      description: mohClass.description,
+      mode: mohClass.mode,
+    }));
   }
 
   @Get(':name')
@@ -304,4 +360,5 @@ export class QueuesController {
       body.reason
     );
   }
+
 }

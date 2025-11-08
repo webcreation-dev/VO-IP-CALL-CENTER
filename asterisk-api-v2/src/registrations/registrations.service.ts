@@ -12,6 +12,7 @@ import { ConfigFileService } from './config-file.service';
 import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import { UpdateRoutingDto } from './dto/update-routing.dto';
 import {
   SipTrunkRegistration,
   RegistrationStatus,
@@ -19,6 +20,8 @@ import {
 } from './interfaces/registration.interface';
 import { RegistrationInfo } from '../core/asterisk/ami/ami.types';
 import { SipTrunk } from './entities/sip-trunk.entity';
+import { ExtensionsService } from '../extensions/extensions.service';
+import { Queue } from '../queues/entities/queue.entity';
 
 @Injectable()
 export class RegistrationsService {
@@ -27,8 +30,11 @@ export class RegistrationsService {
   constructor(
     @InjectRepository(SipTrunk)
     private readonly sipTrunkRepository: Repository<SipTrunk>,
+    @InjectRepository(Queue)
+    private readonly queueRepository: Repository<Queue>,
     private readonly configFileService: ConfigFileService,
     private readonly amiService: AmiService,
+    private readonly extensionsService: ExtensionsService,
   ) {}
 
   /**
@@ -58,6 +64,10 @@ export class RegistrationsService {
       line: entity.line,
       outbound_proxy: entity.outboundProxy ?? undefined,
       support_path: entity.supportPath,
+      // Routing configuration
+      destination_type: entity.destinationType ?? undefined,
+      destination_id: entity.destinationId ?? undefined,
+      did_pattern: entity.didPattern ?? undefined,
     };
   }
 
@@ -142,6 +152,11 @@ export class RegistrationsService {
     }
 
     try {
+      // Validate routing destination if provided
+      if (dto.destination_type && dto.destination_id) {
+        await this.validateDestination(dto.destination_type, dto.destination_id, tenantId);
+      }
+
       // Create entity
       const sipTrunk = this.sipTrunkRepository.create({
         name: dto.name,
@@ -165,10 +180,25 @@ export class RegistrationsService {
         displayName: null,
         description: null,
         enabled: true,
+        // Routing configuration
+        destinationType: dto.destination_type || null,
+        destinationId: dto.destination_id || null,
+        didPattern: dto.did_pattern || '_X.',
       });
 
       // Save to database
       const saved = await this.sipTrunkRepository.save(sipTrunk);
+
+      // Create routing extensions if destination is configured
+      if (saved.destinationType && saved.destinationId) {
+        try {
+          await this.createRoutingExtensions(saved);
+          this.logger.log(`Created routing extensions for trunk ${dto.name}`);
+        } catch (error) {
+          this.logger.warn(`Failed to create routing extensions: ${error.message}`);
+          // Don't fail the trunk creation if routing fails
+        }
+      }
 
       // Regenerate config file from all DB entries
       await this.configFileService.generateFromDatabase();
@@ -290,6 +320,16 @@ export class RegistrationsService {
       if (dto.outbound_proxy !== undefined) trunk.outboundProxy = dto.outbound_proxy || null;
       if (dto.support_path !== undefined) trunk.supportPath = dto.support_path;
 
+      // Update routing fields if provided
+      if (dto.destination_type !== undefined) trunk.destinationType = dto.destination_type || null;
+      if (dto.destination_id !== undefined) trunk.destinationId = dto.destination_id || null;
+      if (dto.did_pattern !== undefined) trunk.didPattern = dto.did_pattern || null;
+
+      // Validate routing if being updated
+      if (trunk.destinationType && trunk.destinationId) {
+        await this.validateDestination(trunk.destinationType, trunk.destinationId, trunk.tenantId);
+      }
+
       // Save to database
       const updated = await this.sipTrunkRepository.save(trunk);
 
@@ -388,6 +428,257 @@ export class RegistrationsService {
     } catch (error) {
       this.logger.error(`Failed to get registration statuses from AMI: ${error.message}`);
       throw new InternalServerErrorException('Failed to retrieve registration statuses from Asterisk');
+    }
+  }
+
+  /**
+   * Update routing configuration for a trunk
+   * This will automatically create/update the necessary dialplan extensions
+   */
+  async updateRouting(name: string, dto: UpdateRoutingDto, tenantId?: number) {
+    // Find the trunk
+    const where: any = { name };
+    if (tenantId) {
+      where.tenantId = tenantId;
+    }
+
+    const trunk = await this.sipTrunkRepository.findOne({ where });
+
+    if (!trunk) {
+      throw new NotFoundException(`SIP trunk '${name}' not found`);
+    }
+
+    try {
+      // Validate destination if specified
+      if (dto.destination_type && dto.destination_id) {
+        await this.validateDestination(dto.destination_type, dto.destination_id, trunk.tenantId);
+      }
+
+      // Remove old routing extensions if routing is being changed
+      if (trunk.destinationType && trunk.destinationId) {
+        await this.removeRoutingExtensions(trunk);
+      }
+
+      // Update trunk routing fields
+      trunk.destinationType = dto.destination_type ?? null;
+      trunk.destinationId = dto.destination_id ?? null;
+      trunk.didPattern = dto.did_pattern ?? trunk.didPattern ?? '_X.';
+
+      // Save trunk
+      const updated = await this.sipTrunkRepository.save(trunk);
+
+      // Create new routing extensions if destination is set
+      let extensionsCreated: any[] = [];
+      if (trunk.destinationType && trunk.destinationId) {
+        extensionsCreated = await this.createRoutingExtensions(trunk);
+      }
+
+      this.logger.log(`Updated routing for trunk ${name}: ${trunk.destinationType} -> ${trunk.destinationId}`);
+
+      return {
+        message: 'Routing configured successfully',
+        trunk: {
+          id: updated.name,
+          destination_type: updated.destinationType,
+          destination_id: updated.destinationId,
+          did_pattern: updated.didPattern,
+          context: updated.context,
+        },
+        extensions_created: extensionsCreated,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(`Failed to update routing for ${name}: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to update routing: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get routing configuration for a trunk
+   */
+  async getRouting(name: string, tenantId?: number) {
+    const where: any = { name };
+    if (tenantId) {
+      where.tenantId = tenantId;
+    }
+
+    const trunk = await this.sipTrunkRepository.findOne({ where });
+
+    if (!trunk) {
+      throw new NotFoundException(`SIP trunk '${name}' not found`);
+    }
+
+    // Get associated extensions if routing is configured
+    let extensions: any[] = [];
+    if (trunk.destinationType && trunk.destinationId) {
+      try {
+        const allExtensions = await this.extensionsService.getByContext(trunk.tenantId, trunk.context);
+        // Filter extensions that match the DID pattern and route to the destination
+        const destType = trunk.destinationType;
+        const destId = trunk.destinationId;
+        extensions = allExtensions.filter((ext: any) => {
+          return ext.exten === trunk.didPattern &&
+                 this.isRoutingToDestination(ext, destType, destId, trunk.tenantId);
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to get extensions for trunk ${name}: ${error.message}`);
+      }
+    }
+
+    return {
+      destination_type: trunk.destinationType,
+      destination_id: trunk.destinationId,
+      did_pattern: trunk.didPattern,
+      context: trunk.context,
+      extensions: extensions.map((ext: any) => ({
+        context: ext.context,
+        exten: ext.exten,
+        priority: ext.priority,
+        app: ext.app,
+        appdata: ext.appdata,
+      })),
+    };
+  }
+
+  /**
+   * Validate that a destination exists and belongs to the tenant
+   */
+  private async validateDestination(type: string, destinationId: string, tenantId: number): Promise<void> {
+    switch (type) {
+      case 'queue':
+        // Queue names are tenant-prefixed (t{tenantId}_{queueName})
+        const queueName = destinationId.startsWith(`t${tenantId}_`) ? destinationId : `t${tenantId}_${destinationId}`;
+        const queue = await this.queueRepository.findOne({ where: { name: queueName } });
+        if (!queue) {
+          throw new NotFoundException(`Queue '${destinationId}' not found for tenant ${tenantId}`);
+        }
+        break;
+
+      case 'extension':
+        // Extensions are validated when created, so we just check the format
+        if (!destinationId || destinationId.trim() === '') {
+          throw new BadRequestException('Extension number cannot be empty');
+        }
+        break;
+
+      case 'ivr':
+        // IVR validation would go here
+        // For now, we just check it's not empty
+        if (!destinationId || destinationId.trim() === '') {
+          throw new BadRequestException('IVR menu ID cannot be empty');
+        }
+        break;
+
+      default:
+        throw new BadRequestException(`Unknown destination type: ${type}`);
+    }
+  }
+
+  /**
+   * Create dialplan extensions for trunk routing
+   */
+  private async createRoutingExtensions(trunk: SipTrunk): Promise<any[]> {
+    const extensions: any[] = [];
+
+    // Determine the app and appdata based on destination type
+    let app: string;
+    let appdata: string;
+
+    if (!trunk.destinationId) {
+      throw new BadRequestException('Destination ID is required');
+    }
+
+    switch (trunk.destinationType) {
+      case 'queue':
+        app = 'Queue';
+        // Use the full queue name (tenant-prefixed)
+        appdata = trunk.destinationId.startsWith(`t${trunk.tenantId}_`)
+          ? trunk.destinationId
+          : `t${trunk.tenantId}_${trunk.destinationId}`;
+        break;
+
+      case 'extension':
+        app = 'Goto';
+        appdata = `${trunk.context},${trunk.destinationId},1`;
+        break;
+
+      case 'ivr':
+        app = 'Goto';
+        appdata = `ivr-${trunk.destinationId},s,1`;
+        break;
+
+      default:
+        throw new BadRequestException(`Cannot create routing for destination type: ${trunk.destinationType}`);
+    }
+
+    // Create the extension
+    try {
+      const extension = await this.extensionsService.create(trunk.tenantId, {
+        context: trunk.context,
+        exten: trunk.didPattern || '_X.',
+        priority: 1,
+        app,
+        appdata,
+      });
+
+      extensions.push(extension);
+    } catch (error) {
+      this.logger.error(`Failed to create routing extension: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to create routing extension: ${error.message}`);
+    }
+
+    return extensions;
+  }
+
+  /**
+   * Remove routing extensions for a trunk
+   */
+  private async removeRoutingExtensions(trunk: SipTrunk): Promise<void> {
+    try {
+      const allExtensions = await this.extensionsService.getByContext(trunk.tenantId, trunk.context);
+
+      // Find extensions that match the DID pattern and route to the current destination
+      const destType = trunk.destinationType;
+      const destId = trunk.destinationId;
+      const extensionsToRemove = allExtensions.filter((ext: any) => {
+        return ext.exten === trunk.didPattern &&
+               destType && destId &&
+               this.isRoutingToDestination(ext, destType, destId, trunk.tenantId);
+      });
+
+      // Remove each extension
+      for (const ext of extensionsToRemove) {
+        await this.extensionsService.remove(trunk.tenantId, ext.id);
+      }
+
+      if (extensionsToRemove.length > 0) {
+        this.logger.log(`Removed ${extensionsToRemove.length} routing extensions for trunk ${trunk.name}`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to remove old routing extensions: ${error.message}`);
+      // Don't throw error here, we can continue with the update
+    }
+  }
+
+  /**
+   * Check if an extension routes to a specific destination
+   */
+  private isRoutingToDestination(extension: any, destinationType: string, destinationId: string, tenantId: number): boolean {
+    switch (destinationType) {
+      case 'queue':
+        const queueName = destinationId.startsWith(`t${tenantId}_`) ? destinationId : `t${tenantId}_${destinationId}`;
+        return extension.app === 'Queue' && extension.appdata === queueName;
+
+      case 'extension':
+        return extension.app === 'Goto' && extension.appdata.includes(destinationId);
+
+      case 'ivr':
+        return extension.app === 'Goto' && extension.appdata.includes(`ivr-${destinationId}`);
+
+      default:
+        return false;
     }
   }
 }

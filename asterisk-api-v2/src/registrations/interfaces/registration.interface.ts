@@ -58,6 +58,15 @@ export interface SipTrunkRegistration {
 
   /** Enable path support (default: false) */
   support_path?: boolean;
+
+  /** Destination type for incoming calls (optional) */
+  destination_type?: string;
+
+  /** Destination identifier - queue name, extension number, or IVR menu ID (optional) */
+  destination_id?: string;
+
+  /** DID pattern to match incoming calls (optional, default: '_X.') */
+  did_pattern?: string;
 }
 
 /**

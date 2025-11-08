@@ -22,6 +22,7 @@ import {
 import { RegistrationsService } from './registrations.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import { UpdateRoutingDto } from './dto/update-routing.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @ApiTags('SIP Trunk Registrations')
@@ -237,6 +238,92 @@ export class RegistrationsController {
     return {
       message: `Registration attempt initiated for ${id}`,
     };
+  }
+
+  /**
+   * Configure routing for incoming calls on this trunk
+   */
+  @Patch(':id/routing')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Configure trunk routing',
+    description: 'Configure automatic routing for incoming calls on this trunk to a destination (queue, extension, ivr)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'SIP trunk identifier',
+    example: 'operator_trunk',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Routing configured successfully',
+    schema: {
+      example: {
+        message: 'Routing configured successfully',
+        trunk: {
+          id: 'operator_trunk',
+          destination_type: 'queue',
+          destination_id: 'support',
+          did_pattern: '_X.',
+        },
+        extensions_created: [
+          {
+            context: 'from-trunk',
+            exten: '_X.',
+            priority: 1,
+            app: 'Queue',
+            appdata: 't1_support',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'SIP trunk or destination not found' })
+  @ApiResponse({ status: 400, description: 'Invalid routing configuration' })
+  async updateRouting(
+    @Param('id') id: string,
+    @Body() updateRoutingDto: UpdateRoutingDto,
+  ) {
+    return this.registrationsService.updateRouting(id, updateRoutingDto);
+  }
+
+  /**
+   * Get routing configuration for a trunk
+   */
+  @Get(':id/routing')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get trunk routing',
+    description: 'Get the current routing configuration for this trunk',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'SIP trunk identifier',
+    example: 'operator_trunk',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Routing configuration retrieved successfully',
+    schema: {
+      example: {
+        destination_type: 'queue',
+        destination_id: 'support',
+        did_pattern: '_X.',
+        extensions: [
+          {
+            context: 'from-trunk',
+            exten: '_X.',
+            priority: 1,
+            app: 'Queue',
+            appdata: 't1_support',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'SIP trunk not found' })
+  async getRouting(@Param('id') id: string) {
+    return this.registrationsService.getRouting(id);
   }
 
   /**

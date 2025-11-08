@@ -46,6 +46,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { IvrModule } from './ivr/ivr.module';
 import { RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { SoundsModule } from './sounds/sounds.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { PermissionsModule } from './permissions/permissions.module';
     IvrModule,
     RolesModule,
     PermissionsModule,
+    SoundsModule,
   ],
   controllers: [AppController],
   providers: [
