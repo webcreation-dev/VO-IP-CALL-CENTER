@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 
 import { Extension } from '../core/database/entities/extension.entity';
 import { Tenant } from '../core/database/entities/tenant.entity';
+import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { CreateExtensionDto } from './dto/create-extension.dto';
 import { UpdateExtensionDto } from './dto/update-extension.dto';
 import { ExtensionFilterDto } from './dto/extension-filter.dto';
@@ -42,6 +43,8 @@ export class ExtensionsService {
     private readonly extensionRepository: Repository<Extension>,
     @InjectRepository(Tenant)
     private readonly tenantRepository: Repository<Tenant>,
+    @InjectRepository(TenantContext)
+    private readonly tenantContextRepository: Repository<TenantContext>,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -395,8 +398,11 @@ export class ExtensionsService {
       throw new NotFoundException(`Tenant ${tenantId} not found`);
     }
 
-    // Check if context matches tenant's context
-    if (tenant.context !== context) {
+    // Check if context belongs to tenant
+    const tenantContext = await this.tenantContextRepository.findOne({
+      where: { tenantId, name: context },
+    });
+    if (!tenantContext) {
       throw new ForbiddenException(
         `Context '${context}' does not belong to your tenant`,
       );

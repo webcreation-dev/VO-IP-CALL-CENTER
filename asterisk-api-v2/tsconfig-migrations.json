@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "transpileOnly": true
+  },
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "src/*": ["src/*"]
+    }
+  }
+}

@@ -32,7 +32,7 @@ export class QueueMembersController {
   constructor(private readonly membersService: QueueMembersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Add member to queue' })
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiResponse({ status: 201, description: 'Member added successfully' })
@@ -71,7 +71,7 @@ export class QueueMembersController {
   }
 
   @Patch(':memberName/pause')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Pause member' })
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiParam({ name: 'memberName', example: '101' })
@@ -86,7 +86,7 @@ export class QueueMembersController {
   }
 
   @Patch(':memberName/unpause')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Unpause member' })
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiParam({ name: 'memberName', example: '101' })
@@ -101,7 +101,7 @@ export class QueueMembersController {
   }
 
   @Patch(':memberName')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Update member penalty' })
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiParam({ name: 'memberName', example: '101' })
@@ -124,7 +124,7 @@ export class QueueMembersController {
   }
 
   @Delete(':memberName')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove member from queue' })
   @ApiParam({ name: 'queueName', example: 'support' })

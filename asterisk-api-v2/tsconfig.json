@@ -16,7 +16,7 @@
     "strictNullChecks": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "forceConsistentCasingInSwitch": false,
+    // "forceConsistentCasingInSwitch": false,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true,

@@ -18,11 +18,11 @@ import { UserPayload } from '../interfaces/user-payload.interface';
  *
  * @example
  * ```typescript
- * @Roles(UserRole.ADMIN)
+ * @Roles(UserRole.SUPER_ADMIN)
  * @Delete(':id')
  * deleteUser() { ... }
  *
- * @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+ * @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
  * @Post()
  * createQueue() { ... }
  * ```

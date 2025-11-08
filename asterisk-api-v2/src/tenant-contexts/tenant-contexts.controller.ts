@@ -130,7 +130,7 @@ export class TenantContextsController {
    * Only admin or tenant_admin can create contexts
    */
   @Post('contexts')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Create new context',
     description: 'Create a new dialplan context for a tenant. Context name will be automatically prefixed with tenant ID.',
@@ -181,7 +181,7 @@ export class TenantContextsController {
    * Only admin or tenant_admin can update contexts
    */
   @Patch('contexts/:id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Update context',
     description: 'Update context description or dialplan configuration. Cannot change tenant ownership or primary status.',
@@ -210,7 +210,7 @@ export class TenantContextsController {
    * Cannot delete primary context
    */
   @Delete('contexts/:id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete context',

@@ -50,7 +50,7 @@ export class ChannelsController {
   }
 
   @Post('originate')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
   @ApiOperation({ summary: 'Originate an outbound call' })
   @ApiResponse({ status: 201, description: 'Call originated successfully' })
   async originate(
@@ -61,7 +61,7 @@ export class ChannelsController {
   }
 
   @Patch(':channelId/answer')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
   @ApiOperation({ summary: 'Answer a ringing channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
   @ApiResponse({ status: 200, description: 'Channel answered' })
@@ -71,7 +71,7 @@ export class ChannelsController {
   }
 
   @Delete(':channelId')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Hangup a channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
@@ -84,7 +84,7 @@ export class ChannelsController {
   }
 
   @Patch(':channelId/hold')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
   @ApiOperation({ summary: 'Hold a channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
   @ApiResponse({ status: 200, description: 'Channel held' })
@@ -94,7 +94,7 @@ export class ChannelsController {
   }
 
   @Patch(':channelId/unhold')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)
   @ApiOperation({ summary: 'Unhold a channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
   @ApiResponse({ status: 200, description: 'Channel unheld' })
@@ -104,7 +104,7 @@ export class ChannelsController {
   }
 
   @Patch(':channelId/mute')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Mute a channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
   @ApiQuery({
@@ -123,7 +123,7 @@ export class ChannelsController {
   }
 
   @Patch(':channelId/unmute')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Unmute a channel' })
   @ApiParam({ name: 'channelId', example: '1234567890.123' })
   @ApiQuery({

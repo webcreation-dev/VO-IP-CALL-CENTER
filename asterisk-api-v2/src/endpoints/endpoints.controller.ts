@@ -61,7 +61,7 @@ export class EndpointsController {
    * Requires admin or tenant_admin role
    */
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Create new endpoint',
     description:
@@ -212,7 +212,7 @@ export class EndpointsController {
    * Update endpoint
    */
   @Patch(':username')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Update endpoint',
     description:
@@ -240,7 +240,7 @@ export class EndpointsController {
    * Delete endpoint
    */
   @Delete(':username')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete endpoint',
@@ -306,7 +306,7 @@ export class EndpointsController {
    * ADDED - Force disconnect an endpoint (like old project)
    */
   @Post(':username/disconnect')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({
     summary: 'Force disconnect an endpoint',
     description: 'Forces disconnection of all active channels for the endpoint',

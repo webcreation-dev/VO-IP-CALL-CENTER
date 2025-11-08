@@ -5,6 +5,7 @@ import { ExtensionsController } from './extensions.controller';
 import { ExtensionsService } from './extensions.service';
 import { Extension } from '../core/database/entities/extension.entity';
 import { Tenant } from '../core/database/entities/tenant.entity';
+import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { CacheModule } from '../core/cache/cache.module';
 
 /**
@@ -27,7 +28,7 @@ import { CacheModule } from '../core/cache/cache.module';
  * - ExtensionsService: Used by TenantService for default extension generation
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Extension, Tenant]), CacheModule],
+  imports: [TypeOrmModule.forFeature([Extension, Tenant, TenantContext]), CacheModule],
   controllers: [ExtensionsController],
   providers: [ExtensionsService],
   exports: [ExtensionsService],

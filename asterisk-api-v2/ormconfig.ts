@@ -11,8 +11,11 @@ export default new DataSource({
   username: process.env.DB_USERNAME || process.env.DB_USER || 'asterisk',
   password: process.env.DB_PASSWORD || 'password',
   database: process.env.DB_NAME || 'asterisk',
-  entities: ['dist/src/**/*.entity.js', 'src/**/*.entity.ts'],
-  migrations: ['dist/src/migrations/*.js', 'src/migrations/*.ts'],
+  entities: ['src/**/*.entity.ts'],
+  migrations: [
+    'src/core/database/migrations/*.ts',
+    'src/migrations/*.ts',
+  ],
   synchronize: false,
   logging: true,
 });

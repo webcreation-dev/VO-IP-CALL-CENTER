@@ -23,12 +23,9 @@ export class AppUser {
   tenantId: number | null;
 
   @Column({ unique: true })
-  username: string;
-
-  @Column({ unique: true })
   email: string;
 
-  @Column({ name: 'password_hash', select: false }) // Ne pas retourner le password dans les queries par défaut
+  @Column({ name: 'password', select: false }) // Ne pas retourner le password dans les queries par défaut
   passwordHash: string;
 
   @Column({
@@ -55,7 +52,7 @@ export class AppUser {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
-  @Column({ name: 'last_login', type: 'timestamp', nullable: true })
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   lastLogin: Date;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -69,7 +66,7 @@ export class AppUser {
     if (this.firstName && this.lastName) {
       return `${this.firstName} ${this.lastName}`;
     }
-    return this.firstName || this.lastName || this.username;
+    return this.firstName || this.lastName || this.email;
   }
 
   // Check if user is super admin

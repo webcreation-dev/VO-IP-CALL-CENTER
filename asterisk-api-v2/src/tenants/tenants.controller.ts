@@ -74,7 +74,7 @@ export class TenantsController {
    * Only accessible by admin users
    */
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Create new tenant',
     description: 'Create a new tenant organization. Only accessible by admin users.',
@@ -302,7 +302,7 @@ export class TenantsController {
    * Tenant Admin: can only update own tenant
    */
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Update tenant',
     description: 'Update tenant information. Admin can update any tenant, tenant_admin can only update own tenant.',
@@ -328,7 +328,7 @@ export class TenantsController {
    * Only accessible by admin users
    */
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete tenant (soft delete)',
@@ -348,7 +348,7 @@ export class TenantsController {
    * Only accessible by admin users
    */
   @Patch(':id/restore')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Restore soft-deleted tenant',
     description: 'Restore a soft-deleted tenant by setting is_active to true. Only accessible by admin users.',

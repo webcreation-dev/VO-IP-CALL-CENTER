@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, MoreThanOrEqual } from 'typeorm';
 import { Tenant } from '../core/database/entities/tenant.entity';
+import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { Extension } from '../core/database/entities/extension.entity';
 import { PsEndpoint } from '../endpoints/entities/ps-endpoint.entity';
 import { Queue } from '../queues/entities/queue.entity';
@@ -48,6 +49,8 @@ export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private readonly tenantRepository: Repository<Tenant>,
+    @InjectRepository(TenantContext)
+    private readonly tenantContextRepository: Repository<TenantContext>,
     @InjectRepository(Extension)
     private readonly extensionRepository: Repository<Extension>,
     @InjectRepository(PsEndpoint)
@@ -116,7 +119,6 @@ export class TenantsService {
       timezone: dto.timezone || 'UTC',
       maxEndpoints: dto.maxEndpoints || 100,
       maxQueues: dto.maxQueues || 50,
-      context: contextName,
       dialplanConfig: dialplanConfig,
       isActive: true,
     });
@@ -396,13 +398,11 @@ export class TenantsService {
    * @private
    */
   private async getAllContextNames(): Promise<string[]> {
-    const tenants = await this.tenantRepository.find({
-      select: ['context'],
-      where: { context: Not(null) as any },
+    const contexts = await this.tenantContextRepository.find({
+      select: ['name'],
+      where: { isPrimary: true },
     });
-    return tenants
-      .map((t) => t.context)
-      .filter((c): c is string => c !== null);
+    return contexts.map((c) => c.name);
   }
 
   /**

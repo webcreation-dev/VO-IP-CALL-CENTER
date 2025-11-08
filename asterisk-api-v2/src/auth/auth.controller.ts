@@ -53,7 +53,7 @@ export class AuthController {
    * @returns Created user (without password)
    */
   @Post('register')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Register a new user',

@@ -62,7 +62,7 @@ export class ExtensionsController {
    * Access: Admin, Tenant Admin
    */
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Create a new dialplan extension',
     description:
@@ -199,7 +199,7 @@ export class ExtensionsController {
    * Access: Admin, Tenant Admin
    */
   @Put(':id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Update an extension',
     description: 'Updates an existing extension. All fields are optional.',
@@ -239,7 +239,7 @@ export class ExtensionsController {
    * Access: Admin, Tenant Admin
    */
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete an extension',

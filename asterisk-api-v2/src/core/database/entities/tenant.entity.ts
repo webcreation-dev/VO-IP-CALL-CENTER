@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import type { DialplanConfig } from '../../../common/interfaces/dialplan-config.interface';
+import { TenantContext } from './tenant-context.entity';
 
 @Entity('tenants')
 export class Tenant {
@@ -46,14 +47,6 @@ export class Tenant {
   @Column({ name: 'max_queues', type: 'integer', default: 50 })
   maxQueues: number;
 
-  /**
-   * Asterisk dialplan context for this tenant
-   * Provides isolation at the Asterisk level
-   * Auto-generated from tenant name if not provided
-   */
-  @Column({ length: 50, nullable: true })
-  context: string;
-
   @Column({ name: 'dialplan_config', type: 'jsonb', nullable: true })
   dialplanConfig: DialplanConfig;
 
@@ -62,6 +55,10 @@ export class Tenant {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  // Relations
+  @OneToMany(() => TenantContext, (context) => context.tenant)
+  contexts: TenantContext[];
 
   // Relations will be added as we create other entities
   // @OneToMany(() => AppUser, (user) => user.tenant)
@@ -72,4 +69,12 @@ export class Tenant {
 
   // @OneToMany(() => Queue, (queue) => queue.tenant)
   // queues: Queue[];
+
+  /**
+   * Get the primary context for this tenant
+   * @returns The primary TenantContext or undefined if not loaded
+   */
+  getPrimaryContext(): TenantContext | undefined {
+    return this.contexts?.find((ctx) => ctx.isPrimary);
+  }
 }

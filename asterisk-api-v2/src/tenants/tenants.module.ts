@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
 import { Tenant } from '../core/database/entities/tenant.entity';
+import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { Extension } from '../core/database/entities/extension.entity';
 import { CacheModule } from '../core/cache/cache.module';
 import { PsEndpoint } from '../endpoints/entities/ps-endpoint.entity';
@@ -37,7 +38,7 @@ import { QueuesModule } from '../queues/queues.module';
 @Module({
   imports: [
     // TypeORM entities
-    TypeOrmModule.forFeature([Tenant, Extension, PsEndpoint, PsAuth, PsAor, Queue, Cdr]),
+    TypeOrmModule.forFeature([Tenant, TenantContext, Extension, PsEndpoint, PsAuth, PsAor, Queue, Cdr]),
 
     // External modules
     CacheModule,

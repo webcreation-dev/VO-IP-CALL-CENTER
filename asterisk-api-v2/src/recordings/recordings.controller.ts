@@ -33,7 +33,7 @@ export class RecordingsController {
   constructor(private readonly recordingsService: RecordingsService) {}
 
   @Post('start')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Start recording a channel' })
   @ApiResponse({ status: 201, description: 'Recording started' })
   async startRecording(
@@ -44,7 +44,7 @@ export class RecordingsController {
   }
 
   @Post('stop/:recordingName')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Stop an active recording' })
   @ApiParam({ name: 'recordingName', example: 'call-recording-101' })
   @ApiResponse({ status: 200, description: 'Recording stopped' })
@@ -114,7 +114,7 @@ export class RecordingsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft delete a recording' })
   @ApiParam({ name: 'id', example: 1 })
@@ -127,7 +127,7 @@ export class RecordingsController {
   }
 
   @Delete(':id/permanent')
-  @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Permanently delete recording file' })
   @ApiParam({ name: 'id', example: 1 })

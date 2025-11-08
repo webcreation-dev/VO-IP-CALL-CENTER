@@ -13,7 +13,7 @@ export const ROLES_KEY = 'roles';
  *
  * @example
  * ```typescript
- * @Roles(UserRole.ADMIN)
+ * @Roles(UserRole.SUPER_ADMIN)
  * @Get('sensitive-data')
  * getSensitiveData() {
  *   return this.service.getSensitiveData();
@@ -22,7 +22,7 @@ export const ROLES_KEY = 'roles';
  *
  * @example
  * ```typescript
- * @Roles(UserRole.ADMIN, UserRole.TENANT_ADMIN)
+ * @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
  * @Post()
  * create(@Body() dto: CreateDto) {
  *   return this.service.create(dto);

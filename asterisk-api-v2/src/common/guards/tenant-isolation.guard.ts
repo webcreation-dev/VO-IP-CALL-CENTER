@@ -42,7 +42,7 @@ export class TenantIsolationGuard implements CanActivate {
     const user = request.user as UserPayload;
 
     // Global admin can access all tenants
-    if (user.role === UserRole.ADMIN) {
+    if (user.role === UserRole.SUPER_ADMIN) {
       return true;
     }
 

@@ -94,11 +94,11 @@ declare -a MODULES=(
     "00-setup:Authentification JWT:$SCRIPT_DIR/00-setup/get-token.sh"
     "01-tenants:Tenants:$SCRIPT_DIR/01-tenants/test-tenants.sh"
     "02-contexts:Contexts:$SCRIPT_DIR/02-contexts/test-contexts.sh"
+    "03-endpoints:Endpoints:$SCRIPT_DIR/03-endpoints/test-endpoints.sh"
+    "04-queues:Queues:$SCRIPT_DIR/04-queues/test-queues.sh"
 )
 
-# Ajoutez les autres modules ici quand ils sont prêts :
-# "03-endpoints:Endpoints:$SCRIPT_DIR/03-endpoints/test-endpoints.sh"
-# "04-queues:Queues:$SCRIPT_DIR/04-queues/test-queues.sh"
+# Modules à créer plus tard :
 # "05-registrations:Registrations:$SCRIPT_DIR/05-registrations/test-registrations.sh"
 # "06-ivr:IVR:$SCRIPT_DIR/06-ivr/test-ivr.sh"
 

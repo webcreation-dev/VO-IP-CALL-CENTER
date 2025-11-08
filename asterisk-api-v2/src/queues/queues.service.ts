@@ -14,6 +14,7 @@ import { CreateQueueDto } from './dto/create-queue.dto';
 import { UpdateQueueDto } from './dto/update-queue.dto';
 import { Extension } from '../core/database/entities/extension.entity';
 import { Tenant } from '../core/database/entities/tenant.entity';
+import { TenantContext } from '../core/database/entities/tenant-context.entity';
 
 import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CacheService } from '../core/cache/cache.service';
@@ -32,6 +33,8 @@ export class QueuesService {
     private readonly extensionRepository: Repository<Extension>,
     @InjectRepository(Tenant)
     private readonly tenantRepository: Repository<Tenant>,
+    @InjectRepository(TenantContext)
+    private readonly tenantContextRepository: Repository<TenantContext>,
     private readonly dataSource: DataSource,
     private readonly amiService: AmiService,
     private readonly cacheService: CacheService,
@@ -150,7 +153,7 @@ export class QueuesService {
 
       // STEP 7: Auto-reload in Asterisk AFTER successful DB commit
       try {
-        await this.reloadQueue(tenantId, dto.name);
+        await this.reloadQueue(tenantId, prefixedName);
         this.logger.log(
           `✅ Queue ${prefixedName} automatically reloaded in Asterisk`,
         );
@@ -1058,10 +1061,13 @@ export class QueuesService {
       throw new NotFoundException(`Tenant ${tenantId} not found`);
     }
 
-    // Check if context matches tenant's context
-    if (tenant.context !== context) {
+    // Check if context belongs to tenant
+    const tenantContext = await this.tenantContextRepository.findOne({
+      where: { tenantId, name: context },
+    });
+    if (!tenantContext) {
       throw new ForbiddenException(
-        `Context '${context}' does not belong to your tenant. Expected: '${tenant.context}'`,
+        `Context '${context}' does not belong to your tenant`,
       );
     }
   }

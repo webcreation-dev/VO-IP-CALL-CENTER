@@ -8,7 +8,7 @@
 # Configuration
 API_URL="${API_URL:-http://localhost:3001/api/v1}"
 EMAIL="${EMAIL:-admin@asterisk.local}"
-PASSWORD="${PASSWORD:-Admin@2025}"
+PASSWORD="${PASSWORD:-Admin123!}"
 
 # Couleurs pour l'affichage
 GREEN='\033[0;32m'
@@ -58,8 +58,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Extraire le token
-TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"\(.*\)"/\1/')
+# Extraire le token (essayer accessToken puis access_token)
+TOKEN=$(echo "$RESPONSE" | grep -o '"accessToken":"[^"]*"' | sed 's/"accessToken":"\(.*\)"/\1/')
+if [ -z "$TOKEN" ]; then
+    TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | sed 's/"access_token":"\(.*\)"/\1/')
+fi
 
 if [ -z "$TOKEN" ]; then
     error "Échec de l'authentification"
