@@ -52,6 +52,9 @@ export class TenantContextsService {
 
     const savedContext = await this.tenantContextRepo.save(context);
 
+    // Create default dialplan extensions for this context
+    await this.createDefaultDialplan(tenantId, contextName);
+
     // Add context to Asterisk extensions.conf
     await this.asteriskConfigService.addContext(contextName);
 
