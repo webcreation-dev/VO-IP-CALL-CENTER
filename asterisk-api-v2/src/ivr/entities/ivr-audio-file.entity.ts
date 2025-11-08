@@ -1,4 +1,4 @@
-import { Tenant } from "src/core/database/entities/tenant.entity";
+import { Tenant } from "../../core/database/entities/tenant.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 
 // ivr-audio-file.entity.ts

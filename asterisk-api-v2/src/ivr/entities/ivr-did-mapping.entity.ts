@@ -1,5 +1,5 @@
 
-import { Tenant } from "src/core/database/entities/tenant.entity";
+import { Tenant } from "../../core/database/entities/tenant.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from "typeorm";
 import { IvrMenu } from "./ivr-menu.entity";
 @Entity('ivr_did_mappings')

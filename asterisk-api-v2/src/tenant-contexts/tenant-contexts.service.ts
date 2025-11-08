@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
+import { ExtensionsService } from '../extensions/extensions.service';
 
 @Injectable()
 export class TenantContextsService {
@@ -10,6 +11,7 @@ export class TenantContextsService {
   constructor(
     @InjectRepository(TenantContext)
     private readonly tenantContextRepo: Repository<TenantContext>,
+    private readonly extensionsService: ExtensionsService,
   ) {}
 
   /**
@@ -77,7 +79,76 @@ export class TenantContextsService {
       },
     });
 
-    return await this.tenantContextRepo.save(context);
+    const savedContext = await this.tenantContextRepo.save(context);
+
+    // Create default dialplan extensions for this context
+    await this.createDefaultDialplan(tenantId, contextName);
+
+    this.logger.log(`Created primary context with default dialplan: ${contextName}`);
+
+    return savedContext;
+  }
+
+  /**
+   * Create default dialplan extensions for a context
+   */
+  private async createDefaultDialplan(tenantId: number, contextName: string): Promise<void> {
+    try {
+      // Extension _1XXX - Internal calls (1000-1999)
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '_1XXX',
+        priority: 1,
+        app: 'NoOp',
+        appdata: 'Internal call to ${EXTEN}',
+      });
+
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '_1XXX',
+        priority: 2,
+        app: 'Dial',
+        appdata: `PJSIP/t${tenantId}_\${EXTEN},20,TtWw`,
+      });
+
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '_1XXX',
+        priority: 3,
+        app: 'Hangup',
+        appdata: '',
+      });
+
+      // Extension 999 - Echo test
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '999',
+        priority: 1,
+        app: 'Answer',
+        appdata: '',
+      });
+
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '999',
+        priority: 2,
+        app: 'Echo',
+        appdata: '',
+      });
+
+      await this.extensionsService.create(tenantId, {
+        context: contextName,
+        exten: '999',
+        priority: 3,
+        app: 'Hangup',
+        appdata: '',
+      });
+
+      this.logger.log(`Default dialplan created for context: ${contextName}`);
+    } catch (error) {
+      this.logger.error(`Failed to create default dialplan for ${contextName}: ${error.message}`);
+      throw error;
+    }
   }
 
   /**

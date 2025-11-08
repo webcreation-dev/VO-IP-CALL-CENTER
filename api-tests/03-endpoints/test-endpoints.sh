@@ -208,7 +208,7 @@ for i in 201 202 203; do
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
       -d "{
-        \"displayName\": \"Agent $i\",
+        \"displayName\": \"Agent WebRTC $i\",
         \"password\": \"webrtc$i\",
         \"transport\": \"transport-wss\",
         \"context\": \"t${TENANT_ID}_default\",
@@ -217,11 +217,30 @@ for i in 201 202 203; do
 
     FINAL_ID=$(echo "$FINAL_ENDPOINT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$FINAL_ID" ]; then
-        info "Endpoint permanent créé: $FINAL_ID"
+        info "Endpoint WebRTC permanent créé: $FINAL_ID"
     fi
 done
 
-success "3 endpoints permanents créés pour vérification Asterisk"
+# Créer 3 endpoints UDP/SIP pour tests Asterisk (softphones classiques)
+for i in 301 302 303; do
+    FINAL_ENDPOINT=$(curl -s -X POST "$API_URL/endpoints" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{
+        \"displayName\": \"Agent SIP $i\",
+        \"password\": \"sip$i\",
+        \"transport\": \"transport-udp\",
+        \"context\": \"t${TENANT_ID}_default\",
+        \"tenantId\": $TENANT_ID
+      }")
+
+    FINAL_ID=$(echo "$FINAL_ENDPOINT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [ -n "$FINAL_ID" ]; then
+        info "Endpoint SIP/UDP permanent créé: $FINAL_ID"
+    fi
+done
+
+success "6 endpoints permanents créés (3 WebRTC + 3 SIP/UDP) pour vérification Asterisk"
 
 ##############################################################################
 # RAPPORT

@@ -125,16 +125,16 @@ export class TenantsService {
 
     const saved = await this.tenantRepository.save(tenant);
 
-    // Create primary context automatically
-    await this.tenantContextsService.createPrimaryContext(saved.id);
+    // Create primary context automatically (also creates default extensions)
+    const primaryContext = await this.tenantContextsService.createPrimaryContext(saved.id);
 
-    // Generate default extensions based on dialplan config
-    await this.generateDefaultExtensions(saved.id, contextName, dialplanConfig);
+    // BUGFIX: Extensions are now created by createPrimaryContext, no need to create them twice
+    // await this.generateDefaultExtensions(saved.id, primaryContext.name, dialplanConfig);
 
     this.logger.log(
-      `Created tenant: ${dto.name} (ID: ${saved.id}, Context: ${contextName})`,
+      `Created tenant: ${dto.name} (ID: ${saved.id}, Primary Context: ${primaryContext.name})`,
     );
-    this.logger.log(`Created primary context: ${contextName}`);
+    this.logger.log(`Created primary context: ${primaryContext.name}`);
 
     // Invalidate cache - delete all list variants
     await this.cacheService.delPattern('tenants:list:*');

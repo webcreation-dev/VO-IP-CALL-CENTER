@@ -55,6 +55,7 @@ run_module() {
 
     # Exécuter le script
     bash "$script_path"
+    
     local exit_code=$?
 
     if [ $exit_code -eq 0 ]; then

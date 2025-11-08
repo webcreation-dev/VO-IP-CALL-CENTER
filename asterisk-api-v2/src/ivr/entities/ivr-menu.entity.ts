@@ -1,4 +1,4 @@
-import { Tenant } from "src/core/database/entities/tenant.entity";
+import { Tenant } from "../../core/database/entities/tenant.entity";
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { IvrOption } from "./ivr-option.entity";
 import { IvrCondition } from "./ivr-condition.entity";

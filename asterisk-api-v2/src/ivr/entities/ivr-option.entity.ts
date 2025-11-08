@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { IvrMenu } from './ivr-menu.entity';
 import type { ActionConfig } from '../interfaces/action-config.interface';
-import { Tenant } from 'src/core/database/entities/tenant.entity';
+import { Tenant } from '../../core/database/entities/tenant.entity';
 
 @Entity('ivr_options')
 export class IvrOption {
