@@ -217,7 +217,7 @@ async exportMenu(
 ) {
   const menu = await this.ivrService.findMenuById(Number(menuId), tenantId);
   const options = await this.ivrService.findOptionsByMenu(Number(menuId), tenantId);
-  const conditions = await this.ivrService.findConditionsByMenu(Number(menuId));
+  const conditions = await this.ivrService.findConditionsByMenu(Number(menuId), tenantId);
 
   return {
     version: '1.0',
@@ -288,7 +288,7 @@ async cloneToTenant(
   
   const sourceMenu = await this.ivrService.findMenuById(Number(menuId), sourceTenantId);
   const options = await this.ivrService.findOptionsByMenu(Number(menuId), sourceTenantId);
-  const conditions = await this.ivrService.findConditionsByMenu(Number(menuId));
+  const conditions = await this.ivrService.findConditionsByMenu(Number(menuId), sourceTenantId);
 
   // Créer le menu dans le tenant cible
   const newMenu = await this.ivrService.createMenu(dto.target_tenant_id, {

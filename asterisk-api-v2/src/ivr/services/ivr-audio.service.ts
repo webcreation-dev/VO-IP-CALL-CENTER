@@ -10,14 +10,17 @@ import * as fs from 'fs';
 // ivr-audio.service.ts
 @Injectable()
 export class IvrAudioService {
-  private readonly soundsBasePath = '/var/lib/asterisk/sounds/custom';
+  private readonly soundsBasePath: string;
 
   constructor(
     @InjectRepository(IvrAudioFile)
     private audioRepo: Repository<IvrAudioFile>,
     private configService: ConfigService,
     private logger: CustomLoggerService,
-  ) {}
+  ) {
+    // Utiliser variable d'env ou fallback sur ./uploads/sounds
+    this.soundsBasePath = this.configService.get<string>('ASTERISK_SOUNDS_PATH') || './uploads/sounds';
+  }
 
   /**
    * Upload un fichier audio

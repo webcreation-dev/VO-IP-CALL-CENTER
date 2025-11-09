@@ -945,6 +945,26 @@ export class QueuesService {
         paused
       );
 
+      // Save to database
+      // Generate uniqueid from interface name hash (consistent 32-bit integer)
+      const uniqueid = Math.abs(
+        formattedInterface.split('').reduce((acc, char) => {
+          return ((acc << 5) - acc + char.charCodeAt(0)) & 0x7FFFFFFF;
+        }, 0)
+      );
+
+      const member = this.queueMemberRepository.create({
+        tenantId: tenantId ?? 1,
+        queueName: queue.name,
+        interface: formattedInterface,
+        membername: memberName || interfaceName,
+        penalty,
+        paused,
+        wrapuptime: 0,
+        uniqueid,
+      });
+      await this.queueMemberRepository.save(member);
+
       this.logger.log(`✅ Added member ${formattedInterface} to queue ${queue.name}`);
 
       return {

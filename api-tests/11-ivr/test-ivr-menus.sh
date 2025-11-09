@@ -309,7 +309,7 @@ section "TEST 9: Désactiver puis réactiver une option"
 TOGGLE_RESPONSE=$(curl -s -X POST "$API_URL/ivr/options/$OPTION2_ID/toggle?tenantId=$TENANT_ID" \
   -H "Authorization: Bearer $TOKEN")
 
-IS_ACTIVE=$(echo "$TOGGLE_RESPONSE" | grep -o '"is_active":[a-z]*' | grep -o '[a-z]*$')
+IS_ACTIVE=$(echo "$TOGGLE_RESPONSE" | grep -o '"is_active":[a-z]*' | grep -o '[a-z]*$' | head -1)
 
 if [ "$IS_ACTIVE" = "false" ]; then
     success "Option désactivée"
@@ -318,7 +318,7 @@ if [ "$IS_ACTIVE" = "false" ]; then
     TOGGLE2_RESPONSE=$(curl -s -X POST "$API_URL/ivr/options/$OPTION2_ID/toggle?tenantId=$TENANT_ID" \
       -H "Authorization: Bearer $TOKEN")
 
-    IS_ACTIVE2=$(echo "$TOGGLE2_RESPONSE" | grep -o '"is_active":[a-z]*' | grep -o '[a-z]*$')
+    IS_ACTIVE2=$(echo "$TOGGLE2_RESPONSE" | grep -o '"is_active":[a-z]*' | grep -o '[a-z]*$' | head -1)
 
     if [ "$IS_ACTIVE2" = "true" ]; then
         success "Option réactivée"
@@ -339,7 +339,7 @@ CONDITION_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/conditions?ten
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "condition_type": "time_based",
+    "condition_type": "time",
     "condition_config": {
       "start_time": "09:00",
       "end_time": "18:00",
@@ -353,7 +353,7 @@ CONDITION_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/conditions?ten
     "is_active": true
   }')
 
-CONDITION_ID=$(echo "$CONDITION_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+CONDITION_ID=$(echo "$CONDITION_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*' | head -1)
 
 if [ -n "$CONDITION_ID" ]; then
     success "Condition ajoutée (ID: $CONDITION_ID)"
@@ -426,7 +426,7 @@ DUPLICATE_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/duplicate?tena
     "name": "main_menu_copy"
   }')
 
-DUPLICATE_ID=$(echo "$DUPLICATE_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+DUPLICATE_ID=$(echo "$DUPLICATE_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*' | head -1)
 
 if [ -n "$DUPLICATE_ID" ] && [ "$DUPLICATE_ID" != "$MENU_ID" ]; then
     success "Menu dupliqué (nouveau ID: $DUPLICATE_ID)"
@@ -442,15 +442,15 @@ section "TEST 15: Importer une configuration JSON"
 
 # Utiliser l'export précédent pour réimporter
 if [ -n "$EXPORT_RESPONSE" ]; then
-    # Modifier le nom pour éviter conflit
-    IMPORT_DATA=$(echo "$EXPORT_RESPONSE" | sed 's/"name":"main_menu"/"name":"imported_menu"/g')
+    # Extraire le champ data et modifier le nom pour éviter conflit
+    IMPORT_DATA=$(echo "$EXPORT_RESPONSE" | jq '.data | .menu.name = "imported_menu"')
 
     IMPORT_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/import?tenantId=$TENANT_ID" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
       -d "$IMPORT_DATA")
 
-    IMPORT_ID=$(echo "$IMPORT_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+    IMPORT_ID=$(echo "$IMPORT_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*' | head -1)
 
     if [ -n "$IMPORT_ID" ]; then
         success "Menu importé avec succès (ID: $IMPORT_ID)"

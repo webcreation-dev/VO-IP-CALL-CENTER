@@ -170,6 +170,9 @@ else
     echo "Réponse: $ADD_MEMBER_RESPONSE"
 fi
 
+# Wait for AMI to sync with database
+sleep 2
+
 ##############################################################################
 # TEST 2: POST /queues/:queueName/members - Ajouter second agent avec penalty
 ##############################################################################
@@ -191,6 +194,9 @@ if [ "$MEMBER2_PENALTY" = "5" ]; then
 else
     failure "Penalty incorrect pour agent 2"
 fi
+
+# Wait for AMI to sync with database
+sleep 2
 
 ##############################################################################
 # TEST 3: GET /queues/:queueName/members - Lister les membres
