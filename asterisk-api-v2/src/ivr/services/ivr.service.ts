@@ -192,7 +192,7 @@ export class IvrService {
   ): Promise<any> {
     const menu = await this.findMenuById(menuId, tenantId);
     const options = await this.findOptionsByMenu(menuId, tenantId);
-    const conditions = await this.findConditionsByMenu(menuId);
+    const conditions = await this.findConditionsByMenu(menuId, tenantId);
 
     const context = {
       callerId: testData.callerId || '+1234567890',
@@ -400,9 +400,13 @@ export class IvrService {
   /**
    * Récupérer toutes les conditions d'un menu
    */
-  async findConditionsByMenu(menuId: number): Promise<IvrCondition[]> {
+  async findConditionsByMenu(menuId: number, tenantId?: number): Promise<IvrCondition[]> {
+    const where: any = { menu_id: menuId };
+    if (tenantId) {
+      where.tenant_id = tenantId;
+    }
     return this.conditionRepo.find({
-      where: { menu_id: menuId },
+      where,
       order: { priority: 'ASC' },
     });
   }

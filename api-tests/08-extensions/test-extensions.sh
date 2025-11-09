@@ -280,7 +280,7 @@ fi
 
 section "TEST 9: Test de pagination"
 
-PAGINATED_RESPONSE=$(curl -s -X GET "$API_URL/extensions?limit=1&offset=0" \
+PAGINATED_RESPONSE=$(curl -s -X GET "$API_URL/extensions?limit=1&page=1" \
   -H "Authorization: Bearer $TOKEN")
 
 PAGINATED_COUNT=$(echo "$PAGINATED_RESPONSE" | grep -o '"id":[0-9]*' | wc -l)

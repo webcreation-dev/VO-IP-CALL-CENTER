@@ -84,12 +84,12 @@ fi
 
 success "Tenant créé avec ID: $TENANT_ID"
 
-# Localiser les fichiers audio de test (du module 06-sounds)
-TEST_AUDIO_DIR="$SCRIPT_DIR/../06-sounds/test-audio-files"
+# Localiser les fichiers audio de test (du module 07-sounds/fixtures)
+TEST_AUDIO_DIR="$SCRIPT_DIR/../07-sounds/fixtures"
 
 if [ ! -d "$TEST_AUDIO_DIR" ]; then
-    info "Dossier test-audio-files non trouvé, tentative avec chemin absolu..."
-    TEST_AUDIO_DIR="/Users/macbookpro/Documents/BACKEND APPS/ManageAppBack/asterisk/api-tests/06-sounds/test-audio-files"
+    info "Dossier fixtures non trouvé, tentative avec chemin absolu..."
+    TEST_AUDIO_DIR="/Users/macbookpro/Documents/BACKEND APPS/ManageAppBack/asterisk/api-tests/07-sounds/fixtures"
 fi
 
 if [ -d "$TEST_AUDIO_DIR" ]; then

@@ -157,8 +157,7 @@ ADD_MEMBER_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
     \"interface\": \"PJSIP/$ENDPOINT1\",
-    \"penalty\": 0,
-    \"state_interface\": \"PJSIP/$ENDPOINT1\"
+    \"penalty\": 0
   }")
 
 MEMBER_INTERFACE=$(echo "$ADD_MEMBER_RESPONSE" | grep -o '"interface":"[^"]*"' | sed 's/"interface":"\(.*\)"/\1/')
@@ -182,8 +181,7 @@ ADD_MEMBER2_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
     \"interface\": \"PJSIP/$ENDPOINT2\",
-    \"penalty\": 5,
-    \"state_interface\": \"PJSIP/$ENDPOINT2\"
+    \"penalty\": 5
   }")
 
 MEMBER2_PENALTY=$(echo "$ADD_MEMBER2_RESPONSE" | grep -o '"penalty":[0-9]*' | grep -o '[0-9]*')

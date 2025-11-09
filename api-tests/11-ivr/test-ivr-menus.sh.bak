@@ -69,13 +69,12 @@ success "Token JWT obtenu"
 section "PREREQUIS - Création des ressources de test"
 
 # 1. Créer tenant
-TIMESTAMP=$(date +%s)
 TENANT_RESPONSE=$(curl -s -X POST "$API_URL/tenants" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"name\": \"test-ivr-tenant-$TIMESTAMP\"
-  }")
+  -d '{
+    "name": "test-ivr-tenant"
+  }')
 
 TENANT_ID=$(echo "$TENANT_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 
@@ -219,7 +218,7 @@ OPTION1_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/options?tenantId
     \"description\": \"Service commercial\",
     \"action\": {
       \"type\": \"queue\",
-      \"target\": \"$QUEUE_NAME\"
+      \"value\": \"$QUEUE_NAME\"
     },
     \"priority\": 1,
     \"is_active\": true
@@ -247,7 +246,7 @@ OPTION2_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/options?tenantId
     "description": "Support technique",
     "action": {
       "type": "submenu",
-      "target": "support_menu"
+      "value": "support_menu"
     },
     "priority": 2,
     "is_active": true
@@ -347,7 +346,7 @@ CONDITION_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus/$MENU_ID/conditions?ten
     },
     "action": {
       "type": "playback",
-      "sounds": ["closed_message"]
+      "value": "closed_message"
     },
     "priority": 1,
     "is_active": true

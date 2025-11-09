@@ -107,7 +107,7 @@ export class IvrMenusController {
     @Query('tenantId') tenantId: number,
     @Param('menuId') menuId: string,
   ) {
-    return this.ivrService.findConditionsByMenu(Number(menuId));
+    return this.ivrService.findConditionsByMenu(Number(menuId), tenantId);
   }
 
   // Test d'un menu IVR

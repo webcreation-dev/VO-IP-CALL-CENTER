@@ -925,6 +925,10 @@ export class QueuesService {
       throw new BadRequestException('AMI not connected');
     }
 
+    if (!interfaceName) {
+      throw new BadRequestException('Interface name is required');
+    }
+
     const queue = await this.findOne(tenantId, displayName);
 
     // Format interface if needed (ensure PJSIP/ prefix)
