@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { QueueMember } from './entities/queue-member.entity';
+import { Queue } from '../queues/entities/queue.entity';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { AmiService } from '../core/asterisk/ami/ami.service';
@@ -21,6 +22,8 @@ export class QueueMembersService {
   constructor(
     @InjectRepository(QueueMember)
     private readonly memberRepository: Repository<QueueMember>,
+    @InjectRepository(Queue)
+    private readonly queueRepository: Repository<Queue>,
     private readonly amiService: AmiService,
     private readonly endpointsService: EndpointsService,
   ) {}
@@ -37,6 +40,17 @@ export class QueueMembersService {
     const prefixedQueue = TenantPrefixUtil.hasPrefix(queueName)
       ? queueName
       : TenantPrefixUtil.addPrefix(tenantId, queueName);
+
+    // Validate queue exists
+    const queue = await this.queueRepository.findOne({
+      where: { name: prefixedQueue, tenantId },
+    });
+
+    if (!queue) {
+      throw new NotFoundException(
+        `Queue ${queueName} not found for tenant ${tenantId}`,
+      );
+    }
     const prefixedEndpoint = TenantPrefixUtil.hasPrefix(dto.endpointName)
       ? dto.endpointName
       : TenantPrefixUtil.addPrefix(tenantId, dto.endpointName);
@@ -60,6 +74,13 @@ export class QueueMembersService {
       dto.paused ? 1 : 0,
     );
 
+    // Generate unique ID for queue member
+    const uniqueid = Math.abs(
+      interfaceName.split('').reduce((acc, char) => {
+        return ((acc << 5) - acc + char.charCodeAt(0)) & 0x7FFFFFFF;
+      }, Date.now())
+    );
+
     // Save to DB
     const member = this.memberRepository.create({
       tenantId,
@@ -69,6 +90,7 @@ export class QueueMembersService {
       penalty: dto.penalty || 0,
       paused: dto.paused ? 1 : 0,
       wrapuptime: dto.wrapuptime || 0,
+      uniqueid,
     });
 
     const saved = await this.memberRepository.save(member);

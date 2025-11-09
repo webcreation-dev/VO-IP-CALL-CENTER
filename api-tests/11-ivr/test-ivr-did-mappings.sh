@@ -68,18 +68,25 @@ success "Token JWT obtenu"
 
 section "PREREQUIS - Création des ressources de test"
 
+# Generate unique timestamp for tenant name
+TIMESTAMP=$(date +%s)
+
 # 1. Créer tenant
 TENANT_RESPONSE=$(curl -s -X POST "$API_URL/tenants" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "test-did-mappings-tenant"
-  }')
+  -d "{
+    \"name\": \"test-did-mappings-tenant-$TIMESTAMP\",
+    \"companyName\": \"Test DID Mappings Company\",
+    \"contactEmail\": \"test-did@example.com\"
+  }")
 
 TENANT_ID=$(echo "$TENANT_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 
 if [ -z "$TENANT_ID" ]; then
     failure "Impossible de créer le tenant de test"
+    info "Réponse API: $TENANT_RESPONSE"
+    info "Vérifiez que l'API est démarrée et que le token est valide"
     exit 1
 fi
 

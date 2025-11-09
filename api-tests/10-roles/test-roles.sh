@@ -127,20 +127,19 @@ ROLE_RESPONSE=$(curl -s -X POST "$API_URL/roles" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"name\": \"Team Leader\",
-    \"level\": 50,
-    \"permissions\": {
-      \"manage_team\": true,
-      \"view_reports\": true,
-      \"manage_queue\": false
-    },
+    \"name\": \"team_leader\",
+    \"displayName\": \"Team Leader\",
+    \"level\": 5,
+    \"canCallSameLevel\": true,
+    \"canCallLowerLevel\": true,
+    \"canCallHigherLevel\": false,
     \"tenantId\": $TENANT_ID
   }")
 
 ROLE_ID=$(echo "$ROLE_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 ROLE_NAME=$(echo "$ROLE_RESPONSE" | grep -o '"name":"[^"]*"' | head -1 | sed 's/"name":"\(.*\)"/\1/')
 
-if [ -n "$ROLE_ID" ] && [ "$ROLE_NAME" = "Team Leader" ]; then
+if [ -n "$ROLE_ID" ] && [ "$ROLE_NAME" = "team_leader" ]; then
     success "Rôle créé avec succès (ID: $ROLE_ID)"
 else
     failure "Échec de création du rôle"
@@ -158,9 +157,12 @@ DUPLICATE_RESPONSE=$(curl -s -X POST "$API_URL/roles" \
   -H "Authorization: Bearer $TOKEN" \
   -w "\n%{http_code}" \
   -d "{
-    \"name\": \"Team Leader\",
+    \"name\": \"team_leader\",
+    \"displayName\": \"Team Leader Duplicate\",
     \"level\": 50,
-    \"permissions\": {},
+    \"canCallSameLevel\": true,
+    \"canCallLowerLevel\": true,
+    \"canCallHigherLevel\": false,
     \"tenantId\": $TENANT_ID
   }")
 
@@ -233,18 +235,16 @@ UPDATE_ROLE_RESPONSE=$(curl -s -X PATCH "$API_URL/roles/$ROLE_ID" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "level": 60,
-    "permissions": {
-      "manage_team": true,
-      "view_reports": true,
-      "manage_queue": true
-    }
+    "level": 6,
+    "canCallSameLevel": true,
+    "canCallLowerLevel": true,
+    "canCallHigherLevel": true
   }')
 
 UPDATED_LEVEL=$(echo "$UPDATE_ROLE_RESPONSE" | grep -o '"level":[0-9]*' | grep -o '[0-9]*')
 
-if [ "$UPDATED_LEVEL" = "60" ]; then
-    success "Rôle modifié avec succès (level: 60)"
+if [ "$UPDATED_LEVEL" = "6" ]; then
+    success "Rôle modifié avec succès (level: 6)"
 else
     failure "Échec de modification du rôle"
 fi
@@ -361,11 +361,12 @@ ROLE2_RESPONSE=$(curl -s -X POST "$API_URL/roles" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"name\": \"Agent Support\",
+    \"name\": \"agent_support\",
+    \"displayName\": \"Agent Support\",
     \"level\": 10,
-    \"permissions\": {
-      \"answer_calls\": true
-    },
+    \"canCallSameLevel\": true,
+    \"canCallLowerLevel\": false,
+    \"canCallHigherLevel\": false,
     \"tenantId\": $TENANT_ID
   }")
 
@@ -380,9 +381,12 @@ if [ -n "$ROLE2_ID" ]; then
       -H "Authorization: Bearer $TOKEN" \
       -w "\n%{http_code}" \
       -d "{
-        \"name\": \"Another Role\",
+        \"name\": \"another_role\",
+        \"displayName\": \"Another Role\",
         \"level\": 10,
-        \"permissions\": {},
+        \"canCallSameLevel\": true,
+        \"canCallLowerLevel\": false,
+        \"canCallHigherLevel\": false,
         \"tenantId\": $TENANT_ID
       }")
 
