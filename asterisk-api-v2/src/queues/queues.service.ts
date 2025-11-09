@@ -21,6 +21,7 @@ import { CacheService } from '../core/cache/cache.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TenantPrefixUtil } from '../common/utils/tenant-prefix.util';
 import { AMI_TIMEOUTS } from '../core/asterisk/ami/ami.constants';
+import { QueueMember } from '../queue-members/entities/queue-member.entity';
 
 @Injectable()
 export class QueuesService {
@@ -35,6 +36,8 @@ export class QueuesService {
     private readonly tenantRepository: Repository<Tenant>,
     @InjectRepository(TenantContext)
     private readonly tenantContextRepository: Repository<TenantContext>,
+    @InjectRepository(QueueMember)
+  private readonly queueMemberRepository: Repository<QueueMember>,
     private readonly dataSource: DataSource,
     private readonly amiService: AmiService,
     private readonly cacheService: CacheService,
