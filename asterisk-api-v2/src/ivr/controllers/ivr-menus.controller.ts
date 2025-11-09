@@ -18,9 +18,10 @@ import { CreateIvrOptionDto } from '../dto/create-ivr-option.dto';
 import { UpdateIvrOptionDto } from '../dto/update-ivr-option.dto';
 import { CreateIvrConditionDto } from '../dto/create-ivr-condition.dto';
 import { ReorderOptionsDto } from '../dto/reorder-options.dto';
+import { ActionConfigDto } from '../dto/action-config.dto';
 
 @ApiTags('IVR Menus')
-// @ApiBearerAuth() // DÉSACTIVÉ POUR TESTS
+@ApiBearerAuth()
 @Controller('ivr/menus')
 export class IvrMenusController {
   constructor(private ivrService: IvrService) {}
@@ -299,8 +300,8 @@ async cloneToTenant(
     timeout: sourceMenu.timeout,
     max_retries: sourceMenu.max_retries,
     max_digits: sourceMenu.max_digits,
-    timeout_action: sourceMenu.timeout_action,
-    invalid_action: sourceMenu.invalid_action,
+    timeout_action: sourceMenu.timeout_action as ActionConfigDto,
+    invalid_action: sourceMenu.invalid_action as ActionConfigDto,
   });
 
   // Cloner les options
@@ -308,7 +309,7 @@ async cloneToTenant(
     await this.ivrService.addOption(Number(newMenu.id), dto.target_tenant_id, {
       digit: option.digit,
       description: option.description,
-      action: option.action,
+      action: option.action as ActionConfigDto,
       priority: option.priority,
       is_active: option.is_active,
     });

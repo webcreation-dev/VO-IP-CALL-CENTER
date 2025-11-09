@@ -15,7 +15,7 @@ import {
   import { UpdateIvrOptionDto } from '../dto/update-ivr-option.dto';
   
   @ApiTags('IVR Options')
-  // @ApiBearerAuth() // DÉSACTIVÉ POUR TESTS
+  @ApiBearerAuth()
   @Controller('ivr/options')
   export class IvrOptionsController {
     constructor(private ivrService: IvrService) {}

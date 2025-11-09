@@ -490,9 +490,13 @@ export class IvrService {
   /**
    * Trouver le mapping pour un DID
    */
-  async findDidMapping(did: string): Promise<IvrDidMapping | null> {
+  async findDidMapping(did: string, tenantId?: number): Promise<IvrDidMapping | null> {
+    const where: any = { did, is_active: true };
+    if (tenantId) {
+      where.tenant_id = tenantId;
+    }
     return this.didMappingRepo.findOne({
-      where: { did, is_active: true },
+      where,
       relations: ['menu'],
     });
   }

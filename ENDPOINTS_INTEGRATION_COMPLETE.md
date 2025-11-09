@@ -326,3 +326,4 @@ write = system,call,agent,user,config,command,reporting,originate,message
 **Temps total:** ~2h (incluant diagnostic AMI)
 
 
+

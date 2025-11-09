@@ -16,7 +16,7 @@ import {
   import { UpdateDidMappingDto } from '../dto/update-did-mapping.dto';
 
   @ApiTags('IVR DID Mappings')
-  // @ApiBearerAuth() // DÉSACTIVÉ POUR TESTS
+  @ApiBearerAuth()
   @Controller('ivr/did-mappings')
 export class IvrDidMappingsController {
   constructor(private ivrService: IvrService) {}
@@ -36,7 +36,7 @@ export class IvrDidMappingsController {
 
   @Get('by-did/:did')
   async findByDid(@Query('tenantId') tenantId: number, @Param('did') did: string) {
-    return this.ivrService.findDidMapping(did);
+    return this.ivrService.findDidMapping(did, tenantId);
   }
 
   @Patch(':id')

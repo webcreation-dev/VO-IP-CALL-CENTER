@@ -2,9 +2,27 @@ import { Type } from "class-transformer";
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString, IsUrl, ValidateNested } from "class-validator";
 
   // action-config.dto.ts
+
+  export enum ActionType {
+    QUEUE = 'queue',
+    ENDPOINT = 'endpoint',
+    SUBMENU = 'submenu',
+    PLAYBACK = 'playback',
+    HANGUP = 'hangup',
+    VOICEMAIL = 'voicemail',
+    CALLBACK = 'callback',
+    EXTERNAL_API = 'external_api',
+    REPEAT = 'repeat',
+  }
+
+  export enum HttpMethod {
+    GET = 'GET',
+    POST = 'POST',
+  }
+
   export class ActionConfigDto {
-    @IsEnum(['queue', 'endpoint', 'submenu', 'playback', 'hangup', 'voicemail', 'callback', 'external_api'])
-    type: string;
+    @IsEnum(ActionType)
+    type: ActionType;
   
     @IsOptional()
     @IsString()
@@ -49,7 +67,7 @@ import { IsArray, IsEnum, IsNumber, IsOptional, IsString, IsUrl, ValidateNested 
     url?: string;
   
     @IsOptional()
-    @IsEnum(['GET', 'POST'])
-    method?: 'GET' | 'POST';
+    @IsEnum(HttpMethod)
+    method?: HttpMethod;
   }
   

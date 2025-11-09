@@ -98,12 +98,16 @@ declare -a MODULES=(
     "03-endpoints:Endpoints:$SCRIPT_DIR/03-endpoints/test-endpoints.sh"
     "04-queues:Queues:$SCRIPT_DIR/04-queues/test-queues.sh"
     "05-registrations:SIP Registrations:$SCRIPT_DIR/05-registrations/test-registrations.sh"
-    "07-sounds:Sound Files:$SCRIPT_DIR/07-sounds/test-sounds.sh"
-    "08-moh:Music on Hold:$SCRIPT_DIR/08-moh/test-moh.sh"
+    "06-sounds:Sound Files:$SCRIPT_DIR/07-sounds/test-sounds.sh"
+    "07-moh:Music on Hold:$SCRIPT_DIR/08-moh/test-moh.sh"
+    "08-auth:Auth:$SCRIPT_DIR/07-auth/test-auth.sh"
+    "09-extensions:Extensions:$SCRIPT_DIR/08-extensions/test-extensions.sh"
+    "10-queue-members:Queue Members:$SCRIPT_DIR/09-queue-members/test-queue-members.sh"
+    "11-roles:Roles:$SCRIPT_DIR/10-roles/test-roles.sh"
+    "12-ivr-menus:IVR Menus:$SCRIPT_DIR/11-ivr/test-ivr-menus.sh"
+    "13-ivr-did:IVR DID Mappings:$SCRIPT_DIR/11-ivr/test-ivr-did-mappings.sh"
+    "14-ivr-audio:IVR Audio:$SCRIPT_DIR/11-ivr/test-ivr-audio.sh"
 )
-
-# Modules à créer plus tard :
-# "06-ivr:IVR:$SCRIPT_DIR/06-ivr/test-ivr.sh"
 
 ##############################################################################
 # CLEANUP GLOBAL - Supprimer toutes les données au début

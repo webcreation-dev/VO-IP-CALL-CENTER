@@ -19,7 +19,7 @@ import {
   import { IvrAudioService } from '../services/ivr-audio.service';
 
 @ApiTags('IVR Audio')
-// @ApiBearerAuth() // DÉSACTIVÉ POUR TESTS
+@ApiBearerAuth()
 @Controller('ivr/audio')
 export class IvrAudioController {
   constructor(private audioService: IvrAudioService) {}

@@ -16,7 +16,7 @@ import {
   import { CreateIvrConditionDto } from '../dto/create-ivr-condition.dto';
   
   @ApiTags('IVR Conditions')
-  // @ApiBearerAuth() // DÉSACTIVÉ POUR TESTS
+  @ApiBearerAuth()
   @Controller('ivr/conditions')
   export class IvrConditionsController {
     constructor(private ivrService: IvrService) {}

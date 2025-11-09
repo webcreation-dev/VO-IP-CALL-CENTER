@@ -3,9 +3,17 @@ import { IsEnum, IsObject, IsOptional, IsNumber, IsBoolean, ValidateNested } fro
 import { Type } from 'class-transformer';
 import { ActionConfigDto } from './action-config.dto';
 
+export enum ConditionType {
+  TIME = 'time',
+  CALLER_ID = 'caller_id',
+  DID = 'did',
+  CUSTOM = 'custom',
+  TIME_BASED = 'time_based',
+}
+
 export class CreateIvrConditionDto {
-  @IsEnum(['time', 'caller_id', 'did', 'custom'])
-  condition_type: 'time' | 'caller_id' | 'did' | 'custom';
+  @IsEnum(ConditionType)
+  condition_type: ConditionType;
 
   @IsObject()
   condition_config: {

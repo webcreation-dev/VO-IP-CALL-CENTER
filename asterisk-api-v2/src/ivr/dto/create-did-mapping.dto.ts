@@ -4,7 +4,7 @@ import { IsBoolean, IsNumber, IsOptional, IsString, Matches } from "class-valida
   // create-did-mapping.dto.ts
   export class CreateDidMappingDto {
     @IsString()
-    @Matches(/^\+?[0-9]+$/, { message: 'DID invalide' })
+    @Matches(/^\+?[0-9_]+$/, { message: 'DID invalide (format: +33123456789 ou +331________ pour pattern)' })
     did: string;
   
     @IsNumber()

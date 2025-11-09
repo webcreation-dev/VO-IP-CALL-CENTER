@@ -24,6 +24,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @ApiTags('Roles')
 @ApiBearerAuth()
@@ -33,7 +34,7 @@ export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Post()
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Create a new role' })
   @ApiResponse({ status: 201, description: 'Role created successfully' })
   @ApiResponse({ status: 409, description: 'Role name or level already exists' })
@@ -46,7 +47,7 @@ export class RolesController {
   }
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'AGENT')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.AGENT)
   @ApiOperation({ summary: 'Get all roles for tenant' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
   @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
@@ -59,7 +60,7 @@ export class RolesController {
   }
 
   @Get('presets')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Get all available role presets' })
   @ApiResponse({ status: 200, description: 'Presets retrieved successfully' })
   getPresets() {
@@ -67,7 +68,7 @@ export class RolesController {
   }
 
   @Get('presets/:id')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Get a specific preset by ID' })
   @ApiResponse({ status: 200, description: 'Preset retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Preset not found' })
@@ -76,7 +77,7 @@ export class RolesController {
   }
 
   @Post('presets/:id/apply')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Apply a preset to current tenant' })
   @ApiResponse({ status: 201, description: 'Preset applied successfully' })
   @ApiResponse({ status: 400, description: 'Tenant already has roles' })
@@ -89,7 +90,7 @@ export class RolesController {
   }
 
   @Get('statistics')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Get role statistics for tenant' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   getStatistics(@TenantId() tenantId: number) {
@@ -97,7 +98,7 @@ export class RolesController {
   }
 
   @Get(':id')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'AGENT')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.AGENT)
   @ApiOperation({ summary: 'Get a specific role by ID' })
   @ApiResponse({ status: 200, description: 'Role retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
@@ -109,7 +110,7 @@ export class RolesController {
   }
 
   @Get(':id/callable-roles')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Get roles that this role can call' })
   @ApiResponse({ status: 200, description: 'Callable roles retrieved successfully' })
   getCallableRoles(
@@ -120,7 +121,7 @@ export class RolesController {
   }
 
   @Patch(':id')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Update a role' })
   @ApiResponse({ status: 200, description: 'Role updated successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
@@ -133,7 +134,7 @@ export class RolesController {
   }
 
   @Delete(':id')
-  @Roles('SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Delete a role' })
   @ApiResponse({ status: 200, description: 'Role deleted successfully' })
   @ApiResponse({ status: 400, description: 'Role is in use by endpoints' })
