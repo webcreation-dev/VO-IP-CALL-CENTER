@@ -6,11 +6,12 @@ import { ConfigFileService } from './config-file.service';
 import { AmiModule } from '../core/asterisk/ami/ami.module';
 import { SipTrunk } from './entities/sip-trunk.entity';
 import { Queue } from '../queues/entities/queue.entity';
+import { Tenant } from '../core/database/entities/tenant.entity';
 import { ExtensionsModule } from '../extensions/extensions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SipTrunk, Queue]),
+    TypeOrmModule.forFeature([SipTrunk, Queue, Tenant]),
     AmiModule,
     forwardRef(() => ExtensionsModule),
   ],
