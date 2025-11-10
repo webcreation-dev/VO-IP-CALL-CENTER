@@ -1,10 +1,18 @@
 import apiClient, { type ApiResponse } from './config';
 
+// Tenant Interface (minimal, for display purposes)
+export interface TenantInfo {
+  id: number;
+  name: string;
+  companyName?: string;
+}
+
 // Trunk (SIP Registration) Interface
 export interface Trunk {
   id: string;                      // Trunk identifier (name)
   name: string;                    // Trunk name (same as id)
   tenantId: number | null;         // Associated tenant (null if global trunk)
+  tenant?: TenantInfo | null;      // Tenant information (if associated)
   displayName?: string;            // Optional display name
   description?: string;            // Optional description
   enabled: boolean;                // Is trunk enabled?
@@ -154,10 +162,52 @@ class TrunksService {
     });
 
     if (response.data.success && response.data.data) {
-      // Map backend "status" field to frontend "registrationStatus"
+      // Transform backend structure to frontend structure
       return response.data.data.map((trunk) => ({
-        ...trunk,
-        registrationStatus: trunk.status, // Backend returns "status", frontend expects "registrationStatus"
+        // Basic identification
+        id: trunk.id,
+        name: trunk.id, // Use id as name
+        tenantId: trunk.tenantId ?? null,
+        tenant: trunk.tenant ? {
+          id: trunk.tenant.id,
+          name: trunk.tenant.name,
+          companyName: trunk.tenant.companyName,
+        } : null,
+        displayName: trunk.displayName,
+        description: trunk.description,
+        enabled: trunk.enabled ?? true,
+
+        // Flatten and rename SIP configuration
+        remoteHost: trunk.remote_hosts,
+        transport: trunk.endpoint?.transport || 'transport-udp',
+        context: trunk.endpoint?.context || 'from-trunk',
+        username: trunk.outbound_auth?.username || '',
+        password: trunk.outbound_auth?.password || '',
+
+        // Convert snake_case to camelCase
+        sendsRegistrations: trunk.sends_registrations ?? true,
+        sendsAuth: trunk.sends_auth ?? true,
+        clientUri: trunk.client_uri,
+        serverUri: trunk.server_uri,
+        retryInterval: trunk.retry_interval,
+        expiration: trunk.expiration,
+        maxRetries: trunk.max_retries,
+        forbiddenRetryInterval: trunk.forbidden_retry_interval,
+        line: trunk.line,
+        outboundProxy: trunk.outbound_proxy,
+        supportPath: trunk.support_path,
+
+        // Routing configuration
+        destinationType: trunk.destination_type,
+        destinationId: trunk.destination_id,
+        didPattern: trunk.did_pattern,
+
+        // Timestamps
+        createdAt: trunk.createdAt,
+        updatedAt: trunk.updatedAt,
+
+        // Registration status
+        registrationStatus: trunk.status,
         isRegistered: trunk.status?.status === 'Registered',
       }));
     }
@@ -175,15 +225,59 @@ class TrunksService {
 
     if (response.data.success && response.data.data) {
       const trunk = response.data.data;
-      // Map backend "status" field to frontend "registrationStatus" if withStatus is true
+
+      // Transform backend structure to frontend structure
+      const transformed: any = {
+        // Basic identification
+        id: trunk.id,
+        name: trunk.id,
+        tenantId: trunk.tenantId ?? null,
+        tenant: trunk.tenant ? {
+          id: trunk.tenant.id,
+          name: trunk.tenant.name,
+          companyName: trunk.tenant.companyName,
+        } : null,
+        displayName: trunk.displayName,
+        description: trunk.description,
+        enabled: trunk.enabled ?? true,
+
+        // Flatten and rename SIP configuration
+        remoteHost: trunk.remote_hosts,
+        transport: trunk.endpoint?.transport || 'transport-udp',
+        context: trunk.endpoint?.context || 'from-trunk',
+        username: trunk.outbound_auth?.username || '',
+        password: trunk.outbound_auth?.password || '',
+
+        // Convert snake_case to camelCase
+        sendsRegistrations: trunk.sends_registrations ?? true,
+        sendsAuth: trunk.sends_auth ?? true,
+        clientUri: trunk.client_uri,
+        serverUri: trunk.server_uri,
+        retryInterval: trunk.retry_interval,
+        expiration: trunk.expiration,
+        maxRetries: trunk.max_retries,
+        forbiddenRetryInterval: trunk.forbidden_retry_interval,
+        line: trunk.line,
+        outboundProxy: trunk.outbound_proxy,
+        supportPath: trunk.support_path,
+
+        // Routing configuration
+        destinationType: trunk.destination_type,
+        destinationId: trunk.destination_id,
+        didPattern: trunk.did_pattern,
+
+        // Timestamps
+        createdAt: trunk.createdAt,
+        updatedAt: trunk.updatedAt,
+      };
+
+      // Add registration status if requested
       if (withStatus && trunk.status) {
-        return {
-          ...trunk,
-          registrationStatus: trunk.status,
-          isRegistered: trunk.status?.status === 'Registered',
-        };
+        transformed.registrationStatus = trunk.status;
+        transformed.isRegistered = trunk.status?.status === 'Registered';
       }
-      return trunk;
+
+      return transformed;
     }
 
     throw new Error(`Failed to fetch trunk ${id}`);

@@ -69,8 +69,8 @@ export class TenantContextsService {
 
     const savedContext = await this.tenantContextRepo.save(context);
 
-    // Create default dialplan extensions for this context
-    await this.createDefaultDialplan(tenantId, contextName);
+    // Create default dialplan extensions for this context (initially flat)
+    await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
 
     // Apply role preset if strategy is context-specific
     if (roleStrategy === 'context-specific' && presetId) {
@@ -83,6 +83,9 @@ export class TenantContextsService {
         );
         const customLabel = customRoles ? ' (with customizations)' : '';
         this.logger.log(`Applied role preset '${presetId}'${customLabel} to context ${contextName}`);
+
+        // Regenerate dialplan based on applied roles
+        await this.regenerateDialplanForContext(savedContext.id);
       } catch (error) {
         this.logger.error(
           `Failed to apply role preset to context ${contextName}: ${error.message}`,
@@ -131,7 +134,7 @@ export class TenantContextsService {
     const savedContext = await this.tenantContextRepo.save(context);
 
     // Create default dialplan extensions for this context
-    await this.createDefaultDialplan(tenantId, contextName);
+    await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
 
     // Add context to Asterisk extensions.conf
     await this.asteriskConfigService.addContext(contextName);
@@ -142,36 +145,186 @@ export class TenantContextsService {
   }
 
   /**
-   * Create default dialplan extensions for a context
+   * Determine if a context uses a flat organization structure
+   *
+   * A flat organization is one where:
+   * - No roles exist for the context
+   * - All roles are at the same level
+   * - All roles have unrestricted permissions (can call everyone)
+   *
+   * @param tenantId - Tenant ID
+   * @param contextId - Context ID
+   * @returns true if flat organization, false if hierarchical
    */
-  private async createDefaultDialplan(tenantId: number, contextName: string): Promise<void> {
+  private async isFlatOrganization(tenantId: number, contextId: number): Promise<boolean> {
+    // Fetch all roles for this context (context-specific roles)
+    const contextRoles = await this.rolesService.findByContext(tenantId, contextId);
+
+    // If there are context-specific roles, analyze them
+    if (contextRoles && contextRoles.length > 0) {
+      // Check if all roles are at the same level
+      const levels = contextRoles.map(r => r.level);
+      const allSameLevel = levels.every(level => level === levels[0]);
+
+      if (allSameLevel) {
+        this.logger.debug(`Context ${contextId}: All roles at same level (${levels[0]}) - FLAT organization`);
+        return true;
+      }
+
+      // Check if all roles have unrestricted permissions
+      const allUnrestricted = contextRoles.every(
+        role => role.canCallSameLevel && role.canCallLowerLevel && role.canCallHigherLevel,
+      );
+
+      if (allUnrestricted) {
+        this.logger.debug(`Context ${contextId}: All roles have unrestricted permissions - FLAT organization`);
+        return true;
+      }
+
+      // Has roles with different levels and restrictions - hierarchical
+      this.logger.debug(`Context ${contextId}: Hierarchical organization detected (${contextRoles.length} roles with varying levels/permissions)`);
+      return false;
+    }
+
+    // No context-specific roles, check tenant-wide roles
+    const tenantRoles = await this.rolesService.findByTenant(tenantId);
+
+    if (!tenantRoles || tenantRoles.length === 0) {
+      this.logger.debug(`Context ${contextId}: No roles defined - FLAT organization`);
+      return true;
+    }
+
+    // Check tenant roles
+    const levels = tenantRoles.map(r => r.level);
+    const allSameLevel = levels.every(level => level === levels[0]);
+
+    if (allSameLevel) {
+      this.logger.debug(`Context ${contextId}: All tenant roles at same level (${levels[0]}) - FLAT organization`);
+      return true;
+    }
+
+    const allUnrestricted = tenantRoles.every(
+      role => role.canCallSameLevel && role.canCallLowerLevel && role.canCallHigherLevel,
+    );
+
+    if (allUnrestricted) {
+      this.logger.debug(`Context ${contextId}: All tenant roles have unrestricted permissions - FLAT organization`);
+      return true;
+    }
+
+    this.logger.debug(`Context ${contextId}: Hierarchical organization detected (${tenantRoles.length} tenant roles with varying levels/permissions)`);
+    return false;
+  }
+
+  /**
+   * Create default dialplan extensions for a context
+   *
+   * Generates conditional dialplan based on organization type:
+   * - Flat organization: Simple 3-priority dialplan (NoOp → Dial → Hangup)
+   * - Hierarchical organization: 5-priority dialplan with ARI validation (NoOp → Set → Stasis → Dial → Hangup)
+   *
+   * @param tenantId - Tenant ID
+   * @param contextName - Full context name (with tenant prefix)
+   * @param contextId - Optional context ID (if not provided, creates flat dialplan as default)
+   */
+  private async createDefaultDialplan(
+    tenantId: number,
+    contextName: string,
+    contextId?: number,
+  ): Promise<void> {
     try {
+      // Determine organization type
+      let isFlat = true; // Default to flat if contextId not provided
+      let orgType = 'FLAT (default)';
+
+      if (contextId) {
+        isFlat = await this.isFlatOrganization(tenantId, contextId);
+        orgType = isFlat ? 'FLAT' : 'HIERARCHICAL';
+      }
+
+      this.logger.log(`Creating dialplan for context ${contextName} - Organization type: ${orgType}`);
+
       // Extension _1XXX - Internal calls (1000-1999)
-      await this.extensionsService.create(tenantId, {
-        context: contextName,
-        exten: '_1XXX',
-        priority: 1,
-        app: 'NoOp',
-        appdata: 'Internal call to ${EXTEN}',
-      });
+      if (isFlat) {
+        // ========================================
+        // FLAT ORGANIZATION - 3 priorities
+        // ========================================
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 1,
+          app: 'NoOp',
+          appdata: 'Internal call to ${EXTEN} [FLAT ORG - No validation]',
+        });
 
-      await this.extensionsService.create(tenantId, {
-        context: contextName,
-        exten: '_1XXX',
-        priority: 2,
-        app: 'Dial',
-        appdata: `PJSIP/t${tenantId}_\${EXTEN},20,TtWw`,
-      });
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 2,
+          app: 'Dial',
+          appdata: `PJSIP/t${tenantId}_\${EXTEN},20,TtWw`,
+        });
 
-      await this.extensionsService.create(tenantId, {
-        context: contextName,
-        exten: '_1XXX',
-        priority: 3,
-        app: 'Hangup',
-        appdata: '',
-      });
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 3,
+          app: 'Hangup',
+          appdata: '',
+        });
 
-      // Extension 999 - Echo test
+        this.logger.log(`  → FLAT organization dialplan: NoOp → Dial → Hangup (3 priorities)`);
+      } else {
+        // ========================================
+        // HIERARCHICAL ORGANIZATION - 5 priorities
+        // ========================================
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 1,
+          app: 'NoOp',
+          appdata: 'Internal call from ${CALLERID(num)} to ${EXTEN} [HIERARCHICAL - Validation required]',
+        });
+
+        // Set channel variable with called endpoint ID
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 2,
+          app: 'Set',
+          appdata: `__CALLED_ENDPOINT=t${tenantId}_\${EXTEN}`,
+        });
+
+        // Transfer to ARI application for validation
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 3,
+          app: 'Stasis',
+          appdata: 'call-validator,validate',
+        });
+
+        // If validation passes, ARI returns to dialplan here
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 4,
+          app: 'Dial',
+          appdata: `PJSIP/t${tenantId}_\${EXTEN},20,TtWw`,
+        });
+
+        await this.extensionsService.create(tenantId, {
+          context: contextName,
+          exten: '_1XXX',
+          priority: 5,
+          app: 'Hangup',
+          appdata: '',
+        });
+
+        this.logger.log(`  → HIERARCHICAL organization dialplan: NoOp → Set → Stasis → Dial → Hangup (5 priorities)`);
+      }
+
+      // Extension 999 - Echo test (same for both types)
       await this.extensionsService.create(tenantId, {
         context: contextName,
         exten: '999',
@@ -196,9 +349,44 @@ export class TenantContextsService {
         appdata: '',
       });
 
-      this.logger.log(`Default dialplan created for context: ${contextName}`);
+      this.logger.log(`✅ Default dialplan created for context: ${contextName} (${orgType})`);
     } catch (error) {
       this.logger.error(`Failed to create default dialplan for ${contextName}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Regenerate dialplan for a context
+   *
+   * Deletes existing internal call extensions (_1XXX) and recreates them based on
+   * the current organization type (flat vs hierarchical).
+   *
+   * Called after:
+   * - Applying a role preset during context creation
+   * - Changing role preset in context update
+   * - Switching between context-specific and tenant-wide roles
+   *
+   * @param contextId - Context ID
+   */
+  async regenerateDialplanForContext(contextId: number): Promise<void> {
+    try {
+      const context = await this.findOne(contextId);
+      this.logger.log(`🔄 Regenerating dialplan for context: ${context.name}`);
+
+      // Delete existing internal call extensions (_1XXX pattern)
+      await this.extensionsService.deleteByPattern(context.tenantId, context.name, '_1XXX');
+      this.logger.log(`  → Deleted old _1XXX extensions`);
+
+      // Recreate dialplan with current organization type
+      await this.createDefaultDialplan(context.tenantId, context.name, context.id);
+
+      // Reload Asterisk dialplan
+      await this.asteriskConfigService.reloadDialplan();
+
+      this.logger.log(`✅ Dialplan regenerated successfully for context: ${context.name}`);
+    } catch (error) {
+      this.logger.error(`Failed to regenerate dialplan for context ${contextId}: ${error.message}`);
       throw error;
     }
   }
@@ -266,7 +454,14 @@ export class TenantContextsService {
   /**
    * Update a context
    */
-  async update(id: number, updates: Partial<TenantContext>): Promise<TenantContext> {
+  async update(
+    id: number,
+    updates: Partial<TenantContext> & {
+      roleStrategy?: 'context-specific' | 'use-tenant-roles';
+      presetId?: string;
+      customRoles?: any[];
+    },
+  ): Promise<TenantContext> {
     const context = await this.findOne(id);
 
     // Cannot change isPrimary
@@ -283,12 +478,68 @@ export class TenantContextsService {
     const permissionsChanged = 'dialplanConfig' in updates;
     const oldConfig = permissionsChanged ? { ...context.dialplanConfig } : {};
 
-    Object.assign(context, updates);
+    // Extract role-related fields from updates before assigning to context
+    const { roleStrategy, presetId, customRoles, ...contextUpdates } = updates;
+
+    Object.assign(context, contextUpdates);
     const savedContext = await this.tenantContextRepo.save(context);
 
     // Log permission changes
     if (permissionsChanged) {
       this.logPermissionChanges(context.name, oldConfig, context.dialplanConfig);
+    }
+
+    // Track if roles were modified (for dialplan regeneration)
+    let rolesModified = false;
+
+    // Handle role strategy and preset updates
+    if (roleStrategy === 'context-specific' && presetId) {
+      try {
+        // First, delete existing context-specific roles
+        await this.rolesService.deleteContextRoles(context.tenantId, context.id);
+
+        // Apply the new preset
+        await this.rolesService.applyPresetToContext(
+          context.tenantId,
+          context.id,
+          presetId,
+          customRoles, // Pass custom roles if provided
+        );
+
+        const customLabel = customRoles ? ' (with customizations)' : '';
+        this.logger.log(
+          `Updated role preset for context ${context.name} to '${presetId}'${customLabel}`,
+        );
+        rolesModified = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed to update role preset for context ${context.name}: ${error.message}`,
+        );
+        // Don't fail the entire update if role preset update fails
+      }
+    } else if (roleStrategy === 'use-tenant-roles') {
+      try {
+        // Delete context-specific roles when switching to tenant roles
+        await this.rolesService.deleteContextRoles(context.tenantId, context.id);
+        this.logger.log(`Switched context ${context.name} to use tenant roles`);
+        rolesModified = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed to delete context roles for ${context.name}: ${error.message}`,
+        );
+      }
+    }
+
+    // Regenerate dialplan if roles were modified
+    if (rolesModified) {
+      try {
+        await this.regenerateDialplanForContext(context.id);
+      } catch (error) {
+        this.logger.error(
+          `Failed to regenerate dialplan after role update for ${context.name}: ${error.message}`,
+        );
+        // Log error but don't fail the update
+      }
     }
 
     return savedContext;

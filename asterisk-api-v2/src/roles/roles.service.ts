@@ -472,6 +472,46 @@ export class RolesService {
     return createdRoles;
   }
 
+  /**
+   * Delete all context-specific roles for a given context
+   * @param tenantId - Tenant ID
+   * @param contextId - Context ID
+   */
+  async deleteContextRoles(tenantId: number, contextId: number): Promise<void> {
+    const roles = await this.roleRepository.find({
+      where: { tenantId, contextId },
+    });
+
+    if (roles.length === 0) {
+      this.logger.log(
+        `No context-specific roles to delete for context ${contextId} (tenant ${tenantId})`,
+      );
+      return;
+    }
+
+    // Check if any endpoints are using these roles
+    for (const role of roles) {
+      const endpointsCount = await this.roleRepository
+        .createQueryBuilder('role')
+        .leftJoin('ps_endpoints', 'endpoint', 'endpoint.role_id = role.id')
+        .where('role.id = :id', { id: role.id })
+        .getCount();
+
+      if (endpointsCount > 0) {
+        throw new BadRequestException(
+          `Cannot delete context roles because role '${role.name}' is used by ${endpointsCount} endpoint(s)`,
+        );
+      }
+    }
+
+    // Delete all context-specific roles
+    await this.roleRepository.remove(roles);
+
+    this.logger.log(
+      `Deleted ${roles.length} context-specific role(s) for context ${contextId} (tenant ${tenantId})`,
+    );
+  }
+
   // ========================================
   // Helper Methods
   // ========================================

@@ -323,6 +323,52 @@ export class ExtensionsService {
   }
 
   /**
+   * Delete all extensions matching a specific pattern in a context
+   *
+   * Used for dialplan regeneration - deletes all extensions for a specific
+   * pattern (e.g., _1XXX) before recreating them.
+   *
+   * @param tenantId - Tenant ID
+   * @param context - Context name
+   * @param pattern - Extension pattern (e.g., '_1XXX', '999')
+   * @throws NotFoundException if context doesn't exist or doesn't belong to tenant
+   */
+  async deleteByPattern(
+    tenantId: number,
+    context: string,
+    pattern: string,
+  ): Promise<void> {
+    // Validate context ownership
+    await this.validateContextOwnership(tenantId, context);
+
+    // Find all extensions matching the pattern
+    const extensions = await this.extensionRepository.find({
+      where: {
+        tenantId,
+        context,
+        exten: pattern,
+      },
+    });
+
+    if (extensions.length === 0) {
+      this.logger.debug(
+        `No extensions found for pattern '${pattern}' in context ${context} (Tenant: ${tenantId})`,
+      );
+      return;
+    }
+
+    // Delete all matching extensions
+    await this.extensionRepository.remove(extensions);
+
+    // Invalidate cache
+    await this.invalidateCache(tenantId, context);
+
+    this.logger.log(
+      `Deleted ${extensions.length} extension(s) for pattern '${pattern}' in context ${context} (Tenant: ${tenantId})`,
+    );
+  }
+
+  /**
    * Get list of contexts for a tenant
    *
    * @param tenantId - Tenant ID

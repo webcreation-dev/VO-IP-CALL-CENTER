@@ -86,6 +86,43 @@ export class AsteriskConfigService {
   }
 
   /**
+   * Reload Asterisk dialplan
+   *
+   * Forces Asterisk to reload the dialplan configuration from the database.
+   * Called after dialplan regeneration to apply changes immediately.
+   *
+   * @throws InternalServerErrorException if reload fails
+   */
+  async reloadDialplan(): Promise<void> {
+    this.logger.log('Reloading Asterisk dialplan...');
+
+    try {
+      const command = `docker exec ${this.containerName} asterisk -rx "dialplan reload"`;
+
+      const { stdout, stderr } = await execAsync(command);
+
+      if (stdout) {
+        this.logger.debug(`dialplan reload output: ${stdout.trim()}`);
+      }
+
+      if (stderr) {
+        this.logger.warn(`dialplan reload stderr: ${stderr.trim()}`);
+      }
+
+      this.logger.log('✅ Asterisk dialplan reloaded successfully');
+    } catch (error) {
+      this.logger.error(
+        `Failed to reload Asterisk dialplan: ${error.message}`,
+        error.stack,
+      );
+
+      throw new InternalServerErrorException(
+        `Failed to reload Asterisk dialplan: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Vérifie si un contexte existe dans Asterisk
    *
    * @param contextName - Nom du contexte à vérifier

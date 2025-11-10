@@ -187,8 +187,15 @@ export default function TrunksList({ trunks, onEdit, onRefresh }: TrunksListProp
 
                 {/* Tenant */}
                 <TableCell>
-                  {trunk.tenantId !== null ? (
-                    <span className="text-sm">Tenant {trunk.tenantId}</span>
+                  {trunk.tenantId !== null && trunk.tenant ? (
+                    <div>
+                      <div className="text-sm font-medium">{trunk.tenant.name}</div>
+                      {trunk.tenant.companyName && (
+                        <div className="text-xs text-muted-foreground">
+                          {trunk.tenant.companyName}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <Badge variant="secondary" className="text-xs">
                       Non associé
