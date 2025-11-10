@@ -176,6 +176,32 @@ export class RolesService {
   }
 
   /**
+   * Find context-specific roles only (excludes tenant-wide roles)
+   * @param tenantId - Tenant ID
+   * @param contextId - Context ID
+   * @param activeOnly - Only return active roles
+   * @returns Array of context-specific roles
+   */
+  async findContextSpecificRoles(
+    tenantId: number,
+    contextId: number,
+    activeOnly = false,
+  ): Promise<EndpointRole[]> {
+    const query = this.roleRepository
+      .createQueryBuilder('role')
+      .where('role.tenantId = :tenantId', { tenantId })
+      .andWhere('role.contextId = :contextId', { contextId });
+
+    if (activeOnly) {
+      query.andWhere('role.isActive = :isActive', { isActive: true });
+    }
+
+    query.orderBy('role.level', 'ASC');
+
+    return query.getMany();
+  }
+
+  /**
    * Update a role
    */
   async update(

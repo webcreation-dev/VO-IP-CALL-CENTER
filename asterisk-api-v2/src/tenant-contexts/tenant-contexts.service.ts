@@ -49,11 +49,6 @@ export class TenantContextsService {
       throw new ConflictException(`Context with name '${contextName}' already exists`);
     }
 
-    // Check if tenant already has a primary context when trying to create one
-    const existingPrimary = await this.tenantContextRepo.findOne({
-      where: { tenantId, isPrimary: true },
-    });
-
     const context = this.tenantContextRepo.create({
       tenantId,
       name: contextName,
@@ -164,7 +159,7 @@ export class TenantContextsService {
    */
   private async isFlatOrganization(tenantId: number, contextId: number): Promise<boolean> {
     // Fetch context-specific roles ONLY
-    const contextRoles = await this.rolesService.findByContext(tenantId, contextId);
+    const contextRoles = await this.rolesService.findContextSpecificRoles(tenantId, contextId);
 
     // No context-specific roles = FLAT organization
     // This includes contexts using 'use-tenant-roles' strategy
