@@ -92,8 +92,8 @@ export class TenantContextsService {
       await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
     }
 
-    // Add context to Asterisk extensions.conf
-    await this.asteriskConfigService.addContext(contextName);
+    // Reload Asterisk dialplan to load the new context from database
+    await this.asteriskConfigService.reloadDialplan();
 
     this.logger.log(`Created secondary context: ${contextName}`);
 
@@ -133,8 +133,8 @@ export class TenantContextsService {
     // Create default dialplan extensions for this context
     await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
 
-    // Add context to Asterisk extensions.conf
-    await this.asteriskConfigService.addContext(contextName);
+    // Reload Asterisk dialplan to load the new context from database
+    await this.asteriskConfigService.reloadDialplan();
 
     this.logger.log(`Created primary context with default dialplan: ${contextName}`);
 
@@ -577,8 +577,9 @@ export class TenantContextsService {
     // Remove from PostgreSQL
     await this.tenantContextRepo.remove(context);
 
-    // Remove from Asterisk (non-blocking)
-    await this.asteriskConfigService.removeContext(context.name);
+    // Reload Asterisk dialplan to remove the context
+    // (extensions are deleted automatically via CASCADE foreign key)
+    await this.asteriskConfigService.reloadDialplan();
 
     this.logger.log(`Removed context: ${context.name}`);
   }
