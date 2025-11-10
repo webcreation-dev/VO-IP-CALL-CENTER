@@ -69,12 +69,10 @@ export class TenantContextsService {
 
     const savedContext = await this.tenantContextRepo.save(context);
 
-    // Create default dialplan extensions for this context (initially flat)
-    await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
-
-    // Apply role preset if strategy is context-specific
+    // Apply role preset if strategy is context-specific, then create dialplan
     if (roleStrategy === 'context-specific' && presetId) {
       try {
+        // Apply roles first
         await this.rolesService.applyPresetToContext(
           tenantId,
           savedContext.id,
@@ -84,15 +82,19 @@ export class TenantContextsService {
         const customLabel = customRoles ? ' (with customizations)' : '';
         this.logger.log(`Applied role preset '${presetId}'${customLabel} to context ${contextName}`);
 
-        // Regenerate dialplan based on applied roles
-        await this.regenerateDialplanForContext(savedContext.id);
+        // Create dialplan AFTER roles are applied (will detect correct organization type)
+        await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
       } catch (error) {
         this.logger.error(
           `Failed to apply role preset to context ${contextName}: ${error.message}`,
         );
         // Don't fail context creation if role preset fails
-        // The context is already created, roles can be added manually later
+        // Create flat dialplan as fallback
+        await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
       }
+    } else {
+      // No role preset - create flat dialplan
+      await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
     }
 
     // Add context to Asterisk extensions.conf
@@ -148,71 +150,50 @@ export class TenantContextsService {
    * Determine if a context uses a flat organization structure
    *
    * A flat organization is one where:
-   * - No roles exist for the context
-   * - All roles are at the same level
-   * - All roles have unrestricted permissions (can call everyone)
+   * - No context-specific roles exist (e.g., using 'use-tenant-roles' strategy)
+   * - All context-specific roles are at the same level
+   * - All context-specific roles have unrestricted permissions (can call everyone)
+   *
+   * Important: Only context-specific roles are considered. If a context has no
+   * context-specific roles (roleStrategy = 'use-tenant-roles'), it's considered FLAT
+   * and will NOT use ARI validation.
    *
    * @param tenantId - Tenant ID
    * @param contextId - Context ID
    * @returns true if flat organization, false if hierarchical
    */
   private async isFlatOrganization(tenantId: number, contextId: number): Promise<boolean> {
-    // Fetch all roles for this context (context-specific roles)
+    // Fetch context-specific roles ONLY
     const contextRoles = await this.rolesService.findByContext(tenantId, contextId);
 
-    // If there are context-specific roles, analyze them
-    if (contextRoles && contextRoles.length > 0) {
-      // Check if all roles are at the same level
-      const levels = contextRoles.map(r => r.level);
-      const allSameLevel = levels.every(level => level === levels[0]);
-
-      if (allSameLevel) {
-        this.logger.debug(`Context ${contextId}: All roles at same level (${levels[0]}) - FLAT organization`);
-        return true;
-      }
-
-      // Check if all roles have unrestricted permissions
-      const allUnrestricted = contextRoles.every(
-        role => role.canCallSameLevel && role.canCallLowerLevel && role.canCallHigherLevel,
-      );
-
-      if (allUnrestricted) {
-        this.logger.debug(`Context ${contextId}: All roles have unrestricted permissions - FLAT organization`);
-        return true;
-      }
-
-      // Has roles with different levels and restrictions - hierarchical
-      this.logger.debug(`Context ${contextId}: Hierarchical organization detected (${contextRoles.length} roles with varying levels/permissions)`);
-      return false;
-    }
-
-    // No context-specific roles, check tenant-wide roles
-    const tenantRoles = await this.rolesService.findByTenant(tenantId);
-
-    if (!tenantRoles || tenantRoles.length === 0) {
-      this.logger.debug(`Context ${contextId}: No roles defined - FLAT organization`);
+    // No context-specific roles = FLAT organization
+    // This includes contexts using 'use-tenant-roles' strategy
+    if (!contextRoles || contextRoles.length === 0) {
+      this.logger.debug(`Context ${contextId}: No context-specific roles - FLAT organization`);
       return true;
     }
 
-    // Check tenant roles
-    const levels = tenantRoles.map(r => r.level);
+    // Check if all roles are at the same level
+    const levels = contextRoles.map(r => r.level);
     const allSameLevel = levels.every(level => level === levels[0]);
 
     if (allSameLevel) {
-      this.logger.debug(`Context ${contextId}: All tenant roles at same level (${levels[0]}) - FLAT organization`);
+      this.logger.debug(`Context ${contextId}: All roles at same level (${levels[0]}) - FLAT organization`);
       return true;
     }
 
-    const allUnrestricted = tenantRoles.every(
+    // Check if all roles have unrestricted permissions
+    const allUnrestricted = contextRoles.every(
       role => role.canCallSameLevel && role.canCallLowerLevel && role.canCallHigherLevel,
     );
 
     if (allUnrestricted) {
-      this.logger.debug(`Context ${contextId}: All tenant roles have unrestricted permissions - FLAT organization`);
+      this.logger.debug(`Context ${contextId}: All roles have unrestricted permissions - FLAT organization`);
       return true;
     }
 
-    this.logger.debug(`Context ${contextId}: Hierarchical organization detected (${tenantRoles.length} tenant roles with varying levels/permissions)`);
+    // Has roles with different levels and restrictions - hierarchical
+    this.logger.debug(`Context ${contextId}: Hierarchical organization detected (${contextRoles.length} context-specific roles with varying levels/permissions)`);
     return false;
   }
 
@@ -374,11 +355,14 @@ export class TenantContextsService {
       const context = await this.findOne(contextId);
       this.logger.log(`🔄 Regenerating dialplan for context: ${context.name}`);
 
-      // Delete existing internal call extensions (_1XXX pattern)
+      // Delete existing extensions (both _1XXX and 999)
       await this.extensionsService.deleteByPattern(context.tenantId, context.name, '_1XXX');
       this.logger.log(`  → Deleted old _1XXX extensions`);
 
-      // Recreate dialplan with current organization type
+      await this.extensionsService.deleteByPattern(context.tenantId, context.name, '999');
+      this.logger.log(`  → Deleted old 999 extension (echo test)`);
+
+      // Recreate dialplan with current organization type (recreates both patterns)
       await this.createDefaultDialplan(context.tenantId, context.name, context.id);
 
       // Reload Asterisk dialplan
