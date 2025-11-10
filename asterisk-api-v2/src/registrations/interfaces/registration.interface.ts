@@ -71,8 +71,8 @@ export interface SipTrunkRegistration {
   did_pattern?: string;
 
   // Metadata fields
-  /** Tenant ID this trunk belongs to */
-  tenantId: number;
+  /** Tenant ID this trunk belongs to (null for global trunks) */
+  tenantId: number | null;
 
   /** Full tenant object (loaded with relations) */
   tenant?: Tenant;

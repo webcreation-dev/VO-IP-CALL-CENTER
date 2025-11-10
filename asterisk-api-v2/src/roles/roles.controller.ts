@@ -67,8 +67,8 @@ export class RolesController {
   // ========================================
 
   @Post('presets')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Create a new role preset (ADMIN only)' })
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create a new role preset (SUPER_ADMIN only)' })
   @ApiResponse({ status: 201, description: 'Preset created successfully' })
   @ApiResponse({ status: 409, description: 'Preset ID already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -77,8 +77,8 @@ export class RolesController {
   }
 
   @Get('presets/all')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get all presets including inactive (ADMIN only)' })
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get all presets including inactive (SUPER_ADMIN only)' })
   @ApiResponse({ status: 200, description: 'All presets retrieved successfully' })
   getAllPresets() {
     return this.rolesService.getAllPresets();
@@ -100,8 +100,8 @@ export class RolesController {
   }
 
   @Put('presets/id/:id')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Update a role preset (ADMIN only)' })
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Update a role preset (SUPER_ADMIN only)' })
   @ApiResponse({ status: 200, description: 'Preset updated successfully' })
   @ApiResponse({ status: 404, description: 'Preset not found' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -113,8 +113,8 @@ export class RolesController {
   }
 
   @Delete('presets/id/:id')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Delete a role preset (ADMIN only)' })
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Delete a role preset (SUPER_ADMIN only)' })
   @ApiResponse({ status: 200, description: 'Preset deleted successfully' })
   @ApiResponse({ status: 404, description: 'Preset not found' })
   async deletePreset(@Param('id', ParseIntPipe) id: number) {
