@@ -33,10 +33,11 @@ import { useToast } from '@/components/ui/use-toast';
 import endpointsService, { type Endpoint, type EndpointCreateRequest, type EndpointCreateResponse } from '@/api/endpoints';
 import metadataService from '@/api/metadata';
 import tenantsService from '@/api/tenants';
+import contextsService, { type TenantContext } from '@/api/contexts';
+import rolesService from '@/api/roles';
 import useAuthStore from '@/store/authStore';
 import { UserRole } from '@/api/auth';
 import { EndpointCredentialsDialog } from './EndpointCredentialsDialog';
-import { useRoles } from '@/hooks/useRoles';
 
 // Validation schema
 const endpointSchema = z.object({
@@ -115,9 +116,21 @@ export default function EndpointFormModal({
   const { toast } = useToast();
   const { user } = useAuthStore();
 
-  // Load available roles
-  const { data: rolesData } = useRoles(true);
-  const roles = Array.isArray(rolesData) ? rolesData : [];
+  // Load available roles (pass tenantId for ADMIN users)
+  const { data: roles } = useQuery({
+    queryKey: ['roles', 'active', watch('tenantId')],
+    queryFn: () => rolesService.getRoles(true, watch('tenantId')), // activeOnly=true, tenantId
+    enabled: open && !!watch('tenantId'), // Only load when modal is open AND tenant is selected
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Load available contexts
+  const { data: contexts } = useQuery({
+    queryKey: ['contexts'],
+    queryFn: () => contextsService.getAll(),
+    enabled: open,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 
   // Load available transports from Asterisk (dynamic)
   const { data: transports } = useQuery({
@@ -410,7 +423,7 @@ export default function EndpointFormModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Aucun rôle</SelectItem>
-                  {roles?.map((role) => (
+                  {Array.isArray(roles) && roles.map((role) => (
                     <SelectItem key={role.id} value={role.id.toString()}>
                       {role.displayName} - Niveau {role.level}
                     </SelectItem>
@@ -435,20 +448,27 @@ export default function EndpointFormModal({
             {/* Context */}
             <div className="space-y-2">
               <Label htmlFor="context">Contexte</Label>
-              <Input
-                id="context"
-                {...register('context')}
-                placeholder={
-                  watch('tenantId')
-                    ? `t${watch('tenantId')}_default`
-                    : defaultContext
-                }
-              />
+              <Select
+                value={watch('context')}
+                onValueChange={(value) => setValue('context', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un contexte" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contexts?.map((context: TenantContext) => (
+                    <SelectItem key={context.id} value={context.name}>
+                      {contextsService.getDisplayName(context)}
+                      {context.isPrimary && ' (Défaut)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.context && (
                 <p className="text-sm text-destructive">{errors.context.message}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Contexte dialplan Asterisk (défaut: t{watch('tenantId') || user?.tenantId || '1'}_default)
+                Contexte dialplan pour cet endpoint
               </p>
             </div>
 
