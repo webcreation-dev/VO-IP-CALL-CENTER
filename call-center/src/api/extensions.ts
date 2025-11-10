@@ -15,7 +15,7 @@ export interface Extension {
 
 // Create Extension DTO
 export interface CreateExtensionDto {
-  tenantId?: number;        // For SUPER_ADMIN
+  tenantId?: number;        // For ADMIN
   context: string;          // Required, max 40 chars
   exten: string;            // Required, pattern like _1XXX, 999, etc.
   priority?: number;        // Optional, auto-calculated if not provided

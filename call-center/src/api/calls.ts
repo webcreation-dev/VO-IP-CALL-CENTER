@@ -440,27 +440,27 @@ class CallsService {
   }
 
   canHangup(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
   }
 
   canMute(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
   }
 
   canRecord(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR'].includes(userRole);
   }
 
   canOriginate(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
   }
 
   canTransfer(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
   }
 
   canHoldUnhold(userRole: string): boolean {
-    return ['SUPER_ADMIN', 'ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
+    return ['ADMIN', 'TENANT_ADMIN', 'SUPERVISOR', 'AGENT'].includes(userRole);
   }
 }
 

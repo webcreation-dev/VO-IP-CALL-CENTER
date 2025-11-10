@@ -108,7 +108,6 @@ const useAuthStore = create<AuthState>()(
       // Check if user is admin
       isAdmin: () => {
         return get().hasRole([
-          UserRole.SUPER_ADMIN,
           UserRole.ADMIN,
           UserRole.TENANT_ADMIN
         ]);
@@ -117,7 +116,6 @@ const useAuthStore = create<AuthState>()(
       // Check if user is supervisor or higher
       isSupervisor: () => {
         return get().hasRole([
-          UserRole.SUPER_ADMIN,
           UserRole.ADMIN,
           UserRole.TENANT_ADMIN,
           UserRole.SUPERVISOR

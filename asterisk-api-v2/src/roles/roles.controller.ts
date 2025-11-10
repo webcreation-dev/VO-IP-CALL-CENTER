@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   Query,
@@ -20,6 +21,8 @@ import {
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { CreatePresetDto } from './dto/create-preset.dto';
+import { UpdatePresetDto } from './dto/update-preset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -59,25 +62,68 @@ export class RolesController {
     return this.rolesService.findAll(tenantId, active);
   }
 
+  // ========================================
+  // Presets Management
+  // ========================================
+
+  @Post('presets')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Create a new role preset (ADMIN only)' })
+  @ApiResponse({ status: 201, description: 'Preset created successfully' })
+  @ApiResponse({ status: 409, description: 'Preset ID already exists' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  createPreset(@Body() createPresetDto: CreatePresetDto) {
+    return this.rolesService.createPreset(createPresetDto);
+  }
+
+  @Get('presets/all')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all presets including inactive (ADMIN only)' })
+  @ApiResponse({ status: 200, description: 'All presets retrieved successfully' })
+  getAllPresets() {
+    return this.rolesService.getAllPresets();
+  }
+
   @Get('presets')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
-  @ApiOperation({ summary: 'Get all available role presets' })
+  @ApiOperation({ summary: 'Get all active role presets' })
   @ApiResponse({ status: 200, description: 'Presets retrieved successfully' })
   getPresets() {
     return this.rolesService.getPresets();
   }
 
-  @Get('presets/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
-  @ApiOperation({ summary: 'Get a specific preset by ID' })
+  @Get('presets/:presetId')
+  @ApiOperation({ summary: 'Get a specific preset by preset ID' })
   @ApiResponse({ status: 200, description: 'Preset retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Preset not found' })
-  getPreset(@Param('id') id: string) {
-    return this.rolesService.getPreset(id);
+  getPreset(@Param('presetId') presetId: string) {
+    return this.rolesService.getPreset(presetId);
+  }
+
+  @Put('presets/id/:id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update a role preset (ADMIN only)' })
+  @ApiResponse({ status: 200, description: 'Preset updated successfully' })
+  @ApiResponse({ status: 404, description: 'Preset not found' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  updatePreset(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updatePresetDto: UpdatePresetDto,
+  ) {
+    return this.rolesService.updatePreset(id, updatePresetDto);
+  }
+
+  @Delete('presets/id/:id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Delete a role preset (ADMIN only)' })
+  @ApiResponse({ status: 200, description: 'Preset deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Preset not found' })
+  async deletePreset(@Param('id', ParseIntPipe) id: number) {
+    await this.rolesService.deletePreset(id);
+    return { message: 'Preset deleted successfully' };
   }
 
   @Post('presets/:id/apply')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
+  @Roles(UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Apply a preset to current tenant' })
   @ApiResponse({ status: 201, description: 'Preset applied successfully' })
   @ApiResponse({ status: 400, description: 'Tenant already has roles' })

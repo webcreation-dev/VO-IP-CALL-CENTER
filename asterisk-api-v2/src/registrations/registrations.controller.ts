@@ -23,6 +23,7 @@ import { RegistrationsService } from './registrations.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
 import { UpdateRoutingDto } from './dto/update-routing.dto';
+import { AssociateTenantDto } from './dto/associate-tenant.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 @ApiTags('SIP Trunk Registrations')
@@ -67,10 +68,9 @@ export class RegistrationsController {
   })
   @ApiResponse({ status: 409, description: 'SIP trunk already exists' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  async create(@Body() createRegistrationDto: CreateRegistrationDto, @Query('tenantId') tenantId?: number) {
-    // For now, default to tenant 1 if not provided (SUPER_ADMIN can create for any tenant)
-    const targetTenantId = tenantId || 1;
-    return this.registrationsService.create(createRegistrationDto, targetTenantId);
+  async create(@Body() createRegistrationDto: CreateRegistrationDto) {
+    // Create trunk without tenant (global trunk)
+    return this.registrationsService.create(createRegistrationDto);
   }
 
   /**
@@ -417,6 +417,57 @@ export class RegistrationsController {
       },
       numericValue: index,
     }));
+  }
+
+  /**
+   * Associate trunk with tenant
+   */
+  @Post(':id/associate-tenant')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Associate trunk with tenant',
+    description: 'Associate a global SIP trunk with a specific tenant',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Trunk identifier (name)',
+    example: 'operator_trunk',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trunk successfully associated with tenant',
+  })
+  @ApiResponse({ status: 404, description: 'Trunk or tenant not found' })
+  @ApiResponse({ status: 400, description: 'Trunk already associated or tenant already has a trunk' })
+  async associateTenant(
+    @Param('id') id: string,
+    @Body() associateTenantDto: AssociateTenantDto,
+  ) {
+    return this.registrationsService.associateTenant(id, associateTenantDto.tenantId);
+  }
+
+  /**
+   * Dissociate trunk from tenant
+   */
+  @Delete(':id/dissociate-tenant')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Dissociate trunk from tenant',
+    description: 'Remove tenant association from a SIP trunk (makes it global again)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Trunk identifier (name)',
+    example: 'operator_trunk',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trunk successfully dissociated from tenant',
+  })
+  @ApiResponse({ status: 404, description: 'Trunk not found' })
+  @ApiResponse({ status: 400, description: 'Trunk is not associated with any tenant' })
+  async dissociateTenant(@Param('id') id: string) {
+    return this.registrationsService.dissociateTenant(id);
   }
 
   /**

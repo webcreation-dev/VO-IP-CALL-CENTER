@@ -37,7 +37,6 @@ export default function TenantsList({ tenants, onEdit, onRefresh }: TenantsListP
 
   // Check if user can delete tenants (ADMIN only)
   const canDelete = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN
   );
 

@@ -2,11 +2,10 @@ import apiClient, { type ApiResponse } from './config';
 
 // User roles (matching backend format)
 export const UserRole = {
-  SUPER_ADMIN: 'SUPER_ADMIN',
-  ADMIN: 'ADMIN',
-  TENANT_ADMIN: 'TENANT_ADMIN',
-  SUPERVISOR: 'SUPERVISOR',
-  AGENT: 'AGENT'
+  ADMIN: 'admin',
+  TENANT_ADMIN: 'tenant_admin',
+  SUPERVISOR: 'supervisor',
+  AGENT: 'agent'
 } as const;
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -122,12 +121,12 @@ class AuthService {
 
   // Check if user is admin (any admin type)
   isAdmin(): boolean {
-    return this.hasRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN]);
+    return this.hasRole([UserRole.ADMIN, UserRole.TENANT_ADMIN]);
   }
 
   // Check if user is supervisor or higher
   isSupervisor(): boolean {
-    return this.hasRole([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR]);
+    return this.hasRole([UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR]);
   }
 }
 

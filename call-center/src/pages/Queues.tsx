@@ -24,7 +24,6 @@ export default function Queues() {
 
   // Check if user can create queues (ADMIN or TENANT_ADMIN)
   const canCreate = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );

@@ -11,6 +11,7 @@ import Contexts from '@/pages/Contexts';
 import Queues from '@/pages/Queues';
 import Extensions from '@/pages/Extensions';
 import Ivr from '@/pages/Ivr';
+import Trunks from '@/pages/Trunks';
 import Calls from '@/pages/Calls';
 import Reports from '@/pages/Reports';
 import Roles from '@/pages/Roles';
@@ -88,6 +89,7 @@ function App() {
             <Route path="/queues" element={<Queues />} />
             <Route path="/extensions" element={<Extensions />} />
             <Route path="/ivr" element={<Ivr />} />
+            <Route path="/trunks" element={<Trunks />} />
             <Route path="/calls" element={<Calls />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/roles" element={<Roles />} />

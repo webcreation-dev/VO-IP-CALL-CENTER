@@ -31,11 +31,7 @@ export default function Tenants() {
   const { user } = useAuthStore();
 
   // Check if user can create tenants (ADMIN only)
-  const canCreate = user && (
-    user.role === UserRole.SUPER_ADMIN ||
-    user.role === UserRole.ADMIN ||
-    user.role === UserRole.TENANT_ADMIN
-  );
+  const canCreate = user && user.role === UserRole.ADMIN;
 
   // Debug log
   console.log('User role:', user?.role);

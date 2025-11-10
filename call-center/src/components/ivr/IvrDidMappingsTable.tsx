@@ -77,9 +77,8 @@ export default function IvrDidMappingsTable({
   const [mappingToDelete, setMappingToDelete] = useState<IvrDidMapping | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
   const canModify = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );
@@ -101,11 +100,11 @@ export default function IvrDidMappingsTable({
     },
   });
 
-  // Load tenants for SUPER_ADMIN
+  // Load tenants for ADMIN
   const { data: tenants } = useQuery({
     queryKey: ['tenants', 'active'],
     queryFn: () => tenantsService.getAll({ isActive: true, limit: 100 }),
-    enabled: isSuperAdmin,
+    enabled: isAdmin,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -249,7 +248,7 @@ export default function IvrDidMappingsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            {isSuperAdmin && <TableHead className="w-[150px]">Tenant</TableHead>}
+            {isAdmin && <TableHead className="w-[150px]">Tenant</TableHead>}
             <TableHead className="w-[180px]">Numéro DID</TableHead>
             <TableHead>Menu IVR</TableHead>
             <TableHead className="w-[100px] text-center">Statut</TableHead>
@@ -261,7 +260,7 @@ export default function IvrDidMappingsTable({
           {/* Add/Edit Form Row */}
           {(isAdding || editingId) && (
             <TableRow className="bg-muted/50">
-              {isSuperAdmin && (
+              {isAdmin && (
                 <TableCell>
                   <Select
                     value={watch('tenantId')?.toString()}
@@ -350,7 +349,7 @@ export default function IvrDidMappingsTable({
           {mappings.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={canModify ? (isSuperAdmin ? 6 : 5) : (isSuperAdmin ? 5 : 4)}
+                colSpan={canModify ? (isAdmin ? 6 : 5) : (isAdmin ? 5 : 4)}
                 className="text-center text-muted-foreground py-8"
               >
                 Aucun mapping DID configuré. Cliquez sur "Ajouter un mapping" pour commencer.
@@ -359,7 +358,7 @@ export default function IvrDidMappingsTable({
           ) : (
             mappings.map((mapping) => (
               <TableRow key={mapping.id}>
-                {isSuperAdmin && (
+                {isAdmin && (
                   <TableCell>
                     <span className="text-sm">{mapping.tenantId}</span>
                   </TableCell>

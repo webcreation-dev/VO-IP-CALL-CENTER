@@ -75,7 +75,7 @@ export default function Reports() {
   // Trend filters
   const [trendGroupBy, setTrendGroupBy] = useState<'hour' | 'day' | 'week' | 'month'>('day');
 
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   // Debounce search input (wait 500ms after user stops typing)
   const debouncedCdrSearch = useDebouncedValue(cdrSearch, 500);
@@ -100,11 +100,11 @@ export default function Reports() {
     [selectedTenant, dateRange]
   );
 
-  // Load tenants for SUPER_ADMIN
+  // Load tenants for ADMIN
   const { data: tenants } = useQuery({
     queryKey: ['tenants', 'active'],
     queryFn: () => tenantsService.getAll({ isActive: true, limit: 100 }),
-    enabled: isSuperAdmin,
+    enabled: isAdmin,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -245,8 +245,8 @@ export default function Reports() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Tenant Filter (SUPER_ADMIN only) */}
-              {isSuperAdmin && (
+              {/* Tenant Filter (ADMIN only) */}
+              {isAdmin && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tenant</label>
                   <Select

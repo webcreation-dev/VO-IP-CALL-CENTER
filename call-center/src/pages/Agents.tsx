@@ -40,7 +40,8 @@ export default function Agents() {
   });
 
   // Fetch roles for filter
-  const { data: roles = [] } = useRoles(true);
+  const { data: rolesData } = useRoles(true);
+  const roles = Array.isArray(rolesData) ? rolesData : [];
 
   // Filter endpoints based on search query and role
   const filteredEndpoints = Array.isArray(endpoints)

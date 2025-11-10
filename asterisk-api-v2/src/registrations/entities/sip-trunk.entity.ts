@@ -17,12 +17,12 @@ export class SipTrunk {
   @Column({ type: 'varchar', length: 40 })
   name: string;
 
-  @Column({ name: 'tenant_id', type: 'integer' })
-  tenantId: number;
+  @Column({ name: 'tenant_id', type: 'integer', nullable: true })
+  tenantId: number | null;
 
-  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Tenant, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'tenant_id' })
-  tenant: Tenant;
+  tenant: Tenant | null;
 
   // SIP Configuration
   @Column({ name: 'remote_host', type: 'varchar', length: 255 })

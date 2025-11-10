@@ -116,7 +116,8 @@ export default function EndpointFormModal({
   const { user } = useAuthStore();
 
   // Load available roles
-  const { data: roles = [] } = useRoles(true);
+  const { data: rolesData } = useRoles(true);
+  const roles = Array.isArray(rolesData) ? rolesData : [];
 
   // Load available transports from Asterisk (dynamic)
   const { data: transports } = useQuery({
@@ -131,11 +132,11 @@ export default function EndpointFormModal({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Load tenants for SUPER_ADMIN
+  // Load tenants for ADMIN
   const { data: tenants } = useQuery({
     queryKey: ['tenants', 'active'],
     queryFn: () => tenantsService.getAll({ isActive: true, limit: 100 }),
-    enabled: user?.role === UserRole.SUPER_ADMIN,
+    enabled: user?.role === UserRole.ADMIN,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -308,8 +309,8 @@ export default function EndpointFormModal({
               Informations de Base
             </h3>
 
-            {/* Tenant Selection - SUPER_ADMIN only */}
-            {user?.role === UserRole.SUPER_ADMIN && (
+            {/* Tenant Selection - ADMIN only */}
+            {user?.role === UserRole.ADMIN && (
               <div className="space-y-2">
                 <Label htmlFor="tenantId">
                   Tenant <span className="text-destructive">*</span>

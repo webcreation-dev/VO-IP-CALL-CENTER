@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { ExtensionsService } from '../extensions/extensions.service';
 import { AsteriskConfigService } from '../core/asterisk-config/asterisk-config.service';
+import { RolesService } from '../roles/roles.service';
 
 @Injectable()
 export class TenantContextsService {
@@ -14,12 +15,28 @@ export class TenantContextsService {
     private readonly tenantContextRepo: Repository<TenantContext>,
     private readonly extensionsService: ExtensionsService,
     private readonly asteriskConfigService: AsteriskConfigService,
+    @Inject(forwardRef(() => RolesService))
+    private readonly rolesService: RolesService,
   ) {}
 
   /**
    * Create a new context for a tenant
+   * @param tenantId - Tenant ID
+   * @param name - Context name (will be prefixed with tenant ID)
+   * @param description - Optional description
+   * @param dialplanConfig - Optional dialplan configuration
+   * @param roleStrategy - Optional role strategy ('context-specific' or 'use-tenant-roles')
+   * @param presetId - Optional preset ID (required if roleStrategy is 'context-specific')
    */
-  async create(tenantId: number, name: string, description?: string, dialplanConfig?: Record<string, any>): Promise<TenantContext> {
+  async create(
+    tenantId: number,
+    name: string,
+    description?: string,
+    dialplanConfig?: Record<string, any>,
+    roleStrategy?: 'context-specific' | 'use-tenant-roles',
+    presetId?: string,
+    customRoles?: any[], // CustomRoleDto[] from roles module
+  ): Promise<TenantContext> {
     // Generate full context name with tenant prefix
     const contextName = `t${tenantId}_${name}`;
 
@@ -54,6 +71,26 @@ export class TenantContextsService {
 
     // Create default dialplan extensions for this context
     await this.createDefaultDialplan(tenantId, contextName);
+
+    // Apply role preset if strategy is context-specific
+    if (roleStrategy === 'context-specific' && presetId) {
+      try {
+        await this.rolesService.applyPresetToContext(
+          tenantId,
+          savedContext.id,
+          presetId,
+          customRoles, // Pass custom roles if provided
+        );
+        const customLabel = customRoles ? ' (with customizations)' : '';
+        this.logger.log(`Applied role preset '${presetId}'${customLabel} to context ${contextName}`);
+      } catch (error) {
+        this.logger.error(
+          `Failed to apply role preset to context ${contextName}: ${error.message}`,
+        );
+        // Don't fail context creation if role preset fails
+        // The context is already created, roles can be added manually later
+      }
+    }
 
     // Add context to Asterisk extensions.conf
     await this.asteriskConfigService.addContext(contextName);

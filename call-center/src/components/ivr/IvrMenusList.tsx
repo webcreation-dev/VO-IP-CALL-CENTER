@@ -47,12 +47,11 @@ export default function IvrMenusList({
 
   // Check if user can modify
   const canModify = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );
 
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   // Handle delete confirmation
   const handleDeleteClick = (menu: IvrMenuEnriched) => {
@@ -200,7 +199,7 @@ export default function IvrMenusList({
                   <Edit className="h-4 w-4 mr-1" />
                   Modifier
                 </Button>
-                {isSuperAdmin && (
+                {isAdmin && (
                   <Button
                     variant="outline"
                     size="sm"

@@ -1,5 +1,21 @@
 import apiClient, { type ApiResponse } from './config';
 
+// Role Preset Interface
+export interface RolePreset {
+  id: string;
+  name: string;
+  description: string;
+  roles: Array<{
+    name: string;
+    displayName: string;
+    level: number;
+    description?: string;
+    canCallSameLevel: boolean;
+    canCallLowerLevel: boolean;
+    canCallHigherLevel: boolean;
+  }>;
+}
+
 // Dialplan Configuration Interface
 export interface DialplanConfig {
   allowInbound?: boolean;       // Allow incoming calls to this context
@@ -21,11 +37,25 @@ export interface TenantContext {
   updatedAt: string;
 }
 
+// Custom Role for Context Creation
+export interface CustomRole {
+  name: string;
+  displayName: string;
+  description?: string;
+  level: number;
+  canCallSameLevel: boolean;
+  canCallLowerLevel: boolean;
+  canCallHigherLevel: boolean;
+}
+
 // Create Context DTO
 export interface CreateContextDto {
   name: string;                     // Required, will be prefixed with t{tenantId}_
   description?: string;             // Optional description
   dialplanConfig?: DialplanConfig;  // Optional dialplan configuration
+  roleStrategy?: 'context-specific' | 'use-tenant-roles';  // Optional role strategy
+  presetId?: string;                // Optional preset ID (required if roleStrategy is 'context-specific')
+  customRoles?: CustomRole[];       // Optional custom roles (modifications to preset)
 }
 
 // Update Context DTO
@@ -54,7 +84,7 @@ class ContextsService {
     throw new Error('Failed to fetch contexts');
   }
 
-  // Get contexts for a specific tenant (SUPER_ADMIN only)
+  // Get contexts for a specific tenant (ADMIN only)
   async getByTenant(tenantId: number): Promise<TenantContext[]> {
     const response = await apiClient.get<ApiResponse<TenantContext[]>>(
       `/tenants/${tenantId}/contexts`
@@ -112,6 +142,17 @@ class ContextsService {
     }
   }
 
+  // Get available role presets
+  async getRolePresets(): Promise<RolePreset[]> {
+    const response = await apiClient.get<ApiResponse<RolePreset[]>>('/roles/presets');
+
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+
+    throw new Error('Failed to fetch role presets');
+  }
+
   // Get display name (remove tenant prefix)
   getDisplayName(context: TenantContext): string {
     // Extract name after "t{tenantId}_" prefix
@@ -125,7 +166,7 @@ class ContextsService {
   }
 
   // Check if context can be edited (name cannot be edited)
-  canEdit(context: TenantContext): boolean {
+  canEdit(_context: TenantContext): boolean {
     // Description and dialplanConfig can always be edited
     // Name cannot be edited after creation
     return true;

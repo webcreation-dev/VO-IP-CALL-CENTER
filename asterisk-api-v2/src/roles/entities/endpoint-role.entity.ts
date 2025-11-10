@@ -10,16 +10,21 @@ import {
   Check,
 } from 'typeorm';
 import { Tenant } from '../../core/database/entities/tenant.entity';
+import { TenantContext } from '../../core/database/entities/tenant-context.entity';
 
 /**
  * EndpointRole Entity
  *
  * Définit les rôles hiérarchiques pour les endpoints avec leurs permissions d'appel.
- * Chaque tenant peut définir ses propres rôles avec des niveaux uniques.
+ *
+ * Deux types de rôles sont supportés :
+ * - Rôles tenant-wide (contextId = null) : Partagés entre tous les contextes du tenant
+ * - Rôles context-specific (contextId défini) : Spécifiques à un contexte particulier
+ *
+ * Les contraintes d'unicité sont gérées par des index uniques en DB qui supportent
+ * les deux modes via COALESCE(context_id, -1).
  */
 @Entity('endpoint_roles')
-@Unique(['tenantId', 'name'])
-@Unique(['tenantId', 'level'])
 @Check('"level" >= 1 AND "level" <= 10')
 export class EndpointRole {
   @PrimaryGeneratedColumn()
@@ -35,6 +40,22 @@ export class EndpointRole {
   @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'tenant_id' })
   tenant: Tenant;
+
+  // ========================================
+  // Context Association (Optional)
+  // ========================================
+
+  /**
+   * ID du contexte (optionnel)
+   * - NULL : Rôle tenant-wide (partagé entre tous les contextes)
+   * - Non-NULL : Rôle context-specific (uniquement pour ce contexte)
+   */
+  @Column({ name: 'context_id', type: 'integer', nullable: true })
+  contextId: number | null;
+
+  @ManyToOne(() => TenantContext, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'context_id' })
+  context: TenantContext | null;
 
   // ========================================
   // Role Information

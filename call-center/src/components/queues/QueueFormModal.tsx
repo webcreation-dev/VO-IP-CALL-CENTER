@@ -96,7 +96,7 @@ export default function QueueFormModal({
   const [routingRules, setRoutingRules] = useState<QueueRoutingRule[]>([]);
 
   const isEditMode = !!queue;
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   const {
     register,
@@ -123,11 +123,11 @@ export default function QueueFormModal({
     },
   });
 
-  // Load tenants for SUPER_ADMIN
+  // Load tenants for ADMIN
   const { data: tenants } = useQuery({
     queryKey: ['tenants', 'active'],
     queryFn: () => tenantsService.getAll({ isActive: true, limit: 100 }),
-    enabled: isSuperAdmin && !isEditMode,
+    enabled: isAdmin && !isEditMode,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -260,8 +260,8 @@ export default function QueueFormModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Tenant Selection - SUPER_ADMIN only, create mode only */}
-          {isSuperAdmin && !isEditMode && (
+          {/* Tenant Selection - ADMIN only, create mode only */}
+          {isAdmin && !isEditMode && (
             <div className="space-y-2">
               <Label htmlFor="tenantId">
                 Tenant <span className="text-destructive">*</span>

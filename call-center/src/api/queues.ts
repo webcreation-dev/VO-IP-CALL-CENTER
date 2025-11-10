@@ -119,7 +119,7 @@ export interface QueueRoutingRule {
 
 // Create Queue DTO
 export interface CreateQueueDto {
-  tenantId?: number;           // For SUPER_ADMIN
+  tenantId?: number;           // For ADMIN
   name: string;                // Required, 3-128 chars
   description?: string;        // Optional
   strategy?: QueueStrategy;    // Default: ringall

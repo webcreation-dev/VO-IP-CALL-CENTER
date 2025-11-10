@@ -22,6 +22,7 @@ import { RegistrationInfo } from '../core/asterisk/ami/ami.types';
 import { SipTrunk } from './entities/sip-trunk.entity';
 import { ExtensionsService } from '../extensions/extensions.service';
 import { Queue } from '../queues/entities/queue.entity';
+import { Tenant } from '../core/database/entities/tenant.entity';
 
 @Injectable()
 export class RegistrationsService {
@@ -32,6 +33,8 @@ export class RegistrationsService {
     private readonly sipTrunkRepository: Repository<SipTrunk>,
     @InjectRepository(Queue)
     private readonly queueRepository: Repository<Queue>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepository: Repository<Tenant>,
     private readonly configFileService: ConfigFileService,
     private readonly amiService: AmiService,
     private readonly extensionsService: ExtensionsService,
@@ -146,28 +149,30 @@ export class RegistrationsService {
   }
 
   /**
-   * Create a new SIP trunk registration
+   * Create a new SIP trunk registration (without tenant - global trunk)
    */
-  async create(dto: CreateRegistrationDto, tenantId: number): Promise<SipTrunkRegistration> {
-    // Check if trunk already exists for this tenant
+  async create(dto: CreateRegistrationDto): Promise<SipTrunkRegistration> {
+    // Check if trunk already exists (globally)
     const exists = await this.sipTrunkRepository.findOne({
-      where: { name: dto.name, tenantId },
+      where: { name: dto.name },
     });
 
     if (exists) {
-      throw new ConflictException(`SIP trunk '${dto.name}' already exists for this tenant`);
+      throw new ConflictException(`SIP trunk '${dto.name}' already exists`);
     }
 
     try {
-      // Validate routing destination if provided
-      if (dto.destination_type && dto.destination_id) {
-        await this.validateDestination(dto.destination_type, dto.destination_id, tenantId);
+      // Don't allow routing configuration on creation (trunk must be associated first)
+      if (dto.destination_type || dto.destination_id) {
+        throw new BadRequestException(
+          'Cannot configure routing on trunk creation. Associate the trunk with a tenant first.'
+        );
       }
 
-      // Create entity
+      // Create entity WITHOUT tenant
       const sipTrunk = this.sipTrunkRepository.create({
         name: dto.name,
-        tenantId,
+        tenantId: null,  // Global trunk - no tenant association
         remoteHost: dto.remote_host,
         username: dto.username,
         password: dto.password,
@@ -196,16 +201,7 @@ export class RegistrationsService {
       // Save to database
       const saved = await this.sipTrunkRepository.save(sipTrunk);
 
-      // Create routing extensions if destination is configured
-      if (saved.destinationType && saved.destinationId) {
-        try {
-          await this.createRoutingExtensions(saved);
-          this.logger.log(`Created routing extensions for trunk ${dto.name}`);
-        } catch (error) {
-          this.logger.warn(`Failed to create routing extensions: ${error.message}`);
-          // Don't fail the trunk creation if routing fails
-        }
-      }
+      // No routing extensions on creation (trunk is global, not associated)
 
       // Regenerate config file from all DB entries
       await this.configFileService.generateFromDatabase();
@@ -213,10 +209,10 @@ export class RegistrationsService {
       // Reload Asterisk
       await this.reloadWizardConfig();
 
-      this.logger.log(`Created SIP trunk registration: ${dto.name} for tenant ${tenantId}`);
+      this.logger.log(`Created global SIP trunk registration: ${dto.name} (not associated with any tenant)`);
       return this.entityToInterface(saved);
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (error instanceof ConflictException || error instanceof BadRequestException) {
         throw error;
       }
       this.logger.error(`Failed to create registration: ${error.message}`);
@@ -425,6 +421,100 @@ export class RegistrationsService {
   }
 
   /**
+   * Associate a trunk with a tenant
+   */
+  async associateTenant(trunkId: string, tenantId: number): Promise<SipTrunkRegistration> {
+    // 1. Find the trunk
+    const trunk = await this.sipTrunkRepository.findOne({ where: { name: trunkId } });
+
+    if (!trunk) {
+      throw new NotFoundException(`Trunk '${trunkId}' not found`);
+    }
+
+    // 2. Check if trunk is already associated
+    if (trunk.tenantId !== null) {
+      throw new BadRequestException(
+        `Trunk '${trunkId}' is already associated with tenant ${trunk.tenantId}`
+      );
+    }
+
+    // 3. Check if tenant exists
+    const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
+
+    if (!tenant) {
+      throw new NotFoundException(`Tenant ${tenantId} not found`);
+    }
+
+    try {
+      // 4. Associate trunk with tenant
+      trunk.tenantId = tenantId;
+      const saved = await this.sipTrunkRepository.save(trunk);
+
+      // 5. Regenerate config and reload Asterisk
+      await this.configFileService.generateFromDatabase();
+      await this.reloadWizardConfig();
+
+      this.logger.log(`Associated trunk '${trunkId}' with tenant ${tenantId}`);
+      return this.entityToInterface(saved);
+    } catch (error) {
+      this.logger.error(`Failed to associate trunk: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to associate trunk: ${error.message}`);
+    }
+  }
+
+  /**
+   * Dissociate a trunk from its tenant
+   */
+  async dissociateTenant(trunkId: string): Promise<SipTrunkRegistration> {
+    // 1. Find the trunk
+    const trunk = await this.sipTrunkRepository.findOne({ where: { name: trunkId } });
+
+    if (!trunk) {
+      throw new NotFoundException(`Trunk '${trunkId}' not found`);
+    }
+
+    // 2. Check if trunk is associated
+    if (trunk.tenantId === null) {
+      throw new BadRequestException(
+        `Trunk '${trunkId}' is not associated with any tenant`
+      );
+    }
+
+    try {
+      // 3. Remove routing configuration (if exists)
+      if (trunk.destinationType || trunk.destinationId) {
+        this.logger.log(`Removing routing configuration for trunk '${trunkId}'`);
+
+        // Remove routing extensions
+        try {
+          await this.removeRoutingExtensions(trunk);
+        } catch (error) {
+          this.logger.warn(`Failed to remove routing extensions: ${error.message}`);
+        }
+
+        trunk.destinationType = null;
+        trunk.destinationId = null;
+        trunk.didPattern = '_X.';
+      }
+
+      // 4. Dissociate from tenant
+      const previousTenantId = trunk.tenantId;
+      trunk.tenantId = null;
+      const saved = await this.sipTrunkRepository.save(trunk);
+
+      // 5. Regenerate config and reload Asterisk
+      await this.configFileService.generateFromDatabase();
+      await this.reloadWizardConfig();
+
+      this.logger.log(`Dissociated trunk '${trunkId}' from tenant ${previousTenantId}`);
+      return this.entityToInterface(saved);
+    } catch (error) {
+      this.logger.error(`Failed to dissociate trunk: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to dissociate trunk: ${error.message}`);
+    }
+  }
+
+  /**
    * Get all registration statuses directly from AMI (without file access)
    * This is useful when backend cannot access Asterisk config files
    */
@@ -453,6 +543,14 @@ export class RegistrationsService {
 
     if (!trunk) {
       throw new NotFoundException(`SIP trunk '${name}' not found`);
+    }
+
+    // Validate that trunk is associated with a tenant before allowing routing configuration
+    if (trunk.tenantId === null) {
+      throw new BadRequestException(
+        'Cannot configure routing for a trunk that is not associated with a tenant. ' +
+        'Please associate the trunk with a tenant first.'
+      );
     }
 
     try {

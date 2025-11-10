@@ -45,7 +45,7 @@ export default function QueueMembersManager({ queueName }: QueueMembersManagerPr
 
   const canManageMembers =
     user &&
-    [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR].includes(
+    [UserRole.ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR].includes(
       user.role as UserRole
     );
 

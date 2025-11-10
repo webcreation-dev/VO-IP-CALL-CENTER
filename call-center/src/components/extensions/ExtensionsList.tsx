@@ -49,7 +49,6 @@ export default function ExtensionsList({
 
   // Check if user can edit/delete
   const canModify = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );
