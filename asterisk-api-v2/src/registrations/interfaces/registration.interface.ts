@@ -67,6 +67,25 @@ export interface SipTrunkRegistration {
 
   /** DID pattern to match incoming calls (optional, default: '_X.') */
   did_pattern?: string;
+
+  // Metadata fields
+  /** Tenant ID this trunk belongs to */
+  tenantId: number;
+
+  /** Display name for the trunk (optional) */
+  displayName?: string;
+
+  /** Description of the trunk (optional) */
+  description?: string;
+
+  /** Whether the trunk is enabled (default: true) */
+  enabled: boolean;
+
+  /** Creation timestamp */
+  createdAt?: Date;
+
+  /** Last update timestamp */
+  updatedAt?: Date;
 }
 
 /**

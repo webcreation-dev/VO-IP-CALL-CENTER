@@ -68,6 +68,13 @@ export class RegistrationsService {
       destination_type: entity.destinationType ?? undefined,
       destination_id: entity.destinationId ?? undefined,
       did_pattern: entity.didPattern ?? undefined,
+      // Metadata fields
+      tenantId: entity.tenantId,
+      displayName: entity.displayName ?? undefined,
+      description: entity.description ?? undefined,
+      enabled: entity.enabled,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
     };
   }
 

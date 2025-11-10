@@ -396,6 +396,11 @@ export class ConfigFileService {
       line: dto.line,
       outbound_proxy: dto.outbound_proxy,
       support_path: dto.support_path,
+      // Metadata fields (set defaults since this is a legacy method)
+      tenantId: 0, // Unknown tenant
+      enabled: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     registrations.set(dto.name, registration);
