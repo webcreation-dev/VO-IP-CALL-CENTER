@@ -80,14 +80,14 @@ export class RegistrationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get all SIP trunks',
-    description: 'Retrieve all SIP trunk registrations from pjsip_wizard.conf',
+    description: 'Retrieve all SIP trunk registrations from the database with full tenant details',
   })
   @ApiQuery({
     name: 'with_status',
     required: false,
-    type: Boolean,
-    description: 'Include registration status from Asterisk AMI',
-    example: true,
+    type: String,
+    description: 'Include registration status from Asterisk AMI (set to "true")',
+    example: 'true',
   })
   @ApiResponse({
     status: 200,
@@ -111,6 +111,14 @@ export class RegistrationsController {
           expiration: 3600,
           retry_interval: 60,
           max_retries: 10,
+          tenantId: 1,
+          tenant: {
+            id: 1,
+            name: 'tenant1',
+            displayName: 'Tenant One',
+            enabled: true,
+          },
+          enabled: true,
           status: {
             id: 'operator_trunk-reg-0',
             server_uri: 'sip:197.234.218.195:25060',
@@ -122,8 +130,9 @@ export class RegistrationsController {
       ],
     },
   })
-  async findAll(@Query('with_status') withStatus?: boolean) {
-    if (withStatus) {
+  async findAll(@Query('with_status') withStatus?: string) {
+    const shouldIncludeStatus = withStatus === 'true' || withStatus === '1';
+    if (shouldIncludeStatus) {
       return this.registrationsService.findAllWithStatus();
     }
     return this.registrationsService.findAll();
@@ -136,7 +145,7 @@ export class RegistrationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get SIP trunk by ID',
-    description: 'Retrieve a specific SIP trunk registration by its ID',
+    description: 'Retrieve a specific SIP trunk registration by its ID with full tenant details',
   })
   @ApiParam({
     name: 'id',
@@ -146,17 +155,18 @@ export class RegistrationsController {
   @ApiQuery({
     name: 'with_status',
     required: false,
-    type: Boolean,
-    description: 'Include registration status from Asterisk AMI',
-    example: true,
+    type: String,
+    description: 'Include registration status from Asterisk AMI (set to "true")',
+    example: 'true',
   })
   @ApiResponse({
     status: 200,
     description: 'SIP trunk retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'SIP trunk not found' })
-  async findOne(@Param('id') id: string, @Query('with_status') withStatus?: boolean) {
-    if (withStatus) {
+  async findOne(@Param('id') id: string, @Query('with_status') withStatus?: string) {
+    const shouldIncludeStatus = withStatus === 'true' || withStatus === '1';
+    if (shouldIncludeStatus) {
       return this.registrationsService.findOneWithStatus(id);
     }
     return this.registrationsService.findOne(id);

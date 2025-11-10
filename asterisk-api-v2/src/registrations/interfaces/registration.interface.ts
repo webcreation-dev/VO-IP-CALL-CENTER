@@ -1,3 +1,5 @@
+import { Tenant } from '../../core/database/entities/tenant.entity';
+
 /**
  * SIP Trunk Registration interface
  * Represents a PJSIP outbound registration configured via pjsip_wizard.conf
@@ -71,6 +73,9 @@ export interface SipTrunkRegistration {
   // Metadata fields
   /** Tenant ID this trunk belongs to */
   tenantId: number;
+
+  /** Full tenant object (loaded with relations) */
+  tenant?: Tenant;
 
   /** Display name for the trunk (optional) */
   displayName?: string;

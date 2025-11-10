@@ -70,6 +70,7 @@ export class RegistrationsService {
       did_pattern: entity.didPattern ?? undefined,
       // Metadata fields
       tenantId: entity.tenantId,
+      tenant: entity.tenant ?? undefined,
       displayName: entity.displayName ?? undefined,
       description: entity.description ?? undefined,
       enabled: entity.enabled,
@@ -229,7 +230,10 @@ export class RegistrationsService {
    */
   async findAll(tenantId?: number): Promise<SipTrunkRegistration[]> {
     const where = tenantId ? { tenantId, enabled: true } : { enabled: true };
-    const trunks = await this.sipTrunkRepository.find({ where });
+    const trunks = await this.sipTrunkRepository.find({
+      where,
+      relations: ['tenant'],
+    });
     return trunks.map(trunk => this.entityToInterface(trunk));
   }
 
@@ -265,7 +269,10 @@ export class RegistrationsService {
       where.tenantId = tenantId;
     }
 
-    const trunk = await this.sipTrunkRepository.findOne({ where });
+    const trunk = await this.sipTrunkRepository.findOne({
+      where,
+      relations: ['tenant'],
+    });
 
     if (!trunk) {
       throw new NotFoundException(`SIP trunk '${name}' not found`);
