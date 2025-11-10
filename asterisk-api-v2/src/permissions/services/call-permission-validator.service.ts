@@ -72,6 +72,42 @@ export class CallPermissionValidatorService {
       }
     }
 
+    // Validate role-context consistency
+    // If endpoint has a role, ensure role belongs to the same context or is tenant-wide
+    if (caller.role && caller.role.contextId !== null) {
+      // Get caller's context ID
+      const callerContext = await this.contextRepo.findOne({
+        where: { name: caller.context },
+      });
+
+      if (callerContext && caller.role.contextId !== callerContext.id) {
+        this.logger.warn(
+          `Role-context mismatch: endpoint ${caller.id} in context ${caller.context} (ID: ${callerContext.id}) has role from context ${caller.role.contextId}`,
+        );
+        return {
+          allowed: false,
+          reason: 'role_context_mismatch',
+        };
+      }
+    }
+
+    if (called.role && called.role.contextId !== null) {
+      // Get called's context ID
+      const calledContext = await this.contextRepo.findOne({
+        where: { name: called.context },
+      });
+
+      if (calledContext && called.role.contextId !== calledContext.id) {
+        this.logger.warn(
+          `Role-context mismatch: endpoint ${called.id} in context ${called.context} (ID: ${calledContext.id}) has role from context ${called.role.contextId}`,
+        );
+        return {
+          allowed: false,
+          reason: 'role_context_mismatch',
+        };
+      }
+    }
+
     // If no roles defined, allow (backward compatible)
     if (!caller.role || !called.role) {
       return {

@@ -43,7 +43,6 @@ export default function ContextsList({ contexts, onEdit, onRefresh }: ContextsLi
 
   // Check if user can delete contexts (ADMIN or TENANT_ADMIN)
   const canDelete = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );

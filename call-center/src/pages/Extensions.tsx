@@ -37,9 +37,8 @@ export default function Extensions() {
   // Get user from store
   const { user } = useAuthStore();
 
-  // Check if user can create extensions (ADMIN or TENANT_ADMIN or SUPER_ADMIN)
+  // Check if user can create extensions (ADMIN or TENANT_ADMIN)
   const canCreate = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );

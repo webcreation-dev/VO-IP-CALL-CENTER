@@ -100,8 +100,7 @@ call-center-admin/
 
 L'application utilise JWT pour l'authentification. Les rôles disponibles sont :
 
-- **SUPER_ADMIN** : Accès total au système
-- **ADMIN** : Administration complète
+- **ADMIN** : Administration complète avec accès total au système
 - **TENANT_ADMIN** : Administration d'un tenant spécifique
 - **SUPERVISOR** : Supervision des agents et files
 - **AGENT** : Accès limité aux fonctions d'agent

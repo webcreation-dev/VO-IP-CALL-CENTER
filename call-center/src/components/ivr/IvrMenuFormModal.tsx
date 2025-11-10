@@ -75,7 +75,7 @@ export default function IvrMenuFormModal({
   const [activeTab, setActiveTab] = useState('basic');
 
   const isEditMode = !!menu;
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   const {
     register,
@@ -99,11 +99,11 @@ export default function IvrMenuFormModal({
     },
   });
 
-  // Load tenants for SUPER_ADMIN
+  // Load tenants for ADMIN
   const { data: tenants } = useQuery({
     queryKey: ['tenants', 'active'],
     queryFn: () => tenantsService.getAll({ isActive: true, limit: 100 }),
-    enabled: isSuperAdmin && !isEditMode,
+    enabled: isAdmin && !isEditMode,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -227,8 +227,8 @@ export default function IvrMenuFormModal({
 
             {/* Tab 1: Basic Information */}
             <TabsContent value="basic" className="space-y-4 mt-4">
-              {/* Tenant Selection - SUPER_ADMIN only */}
-              {isSuperAdmin && !isEditMode && (
+              {/* Tenant Selection - ADMIN only */}
+              {isAdmin && !isEditMode && (
                 <div className="space-y-2">
                   <Label htmlFor="tenantId">
                     Tenant <span className="text-destructive">*</span>

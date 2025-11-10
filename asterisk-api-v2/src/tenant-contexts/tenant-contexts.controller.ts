@@ -22,6 +22,8 @@ import { TenantContextsService } from './tenant-contexts.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
+import { CreateTenantContextDto } from './dto/create-tenant-context.dto';
+import { RolesService } from '../roles/roles.service';
 
 /**
  * Tenant Contexts Controller
@@ -52,6 +54,7 @@ import { UserRole } from '../common/enums/user-role.enum';
 export class TenantContextsController {
   constructor(
     private readonly contextsService: TenantContextsService,
+    private readonly rolesService: RolesService,
   ) {}
 
   /**
@@ -164,15 +167,48 @@ export class TenantContextsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient role' })
   @ApiResponse({ status: 409, description: 'Context already exists' })
-  async create(
-    @Body() dto: { tenantId: number; name: string; description?: string; dialplanConfig?: Record<string, any> },
-  ) {
+  async create(@Body() dto: CreateTenantContextDto) {
     return await this.contextsService.create(
       dto.tenantId,
       dto.name,
       dto.description,
       dto.dialplanConfig,
+      dto.roleStrategy,
+      dto.presetId,
+      dto.customRoles, // Pass custom roles if provided
     );
+  }
+
+  /**
+   * Get available role presets
+   *
+   * Returns list of available role presets that can be applied during context creation
+   */
+  @Get('contexts/role-presets')
+  @ApiOperation({
+    summary: 'Get available role presets',
+    description: 'Returns a list of role presets that can be applied when creating a context with context-specific roles',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Role presets retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 'call_center_standard',
+          name: 'Call Center Standard',
+          description: 'Classic call center hierarchy with 5 levels',
+          roles: [
+            { name: 'agent', displayName: 'Agent', level: 1 },
+            { name: 'team_leader', displayName: 'Team Leader', level: 3 },
+          ],
+        },
+      ],
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getRolePresets() {
+    return await this.rolesService.getPresets();
   }
 
   /**

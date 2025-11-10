@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, ChevronDown } from 'lucide-react';
+import { Loader2, ChevronDown, Info, Shuffle } from 'lucide-react';
 
 import {
   Dialog,
@@ -24,11 +24,18 @@ import contextsService, {
   type TenantContext,
   type CreateContextDto,
   type UpdateContextDto,
+  type CustomRole,
+  type RolePreset,
   DEFAULT_DIALPLAN_CONFIG,
 } from '@/api/contexts';
 import useAuthStore from '@/store/authStore';
 import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import RoleStrategyCard from './RoleStrategyCard';
+import RolePresetCard from './RolePresetCard';
+import CustomizePresetModal from './CustomizePresetModal';
 
 interface ContextFormModalProps {
   open: boolean;
@@ -45,12 +52,28 @@ const contextSchema = z.object({
     .max(50, 'Le nom ne peut pas dépasser 50 caractères')
     .regex(/^[a-z0-9_]+$/, 'Le nom ne peut contenir que des lettres minuscules, chiffres et underscores'),
   description: z.string().optional(),
+  // Role configuration
+  roleStrategy: z.enum(['use-tenant-roles', 'context-specific']).optional(),
+  presetId: z.string().optional(),
+  // Dialplan configuration
   allowInbound: z.boolean(),
   allowOutbound: z.boolean(),
   allowInternal: z.boolean(),
   allowInterContext: z.boolean(),
   allowedContexts: z.array(z.string()).optional(),
-});
+}).refine(
+  (data) => {
+    // If context-specific is selected, presetId is required
+    if (data.roleStrategy === 'context-specific' && !data.presetId) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Un preset est requis pour les rôles context-specific',
+    path: ['presetId'],
+  }
+);
 
 type ContextFormData = z.infer<typeof contextSchema>;
 
@@ -64,6 +87,11 @@ export default function ContextFormModal({
   const { user } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dialplanOpen, setDialplanOpen] = useState(false);
+  const [roleConfigOpen, setRoleConfigOpen] = useState(false);
+  const [expandedPreset, setExpandedPreset] = useState<string | null>(null);
+  const [customRoles, setCustomRoles] = useState<CustomRole[] | undefined>(undefined);
+  const [customizeModalOpen, setCustomizeModalOpen] = useState(false);
+  const [selectedPresetForCustomize, setSelectedPresetForCustomize] = useState<RolePreset | null>(null);
 
   const isEditMode = !!context;
 
@@ -72,6 +100,14 @@ export default function ContextFormModal({
     queryKey: ['contexts', 'all'],
     queryFn: () => contextsService.getAll(),
     enabled: open, // Only fetch when modal is open
+  });
+
+  // Fetch role presets (only in create mode)
+  const { data: rolePresets = [], isLoading: presetsLoading } = useQuery({
+    queryKey: ['role-presets'],
+    queryFn: () => contextsService.getRolePresets(),
+    enabled: open && !isEditMode,
+    staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
   const {
@@ -86,6 +122,8 @@ export default function ContextFormModal({
     defaultValues: {
       name: '',
       description: '',
+      roleStrategy: 'use-tenant-roles',
+      presetId: undefined,
       allowInbound: DEFAULT_DIALPLAN_CONFIG.allowInbound,
       allowOutbound: DEFAULT_DIALPLAN_CONFIG.allowOutbound,
       allowInternal: DEFAULT_DIALPLAN_CONFIG.allowInternal,
@@ -113,16 +151,40 @@ export default function ContextFormModal({
     if (!open) {
       reset();
       setDialplanOpen(false);
+      setRoleConfigOpen(false);
+      setExpandedPreset(null);
+      setCustomRoles(undefined);
+      setSelectedPresetForCustomize(null);
     }
   }, [open, reset]);
 
   // Watch name field for preview
   const nameValue = watch('name');
+  const presetIdValue = watch('presetId');
 
   // Generate preview
   const contextPreview = user?.tenantId
     ? contextsService.generateContextPreview(user.tenantId, nameValue)
     : '';
+
+  // Handle customize button click
+  const handleCustomizeClick = () => {
+    const preset = rolePresets.find((p) => p.id === presetIdValue);
+    if (preset) {
+      setSelectedPresetForCustomize(preset);
+      setCustomizeModalOpen(true);
+    }
+  };
+
+  // Handle apply custom roles
+  const handleApplyCustomRoles = (roles: CustomRole[]) => {
+    setCustomRoles(roles);
+  };
+
+  // Handle reset customization
+  const handleResetCustomization = () => {
+    setCustomRoles(undefined);
+  };
 
   // Handle form submission
   const onSubmit = async (data: ContextFormData) => {
@@ -153,6 +215,9 @@ export default function ContextFormModal({
         const createData: CreateContextDto = {
           name: data.name,
           description: data.description || undefined,
+          roleStrategy: data.roleStrategy,
+          presetId: data.presetId,
+          customRoles: customRoles, // Include custom roles if defined
           dialplanConfig: {
             allowInbound: data.allowInbound,
             allowOutbound: data.allowOutbound,
@@ -248,6 +313,152 @@ export default function ContextFormModal({
               )}
             </div>
           </div>
+
+          {/* Role Configuration (only in create mode) */}
+          {!isEditMode && (
+            <Collapsible open={roleConfigOpen} onOpenChange={setRoleConfigOpen}>
+              <div className="space-y-4">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between"
+                    disabled={isSubmitting}
+                  >
+                    <span className="font-semibold">Configuration des Rôles</span>
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${
+                        roleConfigOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent className="space-y-4 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Définissez comment les rôles hiérarchiques seront gérés pour ce contexte.
+                  </p>
+
+                  {/* Role Strategy Selection */}
+                  <div className="space-y-3">
+                    <Label>Stratégie de rôles</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <RoleStrategyCard
+                        type="use-tenant-roles"
+                        selected={watch('roleStrategy') === 'use-tenant-roles'}
+                        onSelect={() => {
+                          setValue('roleStrategy', 'use-tenant-roles');
+                          setValue('presetId', undefined);
+                        }}
+                        tenantRolesCount={0} // TODO: fetch actual count if needed
+                      />
+                      <RoleStrategyCard
+                        type="context-specific"
+                        selected={watch('roleStrategy') === 'context-specific'}
+                        onSelect={() => setValue('roleStrategy', 'context-specific')}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Role Preset Selection (shown only when context-specific is selected) */}
+                  {watch('roleStrategy') === 'context-specific' && (
+                    <div className="space-y-3 pt-4 border-t">
+                      <Label>
+                        Sélectionner un preset <span className="text-destructive">*</span>
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Choisissez un modèle de hiérarchie de rôles prédéfini.
+                      </p>
+
+                      {presetsLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          <span className="ml-2 text-sm text-muted-foreground">
+                            Chargement des presets...
+                          </span>
+                        </div>
+                      ) : rolePresets.length === 0 ? (
+                        <Card className="border-dashed">
+                          <CardContent className="pt-6 text-center">
+                            <Info className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">
+                              Aucun preset disponible
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <div className="space-y-3">
+                          {rolePresets.map((preset) => (
+                            <RolePresetCard
+                              key={preset.id}
+                              preset={preset}
+                              selected={watch('presetId') === preset.id}
+                              onSelect={() => setValue('presetId', preset.id)}
+                              expanded={expandedPreset === preset.id}
+                              onToggleExpand={() =>
+                                setExpandedPreset(
+                                  expandedPreset === preset.id ? null : preset.id
+                                )
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {errors.presetId && (
+                        <p className="text-sm text-destructive">{errors.presetId.message}</p>
+                      )}
+
+                      {/* Customize Button (shown only when a preset is selected) */}
+                      {presetIdValue && (
+                        <div className="pt-3 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex-1">
+                              <Label className="text-xs font-semibold">Personnalisation</Label>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {customRoles
+                                  ? 'Ce preset a été personnalisé. Les modifications ne seront appliquées qu\'à ce contexte.'
+                                  : 'Personnalisez les rôles et permissions avant application.'}
+                              </p>
+                            </div>
+                            {customRoles && (
+                              <Badge variant="secondary" className="bg-purple-100 text-purple-700 shrink-0">
+                                Personnalisé
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCustomizeClick}
+                              className="flex-1"
+                            >
+                              <Shuffle className="h-4 w-4 mr-2" />
+                              {customRoles ? 'Modifier la personnalisation' : 'Personnaliser le preset'}
+                            </Button>
+
+                            {customRoles && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleResetCustomization}
+                              >
+                                Réinitialiser
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          )}
 
           {/* Dialplan Configuration */}
           <Collapsible open={dialplanOpen} onOpenChange={setDialplanOpen}>
@@ -427,6 +638,15 @@ export default function ContextFormModal({
             </Button>
           </DialogFooter>
         </form>
+
+        {/* Customize Preset Modal */}
+        <CustomizePresetModal
+          open={customizeModalOpen}
+          onOpenChange={setCustomizeModalOpen}
+          preset={selectedPresetForCustomize}
+          initialCustomRoles={customRoles}
+          onApply={handleApplyCustomRoles}
+        />
       </DialogContent>
     </Dialog>
   );

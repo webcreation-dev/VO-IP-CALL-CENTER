@@ -1,69 +1,93 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Users, Building2, Layers, PhoneCall, ListOrdered, Code2, Radio, BarChart3, Shield, FileText, LogOut } from 'lucide-react';
+import { Home, Users, Building2, Layers, PhoneCall, ListOrdered, Code2, Radio, Network, BarChart3, Shield, FileText, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import useAuthStore from '@/store/authStore';
 import { Button } from '@/components/ui/button';
+import { UserRole } from '@/api/auth';
 
 const navigation = [
   {
     name: 'Dashboard',
     href: '/',
     icon: Home,
+    roles: ['admin', 'tenant_admin', 'supervisor', 'agent'], // All roles
   },
   {
     name: 'Agents',
     href: '/agents',
     icon: Users,
+    roles: ['admin', 'tenant_admin', 'supervisor'], // Management roles
   },
   {
     name: 'Tenants',
     href: '/tenants',
     icon: Building2,
+    roles: ['admin'], // ADMIN only
   },
   {
     name: 'Contextes',
     href: '/contexts',
     icon: Layers,
+    roles: ['admin', 'tenant_admin'], // Admin roles
   },
   {
     name: 'Files d\'attente',
     href: '/queues',
     icon: ListOrdered,
+    roles: ['admin', 'tenant_admin', 'supervisor'], // Management roles
   },
   {
     name: 'Extensions',
     href: '/extensions',
     icon: Code2,
+    roles: ['admin', 'tenant_admin'], // Admin roles
   },
   {
     name: 'IVR',
     href: '/ivr',
     icon: Radio,
+    roles: ['admin', 'tenant_admin'], // Admin roles
+  },
+  {
+    name: 'Interconnexions',
+    href: '/trunks',
+    icon: Network,
+    roles: ['admin'], // ADMIN only
   },
   {
     name: 'Appels',
     href: '/calls',
     icon: PhoneCall,
+    roles: ['admin', 'tenant_admin', 'supervisor', 'agent'], // All roles
   },
   {
     name: 'Rôles',
     href: '/roles',
     icon: Shield,
+    roles: ['admin', 'tenant_admin'], // Admin roles
   },
   {
     name: 'Logs d\'Audit',
     href: '/audit-logs',
     icon: FileText,
+    roles: ['admin', 'tenant_admin', 'supervisor'], // Management roles
   },
   {
     name: 'Rapports',
     href: '/reports',
     icon: BarChart3,
+    roles: ['admin', 'tenant_admin', 'supervisor'], // Management roles
   },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuthStore();
+
+  // Filter navigation based on user role
+  const filteredNavigation = navigation.filter((item) => {
+    if (!user) return false;
+    return item.roles.includes(user.role);
+  });
 
   return (
     <div className="flex flex-col h-full bg-card border-r">
@@ -77,7 +101,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           const Icon = item.icon;
 
           return (

@@ -52,14 +52,12 @@ export default function QueuesList({ queues, onEdit, onRefresh }: QueuesListProp
 
   // Check if user can delete queues (ADMIN or TENANT_ADMIN)
   const canDelete = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );
 
   // Check if user can manage members
   const canManageMembers = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN ||
     user.role === UserRole.SUPERVISOR

@@ -24,7 +24,6 @@ export default function Contexts() {
 
   // Check if user can create contexts (ADMIN or TENANT_ADMIN)
   const canCreate = user && (
-    user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.ADMIN ||
     user.role === UserRole.TENANT_ADMIN
   );

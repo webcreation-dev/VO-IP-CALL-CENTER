@@ -154,15 +154,15 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-2xl rounded-lg bg-card shadow-xl dark:bg-gray-800">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-foreground">
             {isEditMode ? 'Modifier le Rôle' : '✨ Nouveau Rôle'}
           </h2>
           <button
             onClick={onClose}
-            className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <X className="h-5 w-5" />
           </button>
@@ -174,20 +174,20 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
             {/* Name (only for creation) */}
             {!isEditMode && (
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-foreground">
                   Nom (identifiant unique) *
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase() })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600"
                   placeholder="agent, supervisor, manager..."
                 />
                 {errors.name && (
-                  <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.name}</p>
                 )}
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Lettres minuscules, chiffres et underscores uniquement
                 </p>
               </div>
@@ -195,31 +195,31 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
 
             {/* Display Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 Nom d'affichage *
               </label>
               <input
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600"
                 placeholder="Agent, Superviseur, Manager..."
               />
               {errors.displayName && (
-                <p className="mt-1 text-sm text-red-600">{errors.displayName}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.displayName}</p>
               )}
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-foreground">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600"
                 placeholder="Description du rôle..."
               />
             </div>
@@ -227,25 +227,25 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
             {/* Level Slider (only for creation) */}
             {!isEditMode && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   🎚️ Niveau hiérarchique *
                 </label>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-500 w-12">1</span>
+                  <span className="text-sm text-muted-foreground w-12">1</span>
                   <input
                     type="range"
                     min="1"
                     max="10"
                     value={formData.level}
                     onChange={(e) => setFormData({ ...formData, level: Number(e.target.value) })}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    className="flex-1 h-2 bg-accent rounded-lg appearance-none cursor-pointer accent-indigo-600 dark:bg-gray-700"
                   />
-                  <span className="text-sm text-gray-500 w-12 text-right">10</span>
+                  <span className="text-sm text-muted-foreground w-12 text-right">10</span>
                 </div>
                 <div className="mt-2 flex items-center justify-center">
                   <LevelBadge level={formData.level} className="text-lg" />
                 </div>
-                <p className="mt-2 text-xs text-gray-500 text-center">
+                <p className="mt-2 text-xs text-muted-foreground text-center">
                   1 = Niveau le plus bas (Agent) • 10 = Niveau le plus haut (Directeur)
                 </p>
               </div>
@@ -253,53 +253,53 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
 
             {/* Permissions */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-foreground mb-3">
                 📞 Permissions d'appel
               </label>
               <div className="space-y-3">
                 {/* Same Level */}
-                <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer hover:bg-gray-50">
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-accent dark:border-gray-700 dark:hover:bg-gray-700/50">
                   <input
                     type="checkbox"
                     checked={formData.canCallSameLevel}
                     onChange={(e) => setFormData({ ...formData, canCallSameLevel: e.target.checked })}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="mt-1 h-4 w-4 rounded border-input text-indigo-600 focus:ring-indigo-500"
                   />
                   <div className="flex-1">
-                    <span className="font-medium text-gray-900">➡️ Appeler même niveau</span>
-                    <p className="text-sm text-gray-500">
+                    <span className="font-medium text-foreground">➡️ Appeler même niveau</span>
+                    <p className="text-sm text-muted-foreground">
                       Autorise les appels vers des utilisateurs du même niveau hiérarchique
                     </p>
                   </div>
                 </label>
 
                 {/* Lower Levels */}
-                <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer hover:bg-gray-50">
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-accent dark:border-gray-700 dark:hover:bg-gray-700/50">
                   <input
                     type="checkbox"
                     checked={formData.canCallLowerLevel}
                     onChange={(e) => setFormData({ ...formData, canCallLowerLevel: e.target.checked })}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="mt-1 h-4 w-4 rounded border-input text-indigo-600 focus:ring-indigo-500"
                   />
                   <div className="flex-1">
-                    <span className="font-medium text-gray-900">⬇️ Appeler niveaux inférieurs</span>
-                    <p className="text-sm text-gray-500">
+                    <span className="font-medium text-foreground">⬇️ Appeler niveaux inférieurs</span>
+                    <p className="text-sm text-muted-foreground">
                       Autorise les appels vers des utilisateurs de niveaux hiérarchiques inférieurs
                     </p>
                   </div>
                 </label>
 
                 {/* Higher Levels */}
-                <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer hover:bg-gray-50">
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-accent dark:border-gray-700 dark:hover:bg-gray-700/50">
                   <input
                     type="checkbox"
                     checked={formData.canCallHigherLevel}
                     onChange={(e) => setFormData({ ...formData, canCallHigherLevel: e.target.checked })}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="mt-1 h-4 w-4 rounded border-input text-indigo-600 focus:ring-indigo-500"
                   />
                   <div className="flex-1">
-                    <span className="font-medium text-gray-900">⬆️ Appeler niveaux supérieurs</span>
-                    <p className="text-sm text-gray-500">
+                    <span className="font-medium text-foreground">⬆️ Appeler niveaux supérieurs</span>
+                    <p className="text-sm text-muted-foreground">
                       Autorise les appels vers des utilisateurs de niveaux hiérarchiques supérieurs
                     </p>
                   </div>
@@ -307,12 +307,12 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
               </div>
 
               {/* Permission Preview */}
-              <div className="mt-3 rounded-lg bg-blue-50 p-3">
+              <div className="mt-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/30">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5 dark:text-blue-400" />
                   <div>
-                    <p className="text-sm font-medium text-blue-900">Aperçu des permissions</p>
-                    <p className="text-sm text-blue-700 mt-1">
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-300">Aperçu des permissions</p>
+                    <p className="text-sm text-blue-700 mt-1 dark:text-blue-400">
                       Ce rôle pourra appeler : <span className="font-semibold">{getPermissionSummary()}</span>
                     </p>
                   </div>
@@ -326,9 +326,9 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
                 type="checkbox"
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="h-4 w-4 rounded border-input text-indigo-600 focus:ring-indigo-500"
               />
-              <span className="text-sm text-gray-700">Rôle actif</span>
+              <span className="text-sm text-foreground">Rôle actif</span>
             </label>
           </div>
 
@@ -338,14 +338,14 @@ export function RoleFormModal({ role, isOpen, onClose, onSuccess }: RoleFormModa
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-input px-4 py-2 text-foreground hover:bg-accent disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-700"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
             >
               {isSubmitting ? (
                 <>
