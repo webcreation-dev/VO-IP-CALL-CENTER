@@ -156,7 +156,7 @@ ADD_MEMBER_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"interface\": \"PJSIP/$ENDPOINT1\",
+    \"endpointName\": \"$ENDPOINT1\",
     \"penalty\": 0
   }")
 
@@ -183,7 +183,7 @@ ADD_MEMBER2_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"interface\": \"PJSIP/$ENDPOINT2\",
+    \"endpointName\": \"$ENDPOINT2\",
     \"penalty\": 5
   }")
 
@@ -343,7 +343,7 @@ INVALID_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
   -H "Authorization: Bearer $TOKEN" \
   -w "\n%{http_code}" \
   -d '{
-    "interface": "PJSIP/nonexistent_endpoint",
+    "endpointName": "nonexistent_endpoint",
     "penalty": 0
   }')
 

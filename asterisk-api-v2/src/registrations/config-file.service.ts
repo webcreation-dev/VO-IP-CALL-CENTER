@@ -573,13 +573,13 @@ export class ConfigFileService {
     section += `endpoint/direct_media = no\n`;
     section += `aor/qualify_frequency = 60\n`;
 
-    if (trunk.clientUri) {
-      section += `registration/client_uri = ${trunk.clientUri}\n`;
-    }
+    // Server URI (obligatoire pour les registrations sortantes)
+    const serverUri = trunk.serverUri || `sip:${trunk.remoteHost}`;
+    section += `server_uri = ${serverUri}\n`;
 
-    if (trunk.serverUri) {
-      section += `registration/server_uri = ${trunk.serverUri}\n`;
-    }
+    // Client URI (recommandé pour identifier le client)
+    const clientUri = trunk.clientUri || `sip:${trunk.username}@${trunk.remoteHost}`;
+    section += `client_uri = ${clientUri}\n`;
 
     if (trunk.outboundProxy) {
       section += `registration/outbound_proxy = ${trunk.outboundProxy}\n`;

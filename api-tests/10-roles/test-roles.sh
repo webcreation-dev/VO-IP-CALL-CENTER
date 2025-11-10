@@ -217,12 +217,12 @@ section "TEST 7: Récupérer un rôle par ID"
 GET_ROLE_RESPONSE=$(curl -s -X GET "$API_URL/roles/$ROLE_ID" \
   -H "Authorization: Bearer $TOKEN")
 
-FOUND_NAME=$(echo "$GET_ROLE_RESPONSE" | grep -o '"name":"[^"]*"' | head -1 | sed 's/"name":"\(.*\)"/\1/')
+FOUND_DISPLAY_NAME=$(echo "$GET_ROLE_RESPONSE" | grep -o '"displayName":"[^"]*"' | head -1 | sed 's/"displayName":"\(.*\)"/\1/')
 
-if [ "$FOUND_NAME" = "Team Leader" ]; then
+if [ "$FOUND_DISPLAY_NAME" = "Team Leader" ]; then
     success "Rôle récupéré correctement"
 else
-    failure "Rôle non trouvé ou nom incorrect"
+    failure "Rôle non trouvé ou displayName incorrect"
 fi
 
 ##############################################################################
@@ -235,16 +235,16 @@ UPDATE_ROLE_RESPONSE=$(curl -s -X PATCH "$API_URL/roles/$ROLE_ID" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "level": 6,
+    "displayName": "Team Leader Senior",
     "canCallSameLevel": true,
     "canCallLowerLevel": true,
     "canCallHigherLevel": true
   }')
 
-UPDATED_LEVEL=$(echo "$UPDATE_ROLE_RESPONSE" | grep -o '"level":[0-9]*' | grep -o '[0-9]*')
+UPDATED_DISPLAY_NAME=$(echo "$UPDATE_ROLE_RESPONSE" | grep -o '"displayName":"[^"]*"' | sed 's/"displayName":"\(.*\)"/\1/')
 
-if [ "$UPDATED_LEVEL" = "6" ]; then
-    success "Rôle modifié avec succès (level: 6)"
+if [ "$UPDATED_DISPLAY_NAME" = "Team Leader Senior" ]; then
+    success "Rôle modifié avec succès (displayName: Team Leader Senior)"
 else
     failure "Échec de modification du rôle"
 fi
