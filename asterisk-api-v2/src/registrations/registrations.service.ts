@@ -336,7 +336,7 @@ export class RegistrationsService {
       if (dto.did_pattern !== undefined) trunk.didPattern = dto.did_pattern || null;
 
       // Validate routing if being updated
-      if (trunk.destinationType && trunk.destinationId) {
+      if (trunk.destinationType && trunk.destinationId && trunk.tenantId !== null) {
         await this.validateDestination(trunk.destinationType, trunk.destinationId, trunk.tenantId);
       }
 
@@ -624,7 +624,7 @@ export class RegistrationsService {
 
     // Get associated extensions if routing is configured
     let extensions: any[] = [];
-    if (trunk.destinationType && trunk.destinationId) {
+    if (trunk.destinationType && trunk.destinationId && trunk.tenantId !== null) {
       try {
         const allExtensions = await this.extensionsService.getByContext(trunk.tenantId, trunk.context);
         // Filter extensions that match the DID pattern and route to the destination
@@ -632,7 +632,7 @@ export class RegistrationsService {
         const destId = trunk.destinationId;
         extensions = allExtensions.filter((ext: any) => {
           return ext.exten === trunk.didPattern &&
-                 this.isRoutingToDestination(ext, destType, destId, trunk.tenantId);
+                 this.isRoutingToDestination(ext, destType, destId, trunk.tenantId!);
         });
       } catch (error) {
         this.logger.warn(`Failed to get extensions for trunk ${name}: ${error.message}`);
@@ -725,7 +725,11 @@ export class RegistrationsService {
         throw new BadRequestException(`Cannot create routing for destination type: ${trunk.destinationType}`);
     }
 
-    // Create the extension
+    // Create the extension (tenant must be set)
+    if (trunk.tenantId === null) {
+      throw new BadRequestException('Cannot create routing for a trunk not associated with a tenant');
+    }
+
     try {
       const extension = await this.extensionsService.create(trunk.tenantId, {
         context: trunk.context,
@@ -748,6 +752,12 @@ export class RegistrationsService {
    * Remove routing extensions for a trunk
    */
   private async removeRoutingExtensions(trunk: SipTrunk): Promise<void> {
+    // Skip if trunk is not associated with a tenant
+    if (trunk.tenantId === null) {
+      this.logger.warn(`Cannot remove routing extensions for trunk ${trunk.name}: not associated with a tenant`);
+      return;
+    }
+
     try {
       const allExtensions = await this.extensionsService.getByContext(trunk.tenantId, trunk.context);
 
@@ -757,7 +767,7 @@ export class RegistrationsService {
       const extensionsToRemove = allExtensions.filter((ext: any) => {
         return ext.exten === trunk.didPattern &&
                destType && destId &&
-               this.isRoutingToDestination(ext, destType, destId, trunk.tenantId);
+               this.isRoutingToDestination(ext, destType, destId, trunk.tenantId!);
       });
 
       // Remove each extension
