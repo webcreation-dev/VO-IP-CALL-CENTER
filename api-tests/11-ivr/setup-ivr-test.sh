@@ -105,69 +105,12 @@ fi
 success "Queue créée: $QUEUE_NAME"
 
 ##############################################################################
-# ÉTAPE 3: Générer les fichiers audio via TTS
+# ÉTAPE 3: Configuration des sons (sons Asterisk par défaut)
 ##############################################################################
-section "3️⃣  Génération des fichiers audio (TTS)"
+section "3️⃣  Configuration des sons"
 
-# Audio 1: Welcome
-info "Génération audio 'welcome'..."
-WELCOME_AUDIO=$(curl -s -X POST "$API_URL/ivr/audio/generate-tts?tenantId=$TENANT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Bienvenue dans notre système I V R. Appuyez sur 1 pour le service commercial, ou appuyez sur 2 pour le support technique.",
-    "name": "welcome",
-    "language": "fr-FR",
-    "voice": "fr-FR-Standard-A"
-  }')
-
-WELCOME_ID=$(echo "$WELCOME_AUDIO" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
-
-if [ -z "$WELCOME_ID" ]; then
-    failure "Impossible de générer l'audio welcome" "$WELCOME_AUDIO"
-fi
-
-success "Audio 'welcome' généré (ID: $WELCOME_ID)"
-
-# Audio 2: Invalid
-info "Génération audio 'invalid'..."
-INVALID_AUDIO=$(curl -s -X POST "$API_URL/ivr/audio/generate-tts?tenantId=$TENANT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Option invalide. Veuillez réessayer.",
-    "name": "invalid",
-    "language": "fr-FR",
-    "voice": "fr-FR-Standard-A"
-  }')
-
-INVALID_ID=$(echo "$INVALID_AUDIO" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
-
-if [ -z "$INVALID_ID" ]; then
-    failure "Impossible de générer l'audio invalid" "$INVALID_AUDIO"
-fi
-
-success "Audio 'invalid' généré (ID: $INVALID_ID)"
-
-# Audio 3: Timeout
-info "Génération audio 'timeout'..."
-TIMEOUT_AUDIO=$(curl -s -X POST "$API_URL/ivr/audio/generate-tts?tenantId=$TENANT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Nous n avons pas reçu votre choix. Veuillez réessayer.",
-    "name": "timeout",
-    "language": "fr-FR",
-    "voice": "fr-FR-Standard-A"
-  }')
-
-TIMEOUT_ID=$(echo "$TIMEOUT_AUDIO" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
-
-if [ -z "$TIMEOUT_ID" ]; then
-    failure "Impossible de générer l'audio timeout" "$TIMEOUT_AUDIO"
-fi
-
-success "Audio 'timeout' généré (ID: $TIMEOUT_ID)"
+info "Utilisation des sons Asterisk par défaut (pas besoin de fichiers audio)..."
+success "Sons configurés: beep, vm-invalid, silence/1"
 
 ##############################################################################
 # ÉTAPE 4: Créer le menu IVR
@@ -181,20 +124,20 @@ MENU_RESPONSE=$(curl -s -X POST "$API_URL/ivr/menus?tenantId=$TENANT_ID" \
   -d "{
     \"name\": \"main_menu\",
     \"description\": \"Menu principal IVR test\",
-    \"welcome_sound\": \"welcome\",
-    \"invalid_sound\": \"invalid\",
-    \"timeout_sound\": \"timeout\",
+    \"welcome_sound\": \"beep\",
+    \"invalid_sound\": \"vm-invalid\",
+    \"timeout_sound\": \"silence/1\",
     \"timeout\": 5,
     \"max_retries\": 3,
     \"max_digits\": 1,
     \"timeout_action\": {
       \"type\": \"playback\",
-      \"sounds\": [\"timeout\"],
+      \"sounds\": [\"silence/1\"],
       \"then\": {\"type\": \"repeat\"}
     },
     \"invalid_action\": {
       \"type\": \"playback\",
-      \"sounds\": [\"invalid\"],
+      \"sounds\": [\"vm-invalid\"],
       \"then\": {\"type\": \"repeat\"}
     }
   }")
@@ -332,9 +275,9 @@ cat > "$CONFIG_FILE" <<EOF
   "did": "$DID_NUMBER",
   "did_mapping_id": $DID_MAPPING_ID,
   "audio_files": {
-    "welcome": $WELCOME_ID,
-    "invalid": $INVALID_ID,
-    "timeout": $TIMEOUT_ID
+    "welcome": "beep (Asterisk default)",
+    "invalid": "vm-invalid (Asterisk default)",
+    "timeout": "silence/1 (Asterisk default)"
   },
   "options": {
     "option_1": $OPTION1_ID,
@@ -364,10 +307,10 @@ echo "   • DID:            $DID_NUMBER"
 echo "   • QUEUE SALES:    sales"
 echo "   • QUEUE SUPPORT:  support"
 echo ""
-echo "🎵 Fichiers audio générés:"
-echo "   • welcome (ID: $WELCOME_ID)"
-echo "   • invalid (ID: $INVALID_ID)"
-echo "   • timeout (ID: $TIMEOUT_ID)"
+echo "🎵 Sons configurés (Asterisk par défaut):"
+echo "   • welcome → beep"
+echo "   • invalid → vm-invalid"
+echo "   • timeout → silence/1"
 echo ""
 echo "🔢 Options IVR:"
 echo "   • Touche 1 → Queue 'sales'"
