@@ -231,7 +231,6 @@ DID_MAPPING_RESPONSE=$(curl -s -X POST "$API_URL/ivr/did-mappings?tenantId=$TENA
     \"did\": \"$DID_NUMBER\",
     \"menu_id\": $MENU_ID,
     \"is_active\": true,
-    \"description\": \"Test IVR - DID principal\"
   }")
 
 DID_MAPPING_ID=$(echo "$DID_MAPPING_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
