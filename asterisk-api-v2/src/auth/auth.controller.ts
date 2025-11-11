@@ -184,6 +184,6 @@ export class AuthController {
     description: 'Unauthorized - JWT token missing or invalid',
   })
   async getProfile(@CurrentUser() user: UserPayload) {
-    return user;
+    return await this.authService.findById(user.sub);
   }
 }
