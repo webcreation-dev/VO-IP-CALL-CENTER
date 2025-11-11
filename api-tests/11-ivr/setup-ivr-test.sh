@@ -67,7 +67,7 @@ info "Création du tenant 'ivr-test-tenant-$TIMESTAMP'..."
 TENANT_RESPONSE=$(curl -s -X POST "$API_URL/tenants" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\": \"ivr-test-tenant-$TIMESTAMP\", \"is_active\": true}")
+  -d "{\"name\": \"ivr-test-tenant-$TIMESTAMP\"}")
 
 # Extraire l'ID du tenant
 TENANT_ID=$(echo "$TENANT_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
