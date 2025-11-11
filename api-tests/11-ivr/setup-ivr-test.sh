@@ -91,12 +91,8 @@ QUEUE_RESPONSE=$(curl -s -X POST "$API_URL/queues" \
     \"name\": \"sales\",
     \"strategy\": \"ringall\",
     \"timeout\": 30,
-    \"retry\": 5,
-    \"weight\": 0,
-    \"max_len\": 0,
-    \"announce_frequency\": 0,
-    \"announce_holdtime\": \"no\",
-    \"announce_position\": \"yes\",
+    \"maxlen\": 0,
+    \"context\": \"t${TENANT_ID}_default\",
     \"tenantId\": $TENANT_ID
   }")
 
@@ -249,6 +245,8 @@ SUPPORT_QUEUE=$(curl -s -X POST "$API_URL/queues" \
     \"name\": \"support\",
     \"strategy\": \"ringall\",
     \"timeout\": 30,
+    \"maxlen\": 0,
+    \"context\": \"t${TENANT_ID}_default\",
     \"tenantId\": $TENANT_ID
   }")
 
