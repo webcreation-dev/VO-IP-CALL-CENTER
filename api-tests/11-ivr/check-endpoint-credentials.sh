@@ -20,7 +20,7 @@ echo ""
 echo -e "${BLUE}Endpoints pour tenant $TENANT_ID:${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-PGPASSWORD='ApiSecurePass2025!' psql -h localhost -U api_user -d asterisk_api -t -A -F $'\t' << EOSQL
+docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -t -A -F $'\t' << EOSQL
 SELECT 
     id,
     username,
@@ -36,7 +36,7 @@ echo ""
 echo -e "${BLUE}Authentification (password) pour tenant $TENANT_ID:${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-PGPASSWORD='ApiSecurePass2025!' psql -h localhost -U api_user -d asterisk_api -t -A -F $'\t' << EOSQL
+docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -t -A -F $'\t' << EOSQL
 SELECT 
     pe.id as endpoint_id,
     pe.username,
@@ -49,10 +49,12 @@ ORDER BY pe.id;
 EOSQL
 
 echo ""
-echo -e "${CYAN}Pour vous connecter, utilisez:${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}Pour vous connecter avec votre client WebRTC:${NC}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-CREDENTIALS=$(PGPASSWORD='ApiSecurePass2025!' psql -h localhost -U api_user -d asterisk_api -t -A -F '|' << EOSQL
+CREDENTIALS=$(docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -t -A -F '|' << EOSQL
 SELECT 
     pe.username,
     pa.password,
@@ -69,12 +71,27 @@ if [ ! -z "$CREDENTIALS" ]; then
     PASSWORD=$(echo "$CREDENTIALS" | cut -d'|' -f2 | xargs)
     DISPLAY=$(echo "$CREDENTIALS" | cut -d'|' -f3 | xargs)
     
-    echo "   Username:     $USERNAME"
-    echo "   Password:     $PASSWORD"
+    echo -e "${GREEN}   Username:     $USERNAME${NC}"
+    echo -e "${GREEN}   Password:     $PASSWORD${NC}"
     echo "   Display Name: $DISPLAY"
     echo "   Server:       pishon.kabou.bj"
     echo "   WebSocket:    wss://pishon.kabou.bj:8089/ws"
     echo ""
+    echo -e "${CYAN}Configuration JsSIP:${NC}"
+    echo ""
+    cat << EOJS
+    const socket = new JsSIP.WebSocketInterface('wss://pishon.kabou.bj:8089/ws');
+    const configuration = {
+      sockets: [socket],
+      uri: 'sip:$USERNAME@pishon.kabou.bj',
+      password: '$PASSWORD',
+      display_name: '$DISPLAY'
+    };
+    const ua = new JsSIP.UA(configuration);
+    ua.start();
+EOJS
+else
+    echo -e "${RED}❌ Aucun endpoint trouvé pour tenant $TENANT_ID${NC}"
 fi
 
 echo ""
