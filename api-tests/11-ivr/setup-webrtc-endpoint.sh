@@ -76,22 +76,12 @@ ENDPOINT_RESPONSE=$(curl -s -X POST "$API_URL/endpoints" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"username\": \"$ENDPOINT_NUMBER\",
     \"password\": \"$PASSWORD\",
     \"displayName\": \"WebRTC Test $ENDPOINT_NUMBER\",
     \"transport\": \"transport-wss\",
     \"context\": \"t${TENANT_ID}_default\",
     \"tenantId\": $TENANT_ID,
-    \"allow\": \"opus,ulaw,alaw\",
-    \"webrtc\": \"yes\",
-    \"dtls_auto_generate_cert\": \"yes\",
-    \"use_avpf\": \"yes\",
-    \"media_encryption\": \"dtls\",
-    \"dtls_verify\": \"fingerprint\",
-    \"dtls_setup\": \"actpass\",
-    \"ice_support\": \"yes\",
-    \"media_use_received_transport\": \"yes\",
-    \"rtcp_mux\": \"yes\"
+    \"codecs\": \"opus,ulaw,alaw\"
   }")
 
 # Extraire l'ID de l'endpoint
