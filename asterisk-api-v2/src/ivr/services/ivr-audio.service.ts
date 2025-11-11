@@ -81,23 +81,24 @@ export class IvrAudioService {
       return `digits:${digits}`;
     }
 
-    // Son standard Asterisk (dans /var/lib/asterisk/sounds/)
-    if (!sound.includes('/') && !sound.startsWith('t')) {
-      return `sound:${sound}`; // Ex: "beep" → "/var/lib/asterisk/sounds/beep"
-    }
-
-    // Son custom du tenant
+    // Chercher d'abord dans les fichiers audio custom du tenant
     const audioFile = await this.audioRepo.findOne({
       where: { tenant_id: tenantId, name: sound },
     });
 
-    if (!audioFile) {
-      this.logger.warn(`Fichier audio introuvable: ${sound} (tenant ${tenantId})`);
-      return 'sound:beep'; // Fallback
+    if (audioFile) {
+      // Retourner le chemin sans extension (Asterisk le gère)
+      return audioFile.filepath.replace(path.extname(audioFile.filepath), '');
     }
 
-    // Retourner le chemin sans extension (Asterisk le gère)
-    return audioFile.filepath.replace(path.extname(audioFile.filepath), '');
+    // Fallback: Son standard Asterisk (dans /var/lib/asterisk/sounds/)
+    if (!sound.includes('/') && !sound.startsWith('t')) {
+      return `sound:${sound}`; // Ex: "beep" → "/var/lib/asterisk/sounds/beep"
+    }
+
+    // Si aucun fichier trouvé, utiliser beep système comme fallback
+    this.logger.warn(`Fichier audio introuvable: ${sound} (tenant ${tenantId})`);
+    return 'sound:beep';
   }
 
   /**
