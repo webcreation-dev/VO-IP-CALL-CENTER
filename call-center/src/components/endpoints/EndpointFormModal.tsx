@@ -116,14 +116,6 @@ export default function EndpointFormModal({
   const { toast } = useToast();
   const { user } = useAuthStore();
 
-  // Load available roles (pass tenantId for ADMIN users)
-  const { data: roles } = useQuery({
-    queryKey: ['roles', 'active', watch('tenantId')],
-    queryFn: () => rolesService.getRoles(true, watch('tenantId')), // activeOnly=true, tenantId
-    enabled: open && !!watch('tenantId'), // Only load when modal is open AND tenant is selected
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-
   // Load available contexts
   const { data: contexts } = useQuery({
     queryKey: ['contexts'],
@@ -182,6 +174,17 @@ export default function EndpointFormModal({
       mailboxes: '',
       roleId: undefined,
     },
+  });
+
+  // Get the current tenant ID from the form (for ADMIN users who can select tenant)
+  const selectedTenantId = watch('tenantId');
+
+  // Load available roles (pass tenantId for ADMIN users)
+  const { data: roles } = useQuery({
+    queryKey: ['roles', 'active', selectedTenantId],
+    queryFn: () => rolesService.getRoles(true, selectedTenantId), // activeOnly=true, tenantId
+    enabled: open && !!selectedTenantId, // Only load when modal is open AND tenant is selected
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   // Reset form when endpoint changes or modal opens

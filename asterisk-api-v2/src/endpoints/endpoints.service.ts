@@ -389,7 +389,8 @@ export class EndpointsService {
     const skip = (page - 1) * limit;
 
     // Query database
-    const query = this.endpointRepository.createQueryBuilder('endpoint');
+    const query = this.endpointRepository.createQueryBuilder('endpoint')
+      .leftJoinAndSelect('endpoint.role', 'role'); // Load role relation
 
     // Filter by tenant (unless admin)
     if (tenantId !== null) {
@@ -469,6 +470,7 @@ export class EndpointsService {
         const { tenantId: extractedTenantId } = TenantPrefixUtil.removePrefix(displayName);
         const endpoint = await this.endpointRepository.findOne({
           where: { id: displayName, tenantId: extractedTenantId },
+          relations: ['role'], // Load role relation
         });
 
         if (!endpoint) {
@@ -489,6 +491,7 @@ export class EndpointsService {
     const prefixedId = TenantPrefixUtil.addPrefix(tenantId, displayName);
     const endpoint = await this.endpointRepository.findOne({
       where: { id: prefixedId, tenantId },
+      relations: ['role'], // Load role relation
     });
 
     if (!endpoint) {
