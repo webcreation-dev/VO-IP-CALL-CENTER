@@ -197,14 +197,14 @@ export class TenantsService {
       // 4. COMMIT transaction - Everything succeeded
       await queryRunner.commitTransaction();
 
-      // 5. Add context to Asterisk AFTER transaction commit
+      // 5. Reload Asterisk dialplan AFTER transaction commit
       try {
-        await this.asteriskConfigService.addContext(contextName);
-        this.logger.log(`Added context ${contextName} to Asterisk`);
+        await this.asteriskConfigService.reloadDialplan();
+        this.logger.log(`Reloaded Asterisk dialplan for context ${contextName}`);
       } catch (asteriskError) {
         // Log error but don't rollback - data is already committed
         this.logger.error(
-          `Failed to add context ${contextName} to Asterisk: ${asteriskError.message}. Tenant created but context not in Asterisk.`,
+          `Failed to reload Asterisk dialplan for context ${contextName}: ${asteriskError.message}. Tenant created but dialplan not reloaded.`,
           asteriskError.stack,
         );
         // You might want to implement a cleanup strategy here
@@ -381,37 +381,26 @@ export class TenantsService {
   async remove(id: number): Promise<void> {
     const tenant = await this.findOne(id);
 
-    // Get all contexts for this tenant to remove from Asterisk
-    const contexts = await this.tenantContextRepository.find({
-      where: { tenantId: id },
-    });
-
-    // Remove all contexts from Asterisk (non-blocking)
-    for (const context of contexts) {
-      try {
-        await this.asteriskConfigService.removeContext(context.name);
-        this.logger.log(`Removed context ${context.name} from Asterisk`);
-      } catch (error) {
-        // Log but don't block deletion
-        this.logger.warn(
-          `Failed to remove context ${context.name} from Asterisk: ${error.message}`,
-        );
-      }
-    }
-
-    // COMMENTED - COLUMN MISSING IN DB
-    // // Soft delete: set is_active to false
-    // tenant.isActive = false;
-    // await this.tenantRepository.save(tenant);
-
-    // Hard delete tenant (CASCADE will handle related records)
+    // Hard delete tenant (CASCADE will handle related records: contexts, extensions, etc.)
     await this.tenantRepository.remove(tenant);
+
+    // Reload Asterisk dialplan to remove all tenant contexts
+    // (contexts and extensions were deleted from DB via CASCADE)
+    try {
+      await this.asteriskConfigService.reloadDialplan();
+      this.logger.log(`Reloaded Asterisk dialplan after removing tenant ${tenant.name}`);
+    } catch (error) {
+      // Log but don't block deletion - tenant is already removed from DB
+      this.logger.warn(
+        `Failed to reload Asterisk dialplan after removing tenant ${tenant.name}: ${error.message}`,
+      );
+    }
 
     // Invalidate cache
     await this.cacheService.delPattern('tenants:list:*');
     await this.cacheService.del(CacheService.generateKey('tenant', String(id)));
 
-    this.logger.log(`Deleted tenant ${id} and removed ${contexts.length} contexts from Asterisk`);
+    this.logger.log(`Deleted tenant ${tenant.name} (ID: ${id}) and all related contexts`);
   }
 
   /**

@@ -56,15 +56,29 @@ export class CallValidatorAriGateway implements OnModuleInit {
         channel.caller.number,
       );
 
+      // Formatted logging box for debugging
+      this.logger.log('╔════════════════════════════════════════════════════════════════╗');
+      this.logger.log('║              ARI CALL VALIDATION REQUEST                      ║');
+      this.logger.log('╠════════════════════════════════════════════════════════════════╣');
+      this.logger.log(`║ Channel ID:        ${channel.id.padEnd(42)} ║`);
+      this.logger.log(`║ Unique ID:         ${(channel.uniqueid || channel.id).padEnd(42)} ║`);
+      this.logger.log(`║ Caller Number:     ${(channel.caller.number || 'N/A').padEnd(42)} ║`);
+      this.logger.log(`║ Caller Name:       ${(channel.caller.name || 'N/A').padEnd(42)} ║`);
+      this.logger.log(`║ Context:           ${(channel.dialplan.context || 'N/A').padEnd(42)} ║`);
+      this.logger.log(`║ Extension:         ${(channel.dialplan.exten || 'N/A').padEnd(42)} ║`);
+      this.logger.log(`║ Priority:          ${(String(channel.dialplan.priority) || 'N/A').padEnd(42)} ║`);
+      this.logger.log('╠════════════════════════════════════════════════════════════════╣');
+      this.logger.log(`║ Caller Endpoint:   ${(callerEndpoint || 'MISSING').padEnd(42)} ║`);
+      this.logger.log(`║ Called Endpoint:   ${(calledEndpoint || 'MISSING').padEnd(42)} ║`);
+      this.logger.log('╚════════════════════════════════════════════════════════════════╝');
+
       if (!callerEndpoint || !calledEndpoint) {
         this.logger.warn(
-          `Missing endpoint information: caller=${callerEndpoint}, called=${calledEndpoint}`,
+          `❌ Missing endpoint information: caller=${callerEndpoint}, called=${calledEndpoint}`,
         );
         await this.denyCall(channel, 'missing_endpoint_info');
         return;
       }
-
-      this.logger.log(`Validating call: ${callerEndpoint} → ${calledEndpoint}`);
 
       // Validate the call
       const result = await this.validatorService.validateCall(
@@ -92,16 +106,24 @@ export class CallValidatorAriGateway implements OnModuleInit {
 
       // Allow or deny based on result
       if (result.allowed) {
-        this.logger.log(`✅ Call ALLOWED: ${callerEndpoint} → ${calledEndpoint}`);
+        this.logger.log('╔════════════════════════════════════════════════════════════════╗');
+        this.logger.log('║                    ✅ CALL ALLOWED                             ║');
+        this.logger.log('╚════════════════════════════════════════════════════════════════╝');
         await this.allowCall(channel);
       } else {
-        this.logger.log(
-          `❌ Call DENIED: ${callerEndpoint} → ${calledEndpoint} (${result.reason})`,
-        );
+        this.logger.log('╔════════════════════════════════════════════════════════════════╗');
+        this.logger.log('║                    ❌ CALL DENIED                              ║');
+        this.logger.log('╠════════════════════════════════════════════════════════════════╣');
+        this.logger.log(`║ Reason: ${(result.reason || 'permission_denied').padEnd(52)} ║`);
+        this.logger.log('╚════════════════════════════════════════════════════════════════╝');
         await this.denyCall(channel, result.reason || 'permission_denied');
       }
     } catch (error) {
-      this.logger.error(`Error in call validation: ${error.message}`);
+      this.logger.error('╔════════════════════════════════════════════════════════════════╗');
+      this.logger.error('║              ⚠️ ERROR IN CALL VALIDATION                       ║');
+      this.logger.error('╠════════════════════════════════════════════════════════════════╣');
+      this.logger.error(`║ Error: ${error.message.substring(0, 56).padEnd(56)} ║`);
+      this.logger.error('╚════════════════════════════════════════════════════════════════╝');
       await this.denyCall(channel, 'system_error');
     }
   }

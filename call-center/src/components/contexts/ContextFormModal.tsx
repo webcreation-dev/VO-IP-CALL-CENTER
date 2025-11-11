@@ -18,6 +18,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 
 import contextsService, {
@@ -28,6 +35,8 @@ import contextsService, {
   type RolePreset,
   DEFAULT_DIALPLAN_CONFIG,
 } from '@/api/contexts';
+import tenantsService from '@/api/tenants';
+import { UserRole } from '@/api/auth';
 import useAuthStore from '@/store/authStore';
 import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,8 +53,11 @@ interface ContextFormModalProps {
   onSuccess?: () => void;
 }
 
-// Zod validation schema
-const contextSchema = z.object({
+// Zod validation schema (will be customized based on user role)
+const createContextSchema = (isAdmin: boolean) => z.object({
+  tenantId: isAdmin
+    ? z.number({ required_error: 'Veuillez sélectionner un tenant' })
+    : z.number().optional(),
   name: z
     .string()
     .min(2, 'Le nom doit contenir au moins 2 caractères')
@@ -75,7 +87,7 @@ const contextSchema = z.object({
   }
 );
 
-type ContextFormData = z.infer<typeof contextSchema>;
+type ContextFormData = z.infer<ReturnType<typeof createContextSchema>>;
 
 export default function ContextFormModal({
   open,
@@ -94,6 +106,7 @@ export default function ContextFormModal({
   const [selectedPresetForCustomize, setSelectedPresetForCustomize] = useState<RolePreset | null>(null);
 
   const isEditMode = !!context;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   // Fetch all available contexts for multi-select
   const { data: allContexts = [] } = useQuery({
@@ -102,11 +115,18 @@ export default function ContextFormModal({
     enabled: open, // Only fetch when modal is open
   });
 
-  // Fetch role presets (only in create mode)
+  // Fetch tenants (only for ADMIN users in create mode)
+  const { data: tenants = [], isLoading: tenantsLoading } = useQuery({
+    queryKey: ['tenants', 'all'],
+    queryFn: () => tenantsService.getAll(),
+    enabled: open && !isEditMode && isAdmin,
+  });
+
+  // Fetch role presets
   const { data: rolePresets = [], isLoading: presetsLoading } = useQuery({
     queryKey: ['role-presets'],
     queryFn: () => contextsService.getRolePresets(),
-    enabled: open && !isEditMode,
+    enabled: open, // Fetch in both create and edit mode
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
@@ -118,8 +138,9 @@ export default function ContextFormModal({
     watch,
     setValue,
   } = useForm<ContextFormData>({
-    resolver: zodResolver(contextSchema),
+    resolver: zodResolver(createContextSchema(isAdmin && !isEditMode)),
     defaultValues: {
+      tenantId: user?.tenantId || undefined,
       name: '',
       description: '',
       roleStrategy: 'use-tenant-roles',
@@ -161,10 +182,12 @@ export default function ContextFormModal({
   // Watch name field for preview
   const nameValue = watch('name');
   const presetIdValue = watch('presetId');
+  const tenantIdValue = watch('tenantId');
 
-  // Generate preview
-  const contextPreview = user?.tenantId
-    ? contextsService.generateContextPreview(user.tenantId, nameValue)
+  // Generate preview - use selected tenantId (for ADMIN) or user's tenantId
+  const effectiveTenantId = isAdmin ? tenantIdValue : user?.tenantId;
+  const contextPreview = effectiveTenantId
+    ? contextsService.generateContextPreview(effectiveTenantId, nameValue)
     : '';
 
   // Handle customize button click
@@ -202,6 +225,9 @@ export default function ContextFormModal({
             allowInterContext: data.allowInterContext,
             allowedContexts: data.allowInterContext ? (data.allowedContexts || []) : [],
           },
+          roleStrategy: data.roleStrategy,
+          presetId: data.presetId,
+          customRoles: customRoles, // Include custom roles if defined
         };
 
         await contextsService.update(context.id, updateData);
@@ -213,6 +239,7 @@ export default function ContextFormModal({
       } else {
         // Create new context
         const createData: CreateContextDto = {
+          tenantId: data.tenantId, // Include tenantId (required for ADMIN, optional for others)
           name: data.name,
           description: data.description || undefined,
           roleStrategy: data.roleStrategy,
@@ -271,6 +298,53 @@ export default function ContextFormModal({
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Informations de base</h3>
 
+            {/* Tenant Selection (ADMIN only, create mode only) */}
+            {!isEditMode && isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="tenantId">
+                  Tenant <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  onValueChange={(value) => setValue('tenantId', parseInt(value, 10))}
+                  value={tenantIdValue?.toString()}
+                  disabled={isSubmitting || tenantsLoading}
+                >
+                  <SelectTrigger id="tenantId">
+                    <SelectValue placeholder="Sélectionner un tenant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenantsLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="ml-2 text-sm">Chargement...</span>
+                      </div>
+                    ) : tenants.length === 0 ? (
+                      <div className="py-4 text-center text-sm text-muted-foreground">
+                        Aucun tenant disponible
+                      </div>
+                    ) : (
+                      tenants.map((tenant) => (
+                        <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                          {tenant.name}
+                          {tenant.companyName && (
+                            <span className="text-muted-foreground ml-2">
+                              ({tenant.companyName})
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {errors.tenantId && (
+                  <p className="text-sm text-destructive">{errors.tenantId.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Le contexte sera créé pour le tenant sélectionné.
+                </p>
+              </div>
+            )}
+
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="name">
@@ -314,25 +388,24 @@ export default function ContextFormModal({
             </div>
           </div>
 
-          {/* Role Configuration (only in create mode) */}
-          {!isEditMode && (
-            <Collapsible open={roleConfigOpen} onOpenChange={setRoleConfigOpen}>
-              <div className="space-y-4">
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-between"
-                    disabled={isSubmitting}
-                  >
-                    <span className="font-semibold">Configuration des Rôles</span>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        roleConfigOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </Button>
-                </CollapsibleTrigger>
+          {/* Role Configuration */}
+          <Collapsible open={roleConfigOpen} onOpenChange={setRoleConfigOpen}>
+            <div className="space-y-4">
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between"
+                  disabled={isSubmitting}
+                >
+                  <span className="font-semibold">Configuration des Rôles</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      roleConfigOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
 
                 <CollapsibleContent className="space-y-4 pt-4">
                   <p className="text-sm text-muted-foreground">
@@ -458,7 +531,6 @@ export default function ContextFormModal({
                 </CollapsibleContent>
               </div>
             </Collapsible>
-          )}
 
           {/* Dialplan Configuration */}
           <Collapsible open={dialplanOpen} onOpenChange={setDialplanOpen}>

@@ -180,7 +180,11 @@ export default function TrunkAssociationModal({
         {isCurrentlyAssociated && (
           <div className="p-3 bg-muted rounded-md border">
             <p className="text-sm">
-              Ce trunk est actuellement associé au <strong>Tenant {trunk.tenantId}</strong>.
+              Ce trunk est actuellement associé au tenant{' '}
+              <strong>
+                {trunk.tenant?.name || `ID ${trunk.tenantId}`}
+                {trunk.tenant?.companyName && ` (${trunk.tenant.companyName})`}
+              </strong>.
               {trunk.destinationType && trunk.destinationId && (
                 <>
                   <br />

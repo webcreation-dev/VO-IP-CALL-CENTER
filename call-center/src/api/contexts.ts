@@ -50,6 +50,7 @@ export interface CustomRole {
 
 // Create Context DTO
 export interface CreateContextDto {
+  tenantId?: number;                // Optional for ADMIN users (required when user has no tenantId)
   name: string;                     // Required, will be prefixed with t{tenantId}_
   description?: string;             // Optional description
   dialplanConfig?: DialplanConfig;  // Optional dialplan configuration
@@ -62,6 +63,9 @@ export interface CreateContextDto {
 export interface UpdateContextDto {
   description?: string;             // Optional description update
   dialplanConfig?: DialplanConfig;  // Optional dialplan configuration update
+  roleStrategy?: 'context-specific' | 'use-tenant-roles';  // Optional role strategy update
+  presetId?: string;                // Optional preset ID update
+  customRoles?: CustomRole[];       // Optional custom roles update
 }
 
 // Default Dialplan Configuration

@@ -37,6 +37,13 @@ export class CallPermissionValidatorService {
     callerEndpointId: string,
     calledEndpointId: string,
   ): Promise<ValidationResult> {
+    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
+    this.logger.log('│           VALIDATING CALL PERMISSIONS                         │');
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+    this.logger.log(`│ Caller: ${callerEndpointId.padEnd(53)} │`);
+    this.logger.log(`│ Called: ${calledEndpointId.padEnd(53)} │`);
+    this.logger.log('└────────────────────────────────────────────────────────────────┘');
+
     // Fetch both endpoints with their roles
     const [caller, called] = await Promise.all([
       this.endpointRepo.findOne({
@@ -51,25 +58,46 @@ export class CallPermissionValidatorService {
 
     // If endpoints don't exist, deny
     if (!caller || !called) {
+      this.logger.warn('❌ Endpoint not found');
+      this.logger.warn(`   Caller exists: ${!!caller}`);
+      this.logger.warn(`   Called exists: ${!!called}`);
       return {
         allowed: false,
         reason: 'endpoint_not_found',
       };
     }
 
+    // Log endpoint information
+    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
+    this.logger.log('│ ENDPOINT INFORMATION                                           │');
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+    this.logger.log(`│ Caller Context:  ${(caller.context || 'N/A').padEnd(44)} │`);
+    this.logger.log(`│ Caller Role:     ${(caller.role?.name || 'NO ROLE').padEnd(44)} │`);
+    this.logger.log(`│ Caller Level:    ${(caller.role ? String(caller.role.level) : 'N/A').padEnd(44)} │`);
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+    this.logger.log(`│ Called Context:  ${(called.context || 'N/A').padEnd(44)} │`);
+    this.logger.log(`│ Called Role:     ${(called.role?.name || 'NO ROLE').padEnd(44)} │`);
+    this.logger.log(`│ Called Level:    ${(called.role ? String(called.role.level) : 'N/A').padEnd(44)} │`);
+    this.logger.log('└────────────────────────────────────────────────────────────────┘');
+
     // Check inter-context permissions
     if (caller.context !== called.context) {
+      this.logger.log('⚠️  Inter-context call detected');
       const interContextAllowed = await this.validateInterContext(
         caller.context,
         called.context,
       );
 
       if (!interContextAllowed) {
+        this.logger.warn(`❌ Inter-context call denied: ${caller.context} → ${called.context}`);
         return {
           allowed: false,
           reason: 'inter_context_denied',
         };
       }
+      this.logger.log(`✅ Inter-context call allowed: ${caller.context} → ${called.context}`);
+    } else {
+      this.logger.log('✓ Same context call');
     }
 
     // Validate role-context consistency
@@ -82,7 +110,7 @@ export class CallPermissionValidatorService {
 
       if (callerContext && caller.role.contextId !== callerContext.id) {
         this.logger.warn(
-          `Role-context mismatch: endpoint ${caller.id} in context ${caller.context} (ID: ${callerContext.id}) has role from context ${caller.role.contextId}`,
+          `❌ Role-context mismatch: endpoint ${caller.id} in context ${caller.context} (ID: ${callerContext.id}) has role from context ${caller.role.contextId}`,
         );
         return {
           allowed: false,
@@ -99,7 +127,7 @@ export class CallPermissionValidatorService {
 
       if (calledContext && called.role.contextId !== calledContext.id) {
         this.logger.warn(
-          `Role-context mismatch: endpoint ${called.id} in context ${called.context} (ID: ${calledContext.id}) has role from context ${called.role.contextId}`,
+          `❌ Role-context mismatch: endpoint ${called.id} in context ${called.context} (ID: ${calledContext.id}) has role from context ${called.role.contextId}`,
         );
         return {
           allowed: false,
@@ -110,13 +138,36 @@ export class CallPermissionValidatorService {
 
     // If no roles defined, allow (backward compatible)
     if (!caller.role || !called.role) {
+      this.logger.log('✅ No roles defined - allowing call (backward compatible)');
       return {
         allowed: true,
       };
     }
 
     // Validate role permissions
+    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
+    this.logger.log('│ ROLE PERMISSION EVALUATION                                     │');
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+    this.logger.log(`│ Caller Level: ${String(caller.role.level).padEnd(48)} │`);
+    this.logger.log(`│ Called Level: ${String(called.role.level).padEnd(48)} │`);
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+
+    if (caller.role.level === called.role.level) {
+      this.logger.log('│ Scenario: Same Level                                           │');
+      this.logger.log(`│ Permission: canCallSameLevel = ${String(caller.role.canCallSameLevel).padEnd(28)} │`);
+    } else if (caller.role.level > called.role.level) {
+      this.logger.log('│ Scenario: Higher → Lower                                       │');
+      this.logger.log(`│ Permission: canCallLowerLevel = ${String(caller.role.canCallLowerLevel).padEnd(27)} │`);
+    } else {
+      this.logger.log('│ Scenario: Lower → Higher                                       │');
+      this.logger.log(`│ Permission: canCallHigherLevel = ${String(caller.role.canCallHigherLevel).padEnd(26)} │`);
+    }
+
     const roleAllowed = this.validateRolePermissions(caller.role, called.role);
+
+    this.logger.log('├────────────────────────────────────────────────────────────────┤');
+    this.logger.log(`│ Result: ${(roleAllowed ? '✅ ALLOWED' : '❌ DENIED').padEnd(53)} │`);
+    this.logger.log('└────────────────────────────────────────────────────────────────┘');
 
     return {
       allowed: roleAllowed,

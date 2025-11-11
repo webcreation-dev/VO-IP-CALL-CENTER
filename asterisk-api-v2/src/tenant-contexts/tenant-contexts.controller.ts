@@ -23,6 +23,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { CreateTenantContextDto } from './dto/create-tenant-context.dto';
+import { UpdateTenantContextDto } from './dto/update-tenant-context.dto';
 import { RolesService } from '../roles/roles.service';
 
 /**
@@ -220,7 +221,7 @@ export class TenantContextsController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({
     summary: 'Update context',
-    description: 'Update context description or dialplan configuration. Cannot change tenant ownership or primary status.',
+    description: 'Update context description, dialplan configuration, or role configuration. Cannot change tenant ownership or primary status.',
   })
   @ApiParam({
     name: 'id',
@@ -234,7 +235,7 @@ export class TenantContextsController {
   @ApiResponse({ status: 404, description: 'Context not found' })
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { description?: string; dialplanConfig?: Record<string, any> },
+    @Body() dto: UpdateTenantContextDto,
   ) {
     return await this.contextsService.update(id, dto);
   }
