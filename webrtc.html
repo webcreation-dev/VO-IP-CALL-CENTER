@@ -87,25 +87,26 @@
       <h1>🎙️ Client SIP WebRTC pour Asterisk</h1>
   
       <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
-        <strong>ℹ️ Configuration WebRTC Tenant 1</strong><br />
-        <strong>Endpoint 206:</strong> User: <code>206</code> | Password: <code>test123</code><br />
-        <strong>Endpoint 202:</strong> User: <code>202</code> | Password: <code>webrtc202</code><br />
-        <em>Basculer rapidement entre les endpoints avec les boutons ci-dessous</em>
+        <strong>ℹ️ Configuration WebRTC Tenant 12 (IVR TEST)</strong><br />
+        <strong>Endpoint t12_1000:</strong> User: <code>63a77c75ab4b2dd080d6db29e0f239fa</code> | Password: <code>webrtc200</code><br />
+        <strong>Serveur:</strong> <code>pishon.kabou.bj:8089</code> ou <code>161.97.106.134:8089</code><br />
+        <em>Cliquez sur "Endpoint IVR Test" pour charger la config automatiquement</em>
       </div>
 
       <div class="section">
         <h3>Configuration du serveur</h3>
         <div style="margin-bottom: 15px;">
           <strong>Configuration rapide:</strong>
-          <button onclick="loadConfig(206)" style="background-color: #28a745; margin-right: 5px;">👤 Endpoint 206</button>
-          <button onclick="loadConfig(202)" style="background-color: #17a2b8;">👤 Endpoint 202</button>
+          <button onclick="loadConfig('ivr')" style="background-color: #28a745; margin-right: 5px;">🎯 Endpoint IVR Test</button>
+          <button onclick="loadConfig(206)" style="background-color: #17a2b8; margin-right: 5px;">👤 Endpoint 206 (old)</button>
+          <button onclick="loadConfig(202)" style="background-color: #6c757d;">👤 Endpoint 202 (old)</button>
         </div>
         <div class="input-group">
           <label>Adresse du serveur Asterisk:</label>
           <input
             type="text"
             id="serverAddr"
-            value="localhost"
+            value="pishon.kabou.bj"
             placeholder="IP ou domaine"
           />
         </div>
@@ -114,15 +115,15 @@
           <input type="text" id="serverPort" value="8089" placeholder="8089" />
         </div>
         <div class="input-group">
-          <label>Votre numéro SIP:</label>
-          <input type="text" id="sipUser" value="206" placeholder="Ex: 206" />
+          <label>Votre numéro SIP (username):</label>
+          <input type="text" id="sipUser" value="63a77c75ab4b2dd080d6db29e0f239fa" placeholder="Username" />
         </div>
         <div class="input-group">
           <label>Mot de passe:</label>
           <input
             type="password"
             id="sipPass"
-            value="test123"
+            value="webrtc200"
             placeholder="Mot de passe"
           />
         </div>
@@ -785,6 +786,12 @@
   
         function loadConfig(endpoint) {
           const configs = {
+            'ivr': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: '63a77c75ab4b2dd080d6db29e0f239fa',
+              password: 'webrtc200'
+            },
             206: {
               server: 'localhost',
               port: '8089',
@@ -805,7 +812,7 @@
             document.getElementById('serverPort').value = config.port;
             document.getElementById('sipUser').value = config.user;
             document.getElementById('sipPass').value = config.password;
-
+// docker logs -f asterisk | grep -i "ws\|websocket\|8089"
             log(`✅ Configuration chargée pour l'endpoint ${endpoint}`);
             log(`📋 Server: wss://${config.server}:${config.port}`);
             log(`👤 User: ${config.user}`);
