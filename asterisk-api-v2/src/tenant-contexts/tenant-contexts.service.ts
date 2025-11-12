@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantContext } from '../core/database/entities/tenant-context.entity';
@@ -9,7 +9,7 @@ import { promises as fs } from 'fs';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class TenantContextsService {
+export class TenantContextsService implements OnModuleInit {
   private readonly logger = new Logger(TenantContextsService.name);
   private readonly dynamicContextsPath: string;
   private reloadTimer: NodeJS.Timeout;
@@ -28,6 +28,14 @@ export class TenantContextsService {
       'asterisk.dynamicContextsPath',
       '/etc/asterisk/extensions_dynamic.conf',
     );
+  }
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.scheduleContextRegeneration();
+    } catch (error) {
+      this.logger.error(`Initial context regeneration scheduling failed: ${error.message}`);
+    }
   }
 
 
