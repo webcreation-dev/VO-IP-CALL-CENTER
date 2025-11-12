@@ -67,6 +67,19 @@ export class CallPermissionValidatorService {
       };
     }
 
+    // CRITICAL: Validate tenant isolation
+    const tenantValidation = await this.validateEndpointTenantIsolation(
+      caller,
+      called,
+    );
+    if (!tenantValidation.valid) {
+      this.logger.error(`❌ Tenant isolation validation failed: ${tenantValidation.reason}`);
+      return {
+        allowed: false,
+        reason: tenantValidation.reason,
+      };
+    }
+
     // Log endpoint information
     this.logger.log('┌────────────────────────────────────────────────────────────────┐');
     this.logger.log('│ ENDPOINT INFORMATION                                           │');
@@ -184,21 +197,43 @@ export class CallPermissionValidatorService {
     sourceContext: string,
     targetContext: string,
   ): Promise<boolean> {
-    const source = await this.contextRepo.findOne({
-      where: { name: sourceContext },
-    });
+    // Fetch both contexts in parallel
+    const [source, target] = await Promise.all([
+      this.contextRepo.findOne({
+        where: { name: sourceContext },
+      }),
+      this.contextRepo.findOne({
+        where: { name: targetContext },
+      }),
+    ]);
 
-    if (!source) {
+    if (!source || !target) {
+      this.logger.warn(`❌ Context not found: source=${!!source}, target=${!!target}`);
+      return false;
+    }
+
+    // CRITICAL: Validate tenant isolation - prevent cross-tenant calls
+    if (source.tenantId !== target.tenantId) {
+      this.logger.warn(
+        `🚨 SECURITY: Cross-tenant inter-context blocked: ${sourceContext} (tenant ${source.tenantId}) → ${targetContext} (tenant ${target.tenantId})`,
+      );
       return false;
     }
 
     const config = source.dialplanConfig || {};
 
-    return (
+    const allowed =
       config.allowInterContext === true &&
       Array.isArray(config.allowedContexts) &&
-      config.allowedContexts.includes(targetContext)
-    );
+      config.allowedContexts.includes(targetContext);
+
+    if (!allowed) {
+      this.logger.debug(
+        `Inter-context denied by config: ${sourceContext} → ${targetContext}`,
+      );
+    }
+
+    return allowed;
   }
 
   /**
@@ -214,6 +249,78 @@ export class CallPermissionValidatorService {
     }
 
     return callerRole.canCallHigherLevel;
+  }
+
+  /**
+   * Validate endpoint-tenant isolation
+   * Ensures both endpoints belong to same tenant and their contexts are valid
+   */
+  private async validateEndpointTenantIsolation(
+    caller: PsEndpoint,
+    called: PsEndpoint,
+  ): Promise<{ valid: boolean; reason?: string }> {
+    // Extract tenant IDs from endpoint IDs (format: t{tenantId}_{extension})
+    const callerTenantMatch = caller.id.match(/^t(\d+)_/);
+    const calledTenantMatch = called.id.match(/^t(\d+)_/);
+
+    if (!callerTenantMatch || !calledTenantMatch) {
+      this.logger.error(
+        `🚨 SECURITY: Invalid endpoint ID format - caller: ${caller.id}, called: ${called.id}`,
+      );
+      return { valid: false, reason: 'invalid_endpoint_format' };
+    }
+
+    const callerTenantId = parseInt(callerTenantMatch[1], 10);
+    const calledTenantId = parseInt(calledTenantMatch[1], 10);
+
+    // CRITICAL: Validate both endpoints belong to same tenant
+    if (callerTenantId !== calledTenantId) {
+      this.logger.warn(
+        `🚨 SECURITY: Cross-tenant call blocked - caller: ${caller.id} (tenant ${callerTenantId}) → called: ${called.id} (tenant ${calledTenantId})`,
+      );
+      return { valid: false, reason: 'cross_tenant_call_blocked' };
+    }
+
+    // Validate that endpoint contexts exist and belong to correct tenant
+    const [callerContext, calledContext] = await Promise.all([
+      this.contextRepo.findOne({
+        where: { name: caller.context },
+      }),
+      this.contextRepo.findOne({
+        where: { name: called.context },
+      }),
+    ]);
+
+    if (!callerContext) {
+      this.logger.warn(
+        `🚨 SECURITY: Orphaned context detected - endpoint ${caller.id} references non-existent context: ${caller.context}`,
+      );
+      return { valid: false, reason: 'orphaned_caller_context' };
+    }
+
+    if (!calledContext) {
+      this.logger.warn(
+        `🚨 SECURITY: Orphaned context detected - endpoint ${called.id} references non-existent context: ${called.context}`,
+      );
+      return { valid: false, reason: 'orphaned_called_context' };
+    }
+
+    // CRITICAL: Validate endpoint contexts belong to correct tenant
+    if (callerContext.tenantId !== callerTenantId) {
+      this.logger.error(
+        `🚨 SECURITY: Context-tenant mismatch - endpoint ${caller.id} (tenant ${callerTenantId}) uses context ${caller.context} (tenant ${callerContext.tenantId})`,
+      );
+      return { valid: false, reason: 'caller_context_tenant_mismatch' };
+    }
+
+    if (calledContext.tenantId !== calledTenantId) {
+      this.logger.error(
+        `🚨 SECURITY: Context-tenant mismatch - endpoint ${called.id} (tenant ${calledTenantId}) uses context ${called.context} (tenant ${calledContext.tenantId})`,
+      );
+      return { valid: false, reason: 'called_context_tenant_mismatch' };
+    }
+
+    return { valid: true };
   }
 
   /**

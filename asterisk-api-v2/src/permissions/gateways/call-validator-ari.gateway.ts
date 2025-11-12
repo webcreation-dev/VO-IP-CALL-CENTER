@@ -54,6 +54,7 @@ export class CallValidatorAriGateway implements OnModuleInit {
       );
       const callerEndpoint = this.extractEndpointFromCallerNumber(
         channel.caller.number,
+        channel.dialplan.context,
       );
 
       // Formatted logging box for debugging
@@ -89,34 +90,77 @@ export class CallValidatorAriGateway implements OnModuleInit {
       // Extract tenant ID from endpoint
       const tenantId = this.extractTenantId(callerEndpoint);
 
-      // Log the attempt
-      await this.validatorService.logCallAttempt(
-        tenantId,
-        callerEndpoint,
-        calledEndpoint,
-        result.allowed ? 'allowed' : 'denied',
-        result.reason,
-        {
-          channelId: channel.id,
-          uniqueid: channel.uniqueid || channel.id,
-          callerNumber: channel.caller.number,
-          calledNumber: calledEndpoint,
-        },
-      );
+      // Metadata for logging
+      const metadata = {
+        channelId: channel.id,
+        uniqueid: channel.uniqueid || channel.id,
+        callerNumber: channel.caller.number,
+        calledNumber: calledEndpoint,
+      };
 
       // Allow or deny based on result
       if (result.allowed) {
         this.logger.log('╔════════════════════════════════════════════════════════════════╗');
         this.logger.log('║                    ✅ CALL ALLOWED                             ║');
         this.logger.log('╚════════════════════════════════════════════════════════════════╝');
-        await this.allowCall(channel);
+
+        try {
+          await this.allowCall(channel);
+
+          // Log AFTER successful call control
+          await this.validatorService.logCallAttempt(
+            tenantId,
+            callerEndpoint,
+            calledEndpoint,
+            'allowed',
+            undefined,
+            metadata,
+          );
+        } catch (error) {
+          // If allowCall fails, log as system error
+          this.logger.error(`Failed to allow call: ${error.message}`);
+          await this.validatorService.logCallAttempt(
+            tenantId,
+            callerEndpoint,
+            calledEndpoint,
+            'denied',
+            'system_error',
+            { ...metadata, error: error.message },
+          );
+          throw error;
+        }
       } else {
         this.logger.log('╔════════════════════════════════════════════════════════════════╗');
         this.logger.log('║                    ❌ CALL DENIED                              ║');
         this.logger.log('╠════════════════════════════════════════════════════════════════╣');
         this.logger.log(`║ Reason: ${(result.reason || 'permission_denied').padEnd(52)} ║`);
         this.logger.log('╚════════════════════════════════════════════════════════════════╝');
-        await this.denyCall(channel, result.reason || 'permission_denied');
+
+        try {
+          await this.denyCall(channel, result.reason || 'permission_denied');
+
+          // Log AFTER successful call denial
+          await this.validatorService.logCallAttempt(
+            tenantId,
+            callerEndpoint,
+            calledEndpoint,
+            'denied',
+            result.reason,
+            metadata,
+          );
+        } catch (error) {
+          // If denyCall fails, still try to log
+          this.logger.error(`Failed to deny call: ${error.message}`);
+          await this.validatorService.logCallAttempt(
+            tenantId,
+            callerEndpoint,
+            calledEndpoint,
+            'denied',
+            result.reason,
+            { ...metadata, denyError: error.message },
+          );
+          throw error;
+        }
       }
     } catch (error) {
       this.logger.error('╔════════════════════════════════════════════════════════════════╗');
@@ -153,7 +197,7 @@ export class CallValidatorAriGateway implements OnModuleInit {
       const soundFile = this.getSoundFileForReason(reason);
 
       // Play error message
-      await this.ariService.playback(channel.id, `sound:${soundFile}`);
+      await this.ariService.playback(channel.id, soundFile);
 
       // Wait for playback to finish
       await this.sleep(3000);
@@ -174,8 +218,16 @@ export class CallValidatorAriGateway implements OnModuleInit {
       endpoint_not_found: 'ss-noservice',
       inter_context_denied: 'access-denied-ww-646',
       role_permission_denied: 'access-denied-ww-646',
+      role_context_mismatch: 'access-denied-ww-646',
       missing_endpoint_info: 'an-error-has-occured',
       system_error: 'an-error-has-occured',
+      // Tenant isolation errors
+      invalid_endpoint_format: 'an-error-has-occured',
+      cross_tenant_call_blocked: 'access-denied-ww-646',
+      orphaned_caller_context: 'an-error-has-occured',
+      orphaned_called_context: 'an-error-has-occured',
+      caller_context_tenant_mismatch: 'an-error-has-occured',
+      called_context_tenant_mismatch: 'an-error-has-occured',
     };
 
     return soundMap[reason] || 'access-denied-ww-646';
@@ -197,8 +249,14 @@ export class CallValidatorAriGateway implements OnModuleInit {
   /**
    * Extract endpoint ID from caller number
    * Handles formats: "1002", "t1_1002", "PJSIP/t1_1002"
+   * @param callerNumber The caller number from ARI event
+   * @param context The dialplan context to extract tenant ID from
+   * @returns Fully qualified endpoint ID (t{tenantId}_{extension}) or null
    */
-  private extractEndpointFromCallerNumber(callerNumber: string): string | null {
+  private extractEndpointFromCallerNumber(
+    callerNumber: string,
+    context?: string,
+  ): string | null {
     if (!callerNumber) {
       return null;
     }
@@ -211,16 +269,40 @@ export class CallValidatorAriGateway implements OnModuleInit {
       return cleaned;
     }
 
-    // Otherwise, return as-is and let validation handle it
+    // Try to extract tenant ID from context (format: t{tenantId}_{contextName})
+    if (context) {
+      const contextMatch = context.match(/^t(\d+)_/);
+      if (contextMatch) {
+        const tenantId = contextMatch[1];
+        this.logger.debug(
+          `Constructed endpoint ID: t${tenantId}_${cleaned} from context ${context}`,
+        );
+        return `t${tenantId}_${cleaned}`;
+      }
+    }
+
+    // If we can't determine tenant, log warning and return unprefixed
+    // This will fail validation with proper error message
+    this.logger.warn(
+      `Unable to determine tenant for endpoint ${cleaned} (context: ${context || 'N/A'})`,
+    );
     return cleaned;
   }
 
   /**
    * Extract tenant ID from endpoint ID (e.g., "t1_1002" → 1)
+   * @throws Error if tenant ID cannot be extracted (security measure)
    */
   private extractTenantId(endpointId: string): number {
     const match = endpointId.match(/^t(\d+)_/);
-    return match ? parseInt(match[1], 10) : 1;
+
+    if (!match) {
+      throw new Error(
+        `Invalid endpoint ID format: "${endpointId}" - must be in format "t{tenantId}_{extension}"`,
+      );
+    }
+
+    return parseInt(match[1], 10);
   }
 
   /**
