@@ -44,6 +44,11 @@ export default () => ({
     },
   },
 
+  asterisk: {
+    dynamicContextsPath:
+      process.env.DYNAMIC_CONTEXTS_PATH || '/etc/asterisk/extensions_dynamic.conf',
+  },
+
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '1d',

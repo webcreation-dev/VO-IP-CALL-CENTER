@@ -7,10 +7,12 @@ import { ExtensionsModule } from '../extensions/extensions.module';
 import { AsteriskConfigModule } from '../core/asterisk-config/asterisk-config.module';
 import { TenantContextSubscriber } from './tenant-contexts.subscriber';
 import { RolesModule } from '../roles/roles.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TenantContext]),
+    ConfigModule,
     ExtensionsModule,
     AsteriskConfigModule,
     forwardRef(() => RolesModule),

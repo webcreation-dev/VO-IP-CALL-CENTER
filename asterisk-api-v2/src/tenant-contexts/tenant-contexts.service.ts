@@ -6,11 +6,12 @@ import { ExtensionsService } from '../extensions/extensions.service';
 import { AsteriskConfigService } from '../core/asterisk-config/asterisk-config.service';
 import { RolesService } from '../roles/roles.service';
 import { promises as fs } from 'fs';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class TenantContextsService {
   private readonly logger = new Logger(TenantContextsService.name);
-  private readonly DYNAMIC_CONTEXTS = '/etc/asterisk/extensions_dynamic.conf';
+  private readonly dynamicContextsPath: string;
   private reloadTimer: NodeJS.Timeout;
   private readonly DEBOUNCE_MS = 5000;
 
@@ -21,7 +22,13 @@ export class TenantContextsService {
     private readonly asteriskConfigService: AsteriskConfigService,
     @Inject(forwardRef(() => RolesService))
     private readonly rolesService: RolesService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.dynamicContextsPath = this.configService.get<string>(
+      'asterisk.dynamicContextsPath',
+      '/etc/asterisk/extensions_dynamic.conf',
+    );
+  }
 
 
   /**
@@ -70,8 +77,8 @@ export class TenantContextsService {
         }
       }
 
-      await fs.writeFile(this.DYNAMIC_CONTEXTS, content, 'utf8');
-      this.logger.log(`Generated ${contexts.length} contexts in ${this.DYNAMIC_CONTEXTS}`);
+      await fs.writeFile(this.dynamicContextsPath, content, 'utf8');
+      this.logger.log(`Generated ${contexts.length} contexts in ${this.dynamicContextsPath}`);
     } catch (error) {
       this.logger.error(`Failed to generate dynamic contexts: ${error.message}`, error.stack);
       throw error;
