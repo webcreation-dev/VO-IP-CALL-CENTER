@@ -5,6 +5,7 @@ import { TenantContextsService } from './tenant-contexts.service';
 import { TenantContextsController } from './tenant-contexts.controller';
 import { ExtensionsModule } from '../extensions/extensions.module';
 import { AsteriskConfigModule } from '../core/asterisk-config/asterisk-config.module';
+import { TenantContextSubscriber } from './tenant-contexts.subscriber';
 import { RolesModule } from '../roles/roles.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { RolesModule } from '../roles/roles.module';
     forwardRef(() => RolesModule),
   ],
   controllers: [TenantContextsController],
-  providers: [TenantContextsService],
-  exports: [TenantContextsService],
+  providers: [TenantContextsService, TenantContextSubscriber],
+  exports: [TenantContextsService, TenantContextSubscriber],
 })
 export class TenantContextsModule {}

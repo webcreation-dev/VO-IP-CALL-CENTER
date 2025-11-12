@@ -5,10 +5,14 @@ import { TenantContext } from '../core/database/entities/tenant-context.entity';
 import { ExtensionsService } from '../extensions/extensions.service';
 import { AsteriskConfigService } from '../core/asterisk-config/asterisk-config.service';
 import { RolesService } from '../roles/roles.service';
+import { promises as fs } from 'fs';
 
 @Injectable()
 export class TenantContextsService {
   private readonly logger = new Logger(TenantContextsService.name);
+  private readonly DYNAMIC_CONTEXTS = '/etc/asterisk/extensions_dynamic.conf';
+  private reloadTimer: NodeJS.Timeout;
+  private readonly DEBOUNCE_MS = 5000;
 
   constructor(
     @InjectRepository(TenantContext)
@@ -18,6 +22,88 @@ export class TenantContextsService {
     @Inject(forwardRef(() => RolesService))
     private readonly rolesService: RolesService,
   ) {}
+
+
+  /**
+   * Generate extensions_dynamic.conf from database contexts
+   */
+  async generateDynamicContexts(): Promise<void> {
+    try {
+      const contexts = await this.tenantContextRepo.find({
+        order: { tenantId: 'ASC', name: 'ASC' },
+      });
+
+      let content = '; Auto-generated dynamic contexts for multitenancy\n';
+      content += `; Generated at: ${new Date().toISOString()}\n`;
+      content += `; Total contexts: ${contexts.length}\n`;
+      content += '; DO NOT EDIT MANUALLY - Changes will be overwritten\n\n';
+
+      // Define base template
+      content += '[tenant_template](!)\n';
+      content += 'switch => Realtime\n\n';
+
+      // Group contexts by tenant for better readability
+      const contextsByTenant = contexts.reduce<Record<number, TenantContext[]>>((acc, ctx) => {
+        if (!acc[ctx.tenantId]) {
+          acc[ctx.tenantId] = [];
+        }
+        acc[ctx.tenantId].push(ctx);
+        return acc;
+      }, {});
+
+      // Generate contexts grouped by tenant
+      for (const [tenantId, tenantContexts] of Object.entries<TenantContext[]>(contextsByTenant)) {
+        content += `; Tenant ${tenantId} contexts\n`;
+        
+        for (const context of tenantContexts) {
+          content += `[${context.name}](tenant_template)\n`;
+          
+          if (context.description) {
+            content += `; ${context.description}\n`;
+          }
+          
+          if (context.isPrimary) {
+            content += `; PRIMARY CONTEXT\n`;
+          }
+          
+          content += '\n';
+        }
+      }
+
+      await fs.writeFile(this.DYNAMIC_CONTEXTS, content, 'utf8');
+      this.logger.log(`Generated ${contexts.length} contexts in ${this.DYNAMIC_CONTEXTS}`);
+    } catch (error) {
+      this.logger.error(`Failed to generate dynamic contexts: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Schedule context regeneration with debouncing to avoid excessive reloads
+   */
+  async scheduleContextRegeneration(): Promise<void> {
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+    }
+
+    this.reloadTimer = setTimeout(async () => {
+      try {
+        await this.generateDynamicContexts();
+        await this.asteriskConfigService.reloadDialplan();
+      } catch (error) {
+        this.logger.error(`Scheduled context regeneration failed: ${error.message}`);
+      }
+    }, this.DEBOUNCE_MS);
+  }
+
+  /**
+   * Force immediate regeneration (no debouncing)
+   */
+  async forceRegenerateContexts(): Promise<void> {
+    await this.generateDynamicContexts();
+    await this.asteriskConfigService.reloadDialplan();
+  }
+
 
   /**
    * Create a new context for a tenant
