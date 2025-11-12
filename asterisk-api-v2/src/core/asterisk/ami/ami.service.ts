@@ -87,7 +87,8 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
     // Forward all events to subscribers
     this.ami.on('managerevent', (event: any) => {
       // DEBUG: Log EVERY SINGLE EVENT that arrives
-      this.logger.log(`🔔 [GLOBAL LISTENER] Event: ${event.event || 'unknown'}, ActionID: ${event.actionid || 'none'}`);
+      if (event.event !== 'RTCPSent') 
+        this.logger.log(`🔔 [GLOBAL LISTENER] Event: ${event.event || 'unknown'}, ActionID: ${event.actionid || 'none'}`);
       this.emitEvent(event.event, event);
     });
   }

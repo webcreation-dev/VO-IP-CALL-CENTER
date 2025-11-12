@@ -19,17 +19,17 @@ import { TenantContextsService } from './tenant-contexts.service';
     }
   
     async afterInsert(event: InsertEvent<TenantContext>) {
-      console.log(`Tenant context inserted and will be regenerated: ${event.entity?.name}`);
+      console.log(`::::::::::::::::::::::::::::::::Tenant context inserted and will be regenerated: ${event.entity?.name}`);
       await this.tenantContextsService.scheduleContextRegeneration();
     }
   
     async afterUpdate(event: UpdateEvent<TenantContext>) {
-      console.log(`Tenant context updated and will be regenerated: ${event.entity?.name}`);
+      console.log(`::::::::::::::::::::::::::::::::Tenant context updated and will be regenerated: ${event.entity?.name}`);
       await this.tenantContextsService.scheduleContextRegeneration();
     }
   
     async afterRemove(event: RemoveEvent<TenantContext>) {
-      console.log(`Tenant context removed and will be regenerated: ${event.entity?.name}`);
+      console.log(`::::::::::::::::::::::::::::::::Tenant context removed and will be regenerated: ${event.entity?.name}`);
       await this.tenantContextsService.scheduleContextRegeneration();
     }
   }
