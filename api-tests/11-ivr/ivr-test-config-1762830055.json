@@ -1,0 +1,21 @@
+{
+  "timestamp": "1762830055",
+  "tenant_id": 12,
+  "tenant_name": "ivr-test-tenant-1762830055",
+  "queue_sales": "sales",
+  "queue_support": "support",
+  "menu_id": 4,
+  "menu_name": "main_menu",
+  "did": "+33123456789",
+  "did_mapping_id": 1,
+  "audio_files": {
+    "welcome": "beep (Asterisk default)",
+    "invalid": "vm-invalid (Asterisk default)",
+    "timeout": "silence/1 (Asterisk default)"
+  },
+  "options": {
+    "option_1": 5,
+    "option_2": 6
+  },
+  "api_url": "http://localhost:3001/api/v1"
+}
