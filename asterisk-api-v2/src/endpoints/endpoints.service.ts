@@ -381,7 +381,7 @@ export class EndpointsService {
    * @returns Paginated endpoints with metadata
    */
   async findAll(
-    tenantId: number,
+    tenantId: number | null,
     filter?: EndpointFilterDto,
   ): Promise<{ data: PsEndpoint[]; total: number; page: number; limit: number }> {
     const page = filter?.page || 1;
@@ -389,8 +389,7 @@ export class EndpointsService {
     const skip = (page - 1) * limit;
 
     // Query database
-    const query = this.endpointRepository.createQueryBuilder('endpoint')
-      .leftJoinAndSelect('endpoint.role', 'role'); // Load role relation
+    const query = this.endpointRepository.createQueryBuilder('endpoint');
 
     // Filter by tenant (unless admin)
     if (tenantId !== null) {

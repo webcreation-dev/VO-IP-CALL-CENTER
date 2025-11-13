@@ -55,6 +55,16 @@ export class EndpointsController {
   constructor(private readonly endpointsService: EndpointsService) {}
 
   /**
+   * Extract display name from username (supports both prefixed and non-prefixed formats)
+   * Examples: 't420_1000' -> '1000', '1000' -> '1000'
+   */
+  private extractDisplayName(username: string): string {
+    const prefixedPattern = /^t\d+_(.+)$/;
+    const match = username.match(prefixedPattern);
+    return match ? match[1] : username;
+  }
+
+  /**
    * Create a new endpoint
    *
    * Creates PJSIP endpoint with authentication and AoR configuration
@@ -133,7 +143,7 @@ export class EndpointsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Query() filter: EndpointFilterDto,
   ) {
     return await this.endpointsService.findAll(tenantId, filter);
@@ -233,7 +243,8 @@ export class EndpointsController {
     @Param('username') username: string,
     @Body() dto: UpdateEndpointDto,
   ) {
-    return await this.endpointsService.update(tenantId, username, dto);
+    const displayName = this.extractDisplayName(username);
+    return await this.endpointsService.update(tenantId, displayName, dto);
   }
 
   /**
@@ -260,7 +271,8 @@ export class EndpointsController {
     @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    await this.endpointsService.remove(tenantId, username);
+    const displayName = this.extractDisplayName(username);
+    await this.endpointsService.remove(tenantId, displayName);
   }
 
   /**

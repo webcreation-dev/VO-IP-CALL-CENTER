@@ -26,7 +26,7 @@ import { UpdatePresetDto } from './dto/update-preset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { TenantId } from '../auth/decorators/tenant-id.decorator';
+import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 
 @ApiTags('Roles')
@@ -42,7 +42,7 @@ export class RolesController {
   @ApiResponse({ status: 201, description: 'Role created successfully' })
   @ApiResponse({ status: 409, description: 'Role name or level already exists' })
   create(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Body() createRoleDto: CreateRoleDto,
   ) {
     const finalTenantId = createRoleDto.tenantId || tenantId;
@@ -56,7 +56,7 @@ export class RolesController {
   @ApiQuery({ name: 'tenantId', required: false, type: Number, description: 'Tenant ID (ADMIN only - optional)' })
   @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
   findAll(
-    @TenantId() userTenantId: number,
+    @CurrentTenant() userTenantId: number,
     @Query('activeOnly') activeOnly?: string,
     @Query('tenantId') queryTenantId?: string,
   ) {
@@ -133,7 +133,7 @@ export class RolesController {
   @ApiResponse({ status: 400, description: 'Tenant already has roles' })
   @ApiResponse({ status: 404, description: 'Preset not found' })
   applyPreset(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id') presetId: string,
   ) {
     return this.rolesService.applyPreset(tenantId, presetId);
@@ -143,7 +143,7 @@ export class RolesController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
   @ApiOperation({ summary: 'Get role statistics for tenant' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
-  getStatistics(@TenantId() tenantId: number) {
+  getStatistics(@CurrentTenant() tenantId: number) {
     return this.rolesService.getStatistics(tenantId);
   }
 
@@ -153,7 +153,7 @@ export class RolesController {
   @ApiResponse({ status: 200, description: 'Role retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
   findOne(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.rolesService.findOne(tenantId, id);
@@ -164,7 +164,7 @@ export class RolesController {
   @ApiOperation({ summary: 'Get roles that this role can call' })
   @ApiResponse({ status: 200, description: 'Callable roles retrieved successfully' })
   getCallableRoles(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.rolesService.getCallableRoles(tenantId, id);
@@ -176,7 +176,7 @@ export class RolesController {
   @ApiResponse({ status: 200, description: 'Role updated successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
   update(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateRoleDto: UpdateRoleDto,
   ) {
@@ -190,7 +190,7 @@ export class RolesController {
   @ApiResponse({ status: 400, description: 'Role is in use by endpoints' })
   @ApiResponse({ status: 404, description: 'Role not found' })
   remove(
-    @TenantId() tenantId: number,
+    @CurrentTenant() tenantId: number,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.rolesService.remove(tenantId, id);
