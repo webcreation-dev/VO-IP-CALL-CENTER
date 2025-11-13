@@ -150,9 +150,17 @@ export class RegistrationsService {
   }
 
   /**
-   * Create a new SIP trunk registration (without tenant - global trunk)
+   * Create a new SIP trunk registration (with optional tenant association)
    */
-  async create(dto: CreateRegistrationDto): Promise<SipTrunkRegistration> {
+  async create(dto: CreateRegistrationDto, tenantId?: number): Promise<SipTrunkRegistration> {
+    // Validate tenant exists if provided
+    if (tenantId) {
+      const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
+      if (!tenant) {
+        throw new NotFoundException(`Tenant ${tenantId} not found`);
+      }
+    }
+
     // Check if trunk already exists (globally)
     const exists = await this.sipTrunkRepository.findOne({
       where: { name: dto.name },
@@ -163,17 +171,17 @@ export class RegistrationsService {
     }
 
     try {
-      // Don't allow routing configuration on creation (trunk must be associated first)
-      if (dto.destination_type || dto.destination_id) {
+      // Allow routing configuration on creation if tenant is provided
+      if ((dto.destination_type || dto.destination_id) && !tenantId) {
         throw new BadRequestException(
-          'Cannot configure routing on trunk creation. Associate the trunk with a tenant first.'
+          'Cannot configure routing without tenant association. Provide tenantId parameter.'
         );
       }
 
-      // Create entity WITHOUT tenant
+      // Create entity with optional tenant association
       const sipTrunk = this.sipTrunkRepository.create({
         name: dto.name,
-        tenantId: null,  // Global trunk - no tenant association
+        tenantId: tenantId || null,  // Use provided tenantId or null for global trunk
         remoteHost: dto.remote_host,
         username: dto.username,
         password: dto.password,

@@ -248,46 +248,9 @@ export class QueuesController {
 
   // ========================================
   // QUEUE MEMBERS MANAGEMENT
+  // NOTE: Member management routes moved to QueueMembersController
+  // to avoid route conflicts and use proper DTOs
   // ========================================
-
-  @Post(':name/members')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
-  @ApiOperation({
-    summary: 'Add member to queue',
-    description: 'Add an agent/endpoint as a member of the queue'
-  })
-  @ApiParam({ name: 'name', description: 'Queue name', example: 't1_support' })
-  @ApiResponse({
-    status: 201,
-    description: 'Member added successfully',
-    schema: {
-      example: {
-        success: true,
-        data: {
-          queue: 't1_support',
-          interface: 'PJSIP/t1_101',
-          member_name: '101',
-          added: true
-        },
-        timestamp: '2025-11-04T16:00:00.000Z'
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Invalid request or AMI not connected' })
-  @ApiResponse({ status: 404, description: 'Queue or endpoint not found' })
-  async addMember(
-    @Param('name') queueName: string,
-    @Body() body: { interface: string; memberName?: string; penalty?: number; paused?: boolean }
-  ) {
-    return await this.queuesService.addMember(
-      null,
-      queueName,
-      body.interface,
-      body.memberName,
-      body.penalty || 0,
-      body.paused ? 1 : 0
-    );
-  }
 
   @Delete(':name/members/:memberId')
   @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)

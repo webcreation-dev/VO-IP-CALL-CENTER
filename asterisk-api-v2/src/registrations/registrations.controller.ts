@@ -68,9 +68,18 @@ export class RegistrationsController {
   })
   @ApiResponse({ status: 409, description: 'SIP trunk already exists' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  async create(@Body() createRegistrationDto: CreateRegistrationDto) {
-    // Create trunk without tenant (global trunk)
-    return this.registrationsService.create(createRegistrationDto);
+  @ApiQuery({
+    name: 'tenantId',
+    required: false,
+    description: 'Tenant ID to associate with the SIP trunk',
+    type: Number,
+  })
+  async create(
+    @Body() createRegistrationDto: CreateRegistrationDto,
+    @Query('tenantId') tenantId?: number,
+  ) {
+    // Create trunk with optional tenant association
+    return this.registrationsService.create(createRegistrationDto, tenantId);
   }
 
   /**

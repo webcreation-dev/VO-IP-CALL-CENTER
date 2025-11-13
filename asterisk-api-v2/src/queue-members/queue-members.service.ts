@@ -33,8 +33,13 @@ export class QueueMembersService {
     queueName: string,
     dto: AddMemberDto,
   ): Promise<QueueMember> {
+    // Extract display name if prefixed (e.g., "t515_1000" -> "1000")
+    const endpointDisplayName = TenantPrefixUtil.hasPrefix(dto.endpointName)
+      ? TenantPrefixUtil.removePrefix(dto.endpointName).name
+      : dto.endpointName;
+
     // Validate endpoint exists
-    await this.endpointsService.findOne(tenantId, dto.endpointName);
+    await this.endpointsService.findOne(tenantId, endpointDisplayName);
 
     // Only add prefix if not already prefixed
     const prefixedQueue = TenantPrefixUtil.hasPrefix(queueName)
