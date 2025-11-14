@@ -8,6 +8,7 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -37,7 +38,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiResponse({ status: 201, description: 'Member added successfully' })
   async addMember(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
     @Body() dto: AddMemberDto,
   ) {
@@ -49,7 +50,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'queueName', example: 'support' })
   @ApiResponse({ status: 200, description: 'Members retrieved' })
   async findAll(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
   ) {
     return await this.membersService.findAll(tenantId, queueName);
@@ -64,9 +65,13 @@ export class QueueMembersController {
     type: [EnrichedMemberDto],
   })
   async getAllEnriched(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
   ) {
+    // For SUPER_ADMIN (null tenantId), require explicit tenant context
+    if (tenantId === null) {
+      throw new BadRequestException('SUPER_ADMIN must provide tenant context for enriched members');
+    }
     return await this.membersService.findAllEnriched(tenantId, queueName);
   }
 
@@ -77,7 +82,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member paused' })
   async pause(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {
@@ -92,7 +97,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member unpaused' })
   async unpause(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {
@@ -107,7 +112,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 200, description: 'Member updated' })
   async update(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
     @Body() dto: UpdateMemberDto,
@@ -131,7 +136,7 @@ export class QueueMembersController {
   @ApiParam({ name: 'memberName', example: '101' })
   @ApiResponse({ status: 204, description: 'Member removed' })
   async remove(
-    @CurrentTenant() tenantId: number,
+    @CurrentTenant() tenantId: number | null,
     @Param('queueName') queueName: string,
     @Param('memberName') memberName: string,
   ) {

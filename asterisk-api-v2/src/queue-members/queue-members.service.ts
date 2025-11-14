@@ -29,55 +29,90 @@ export class QueueMembersService {
   ) {}
 
   async addMember(
-    tenantId: number,
+    tenantId: number | null,
     queueName: string,
     dto: AddMemberDto,
   ): Promise<QueueMember> {
-    // Extract display name if prefixed (e.g., "t515_1000" -> "1000")
-    const endpointDisplayName = TenantPrefixUtil.hasPrefix(dto.endpointName)
-      ? TenantPrefixUtil.removePrefix(dto.endpointName).name
-      : dto.endpointName;
+    // TEST MODE: use default tenantId if null
+    const effectiveTenantId = tenantId ?? 1;
 
-    // Validate endpoint exists
-    await this.endpointsService.findOne(tenantId, endpointDisplayName);
+    this.logger.debug(`[addMember] Starting - tenantId: ${tenantId}, effectiveTenantId: ${effectiveTenantId}, queueName: ${queueName}, endpointName: ${dto.endpointName}`);
+
+    // Extract display name and tenantId if prefixed (e.g., "t549_1000" -> "1000", tenantId: 549)
+    let endpointDisplayName: string;
+    let endpointTenantId: number;
+
+    if (TenantPrefixUtil.hasPrefix(dto.endpointName)) {
+      const parsed = TenantPrefixUtil.removePrefix(dto.endpointName);
+      endpointDisplayName = parsed.name;
+      endpointTenantId = parsed.tenantId;
+      this.logger.debug(`[addMember] Endpoint is prefixed - extracted: name="${endpointDisplayName}", tenantId=${endpointTenantId}`);
+    } else {
+      endpointDisplayName = dto.endpointName;
+      endpointTenantId = effectiveTenantId;
+      this.logger.debug(`[addMember] Endpoint not prefixed - using: name="${endpointDisplayName}", tenantId=${endpointTenantId}`);
+    }
+
+    // Validate endpoint exists (use the tenant ID from the endpoint name if prefixed)
+    try {
+      this.logger.debug(`[addMember] Validating endpoint: findOne(${endpointTenantId}, "${endpointDisplayName}")`);
+      await this.endpointsService.findOne(endpointTenantId, endpointDisplayName);
+      this.logger.debug(`[addMember] Endpoint validation SUCCESS`);
+    } catch (error) {
+      this.logger.error(`[addMember] Endpoint validation FAILED: ${error.message}`);
+      throw error;
+    }
+
+    // Use endpointTenantId for consistency (the tenant from the endpoint name)
+    const memberTenantId = endpointTenantId;
 
     // Only add prefix if not already prefixed
     const prefixedQueue = TenantPrefixUtil.hasPrefix(queueName)
       ? queueName
-      : TenantPrefixUtil.addPrefix(tenantId, queueName);
+      : TenantPrefixUtil.addPrefix(memberTenantId, queueName);
 
     // Validate queue exists
     const queue = await this.queueRepository.findOne({
-      where: { name: prefixedQueue, tenantId },
+      where: { name: prefixedQueue, tenantId: memberTenantId },
     });
 
     if (!queue) {
       throw new NotFoundException(
-        `Queue ${queueName} not found for tenant ${tenantId}`,
+        `Queue ${queueName} not found for tenant ${memberTenantId}`,
       );
     }
     const prefixedEndpoint = TenantPrefixUtil.hasPrefix(dto.endpointName)
       ? dto.endpointName
-      : TenantPrefixUtil.addPrefix(tenantId, dto.endpointName);
+      : TenantPrefixUtil.addPrefix(memberTenantId, endpointDisplayName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
+
+    this.logger.debug(`[addMember] Built interface: ${interfaceName}, prefixedQueue: ${prefixedQueue}, memberTenantId: ${memberTenantId}`);
 
     // Check if already member
     const existing = await this.memberRepository.findOne({
-      where: { tenantId, queueName: prefixedQueue, interface: interfaceName },
+      where: { tenantId: memberTenantId, queueName: prefixedQueue, interface: interfaceName },
     });
 
     if (existing) {
+      this.logger.warn(`[addMember] Member already exists: ${interfaceName} in ${prefixedQueue}`);
       throw new ConflictException('Member already exists in queue');
     }
 
     // Add via AMI first
-    await this.amiService.queueAdd(
-      prefixedQueue,
-      interfaceName,
-      dto.memberName || dto.endpointName,
-      dto.penalty || 0,
-      dto.paused ? 1 : 0,
-    );
+    try {
+      this.logger.debug(`[addMember] Calling AMI queueAdd(${prefixedQueue}, ${interfaceName})`);
+      await this.amiService.queueAdd(
+        prefixedQueue,
+        interfaceName,
+        dto.memberName || dto.endpointName,
+        dto.penalty || 0,
+        dto.paused ? 1 : 0,
+      );
+      this.logger.debug(`[addMember] AMI queueAdd SUCCESS`);
+    } catch (error) {
+      this.logger.error(`[addMember] AMI queueAdd FAILED: ${error.message}`);
+      throw error;
+    }
 
     // Generate unique ID for queue member
     const uniqueid = Math.abs(
@@ -88,7 +123,7 @@ export class QueueMembersService {
 
     // Save to DB
     const member = this.memberRepository.create({
-      tenantId,
+      tenantId: memberTenantId,
       queueName: prefixedQueue,
       interface: interfaceName,
       membername: dto.memberName || dto.endpointName,
@@ -98,11 +133,18 @@ export class QueueMembersService {
       uniqueid,
     });
 
-    const saved = await this.memberRepository.save(member);
-    this.logger.log(
-      `Added member ${dto.endpointName} to queue ${queueName}`,
-    );
-    return saved;
+    this.logger.debug(`[addMember] Created member entity, about to save to DB`);
+
+    try {
+      const saved = await this.memberRepository.save(member);
+      this.logger.log(
+        `✅ [addMember] SUCCESS - Added member ${dto.endpointName} to queue ${queueName}`,
+      );
+      return saved;
+    } catch (error) {
+      this.logger.error(`[addMember] Database save FAILED: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   async findAll(tenantId: number | null, queueName: string): Promise<QueueMember[]> {
@@ -135,7 +177,13 @@ export class QueueMembersService {
       : TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
-    await this.amiService.queuePause(prefixedQueue, interfaceName, true, reason);
+    try {
+      await this.amiService.queuePause(prefixedQueue, interfaceName, true, reason);
+    } catch (error) {
+      this.logger.warn(
+        `AMI queuePause failed for ${interfaceName}: ${error.message}. Continuing with DB update.`,
+      );
+    }
 
     await this.memberRepository.update(
       { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
@@ -160,7 +208,13 @@ export class QueueMembersService {
       : TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
-    await this.amiService.queuePause(prefixedQueue, interfaceName, false);
+    try {
+      await this.amiService.queuePause(prefixedQueue, interfaceName, false);
+    } catch (error) {
+      this.logger.warn(
+        `AMI queuePause (unpause) failed for ${interfaceName}: ${error.message}. Continuing with DB update.`,
+      );
+    }
 
     await this.memberRepository.update(
       { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
@@ -186,7 +240,13 @@ export class QueueMembersService {
       : TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
-    await this.amiService.queuePenalty(prefixedQueue, interfaceName, penalty);
+    try {
+      await this.amiService.queuePenalty(prefixedQueue, interfaceName, penalty);
+    } catch (error) {
+      this.logger.warn(
+        `AMI queuePenalty failed for ${interfaceName}: ${error.message}. Continuing with DB update.`,
+      );
+    }
 
     await this.memberRepository.update(
       { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
@@ -213,8 +273,14 @@ export class QueueMembersService {
       : TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);
     const interfaceName = `PJSIP/${prefixedEndpoint}`;
 
-    // Remove from AMI
-    await this.amiService.queueRemove(prefixedQueue, interfaceName);
+    // Remove from AMI (handle errors gracefully)
+    try {
+      await this.amiService.queueRemove(prefixedQueue, interfaceName);
+    } catch (error) {
+      this.logger.warn(
+        `AMI queueRemove failed for ${interfaceName} in ${prefixedQueue}: ${error.message}. Continuing with DB cleanup.`,
+      );
+    }
 
     // Remove from DB
     const member = await this.memberRepository.findOne({
@@ -223,9 +289,12 @@ export class QueueMembersService {
 
     if (member) {
       await this.memberRepository.remove(member);
+      this.logger.log(`Removed member ${memberName} from queue ${queueName}`);
+    } else {
+      this.logger.warn(
+        `Member ${memberName} not found in database for queue ${queueName}`,
+      );
     }
-
-    this.logger.log(`Removed member ${memberName} from queue ${queueName}`);
   }
 
   /**
