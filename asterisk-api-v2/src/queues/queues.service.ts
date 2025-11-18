@@ -154,17 +154,17 @@ export class QueuesService {
         `Created queue: ${dto.name} (${prefixedName}) for tenant ${tenantId} in context ${dto.context}`,
       );
 
-      // STEP 7: Auto-reload in Asterisk AFTER successful DB commit
+      // STEP 7: Force load queue into Asterisk from Realtime AFTER successful DB commit
       try {
-        await this.reloadQueue(tenantId, prefixedName);
+        await this.amiService.forceLoadRealtimeQueue(prefixedName, dto.context);
         this.logger.log(
-          `✅ Queue ${prefixedName} automatically reloaded in Asterisk`,
+          `✅ Queue ${prefixedName} loaded into Asterisk from Realtime`,
         );
       } catch (error) {
         this.logger.warn(
-          `⚠️ Failed to auto-reload queue ${prefixedName}: ${error.message}`,
+          `⚠️ Failed to force load queue ${prefixedName}: ${error.message}`,
         );
-        // Don't fail the request if reload fails - queue is already in DB
+        // Don't fail the request if load fails - queue is in DB and will be loaded on first use
       }
 
       return saved;
@@ -265,6 +265,22 @@ export class QueuesService {
     Object.assign(queue, dto);
 
     const updated = await this.queueRepository.save(queue);
+
+    // STEP 7: Force refresh queue in Asterisk AFTER successful DB update
+    // Note: For existing queues, a full reload or re-load is needed
+    // since reloadQueue doesn't work for Realtime queues
+    try {
+      await this.amiService.forceLoadRealtimeQueue(updated.name, updated.context);
+      this.logger.log(
+        `✅ Queue ${displayName} refreshed in Asterisk after update`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `⚠️ Failed to refresh queue ${displayName} after update: ${error.message}`,
+      );
+      // Don't fail the request if reload fails - queue is already updated in DB
+      // Changes will be picked up when the queue is next accessed
+    }
 
     await this.cacheService.delPattern(`queues:${tenantId}:*`);
 

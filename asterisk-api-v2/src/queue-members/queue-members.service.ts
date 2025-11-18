@@ -98,49 +98,12 @@ export class QueueMembersService {
       throw new ConflictException('Member already exists in queue');
     }
 
-    // Add via AMI first
-    try {
-      this.logger.debug(`[addMember] Calling AMI queueAdd(${prefixedQueue}, ${interfaceName})`);
-      await this.amiService.queueAdd(
-        prefixedQueue,
-        interfaceName,
-        dto.memberName || dto.endpointName,
-        dto.penalty || 0,
-        dto.paused ? 1 : 0,
-      );
-      this.logger.debug(`[addMember] AMI queueAdd SUCCESS`);
-    } catch (error) {
-      this.logger.error(`[addMember] AMI queueAdd FAILED: ${error.message}`);
+    // REALTIME APPROACH: Save to DB first, then try to sync with AMI as best effort
+    // With Realtime, members in the database are automatically loaded by Asterisk
+    // when a call enters the queue (lazy loading). We try AMI for immediate sync,
+    // but if it fails (queue not loaded yet), we still save to DB and let Realtime handle it.
 
-      // If queue doesn't exist in Asterisk, try to force load it from Realtime DB
-      if (error.message && error.message.includes('No such queue')) {
-        this.logger.warn(`[addMember] Queue ${prefixedQueue} not found in Asterisk, attempting to force load from Realtime...`);
-        try {
-          // Force load queue from Realtime by querying its status
-          this.logger.debug(`[addMember] Calling getQueueStatus to force Realtime load...`);
-          await this.amiService.getQueueStatus(prefixedQueue);
-          this.logger.log(`✅ [addMember] Queue ${prefixedQueue} loaded from Realtime`);
-
-          // Small delay to let Asterisk fully initialize the queue
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          // Retry adding the actual member
-          await this.amiService.queueAdd(
-            prefixedQueue,
-            interfaceName,
-            dto.memberName || dto.endpointName,
-            dto.penalty || 0,
-            dto.paused ? 1 : 0,
-          );
-          this.logger.debug(`[addMember] AMI queueAdd SUCCESS (after Realtime load)`);
-        } catch (retryError) {
-          this.logger.error(`[addMember] Failed to load queue from Realtime: ${retryError.message}`);
-          throw error; // Throw original error
-        }
-      } else {
-        throw error;
-      }
-    }
+    this.logger.debug(`[addMember] Saving member to database (Realtime approach)`);
 
     // Generate unique ID for queue member
     const uniqueid = Math.abs(
@@ -149,7 +112,7 @@ export class QueueMembersService {
       }, Date.now())
     );
 
-    // Save to DB
+    // Save to DB FIRST (Realtime-native approach)
     const member = this.memberRepository.create({
       tenantId: memberTenantId,
       queueName: prefixedQueue,
@@ -161,18 +124,34 @@ export class QueueMembersService {
       uniqueid,
     });
 
-    this.logger.debug(`[addMember] Created member entity, about to save to DB`);
+    const saved = await this.memberRepository.save(member);
+    this.logger.log(`✅ [addMember] Member saved to database: ${interfaceName} in ${prefixedQueue}`);
 
+    // Now try to add via AMI for immediate availability (best effort)
+    // If this fails, the member will still be loaded from DB on next queue access
     try {
-      const saved = await this.memberRepository.save(member);
-      this.logger.log(
-        `✅ [addMember] SUCCESS - Added member ${dto.endpointName} to queue ${queueName}`,
+      this.logger.debug(`[addMember] Attempting immediate AMI sync: queueAdd(${prefixedQueue}, ${interfaceName})`);
+      await this.amiService.queueAdd(
+        prefixedQueue,
+        interfaceName,
+        dto.memberName || dto.endpointName,
+        dto.penalty || 0,
+        dto.paused ? 1 : 0,
       );
-      return saved;
-    } catch (error) {
-      this.logger.error(`[addMember] Database save FAILED: ${error.message}`, error.stack);
-      throw error;
+      this.logger.log(`✅ [addMember] Member immediately synced to Asterisk via AMI`);
+    } catch (amiError) {
+      this.logger.warn(
+        `⚠️ [addMember] AMI sync failed (${amiError.message}). ` +
+        `Member is saved in DB and will be loaded by Asterisk when queue is accessed.`
+      );
+      // Don't throw - member is in DB, Realtime will handle it
     }
+
+    this.logger.log(
+      `✅ [addMember] SUCCESS - Added member ${dto.endpointName} to queue ${queueName}`,
+    );
+
+    return saved;
   }
 
   async findAll(tenantId: number | null, queueName: string): Promise<QueueMember[]> {

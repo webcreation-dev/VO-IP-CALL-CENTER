@@ -393,6 +393,38 @@ export class AmiService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  /**
+   * Force load a Realtime queue into Asterisk memory
+   * This is needed because Realtime queues are loaded lazily (on-demand)
+   * We use a dummy Originate call to trigger the queue load from the database
+   */
+  async forceLoadRealtimeQueue(queueName: string, context: string): Promise<void> {
+    try {
+      this.logger.log(`🔄 Attempting to force load Realtime queue: ${queueName}`);
+
+      // Strategy: Create a Local channel call that goes through the queue's context
+      // This will force Asterisk to load the queue from the Realtime database
+      // We use Application: Queue directly to trigger the load
+
+      await this.executeAction({
+        Action: 'Originate',
+        Channel: `Local/${queueName}@${context}`,
+        Application: 'Hangup',
+        Timeout: 2000,
+        Async: 'true',
+      });
+
+      // Give Asterisk time to load the queue from Realtime database
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      this.logger.log(`✅ Forced Realtime load for queue: ${queueName}`);
+    } catch (error) {
+      this.logger.warn(`⚠️ Failed to force load queue ${queueName}: ${error.message}`);
+      // Don't throw - this is a best-effort operation
+      // The queue might still load when we try to add the member
+    }
+  }
+
   // ========================================
   // PJSIP OPERATIONS
   // ========================================

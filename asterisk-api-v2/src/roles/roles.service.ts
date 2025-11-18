@@ -227,11 +227,11 @@ export class RolesService {
     const role = await this.findOne(tenantId, id);
 
     // Check if any endpoints are using this role
-    const endpointsCount = await this.roleRepository
-      .createQueryBuilder('role')
-      .leftJoin('ps_endpoints', 'endpoint', 'endpoint.role_id = role.id')
-      .where('role.id = :id', { id })
-      .getCount();
+    const result = await this.roleRepository.manager.query(
+      'SELECT COUNT(*) as count FROM ps_endpoints WHERE role_id = $1',
+      [id],
+    );
+    const endpointsCount = parseInt(result[0]?.count || '0', 10);
 
     if (endpointsCount > 0) {
       throw new BadRequestException(

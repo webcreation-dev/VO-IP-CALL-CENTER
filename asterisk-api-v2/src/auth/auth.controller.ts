@@ -184,6 +184,14 @@ export class AuthController {
     description: 'Unauthorized - JWT token missing or invalid',
   })
   async getProfile(@CurrentUser() user: UserPayload) {
-    return await this.authService.findById(user.sub);
+    // Return the JWT payload directly (includes: sub, email, role, tenantId)
+    // This matches the Swagger documentation and includes 'id' for backward compatibility
+    return {
+      id: user.sub,
+      sub: user.sub,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    };
   }
 }
