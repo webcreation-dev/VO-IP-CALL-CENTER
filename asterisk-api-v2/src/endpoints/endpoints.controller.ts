@@ -271,7 +271,9 @@ export class EndpointsController {
     @CurrentTenant() tenantId: number,
     @Param('username') username: string,
   ) {
-    const displayName = this.extractDisplayName(username);
+    // For SUPER_ADMIN (tenantId === null), pass username as-is (with prefix if provided)
+    // For TENANT_ADMIN, extract display name (remove prefix if present)
+    const displayName = tenantId === null ? username : this.extractDisplayName(username);
     await this.endpointsService.remove(tenantId, displayName);
   }
 

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>IVR Menu - Vue Arborescente</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          sans-serif;
+        background: #f5f7fa;
+        padding: 20px;
+        color: #333;
+      }
+
+      .card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      .header h2 {
+        margin: 0;
+        color: #2c3e50;
+      }
+
+      .badge {
+        background: #27ae60;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+      }
+
+      .tree {
+        margin-left: 20px;
+      }
+
+      .tree-item {
+        position: relative;
+        padding-left: 30px;
+        margin: 12px 0;
+      }
+
+      .tree-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        border-left: 2px solid #3498db;
+        height: 100%;
+      }
+
+      .tree-item::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 12px;
+        border-top: 2px solid #3498db;
+        width: 20px;
+      }
+
+      .tree-item:last-child::before {
+        height: 12px;
+      }
+
+      .node {
+        display: inline-flex;
+        align-items: center;
+        background: #ecf0f1;
+        padding: 8px 15px;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+
+      .node-icon {
+        margin-right: 10px;
+        font-size: 18px;
+      }
+
+      .node-action {
+        background: #3498db;
+        color: white;
+      }
+
+      .node-queue {
+        background: #e74c3c;
+        color: white;
+      }
+
+      .node-digit {
+        background: #f39c12;
+        color: white;
+      }
+
+      .node-sound {
+        background: #9b59b6;
+        color: white;
+      }
+
+      .info {
+        color: #7f8c8d;
+        font-size: 12px;
+        margin-left: 10px;
+      }
+
+      .did-section {
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #e0e0e0;
+      }
+
+      .did-tag {
+        display: inline-block;
+        background: #34495e;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 4px;
+        margin: 3px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h2>📞 Main Menu (ID: 5)</h2>
+        <span class="badge">Actif</span>
+      </div>
+
+      <div class="tree">
+        <!-- Welcome Sound -->
+        <div class="tree-item">
+          <div class="node node-sound">
+            <span class="node-icon">🎵</span>
+            Message d'accueil: <strong>beep.gsm</strong>
+          </div>
+        </div>
+
+        <!-- Timeout Action -->
+        <div class="tree-item">
+          <div class="node node-action">
+            <span class="node-icon">⏱️</span>
+            Timeout (5s)
+          </div>
+          <span class="info">→ Route vers:</span>
+          <div class="tree">
+            <div class="tree-item">
+              <div class="node node-queue">
+                <span class="node-icon">📋</span>
+                Queue: <strong>t17_support_queue</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DTMF Options -->
+        <div class="tree-item">
+          <div class="node node-digit">
+            <span class="node-icon">1️⃣</span>
+            Touche 1
+          </div>
+          <span class="info">→ Route vers:</span>
+          <div class="tree">
+            <div class="tree-item">
+              <div class="node node-queue">
+                <span class="node-icon">📋</span>
+                Queue: <strong>t17_sales_queue</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tree-item">
+          <div class="node node-digit">
+            <span class="node-icon">2️⃣</span>
+            Touche 2
+          </div>
+          <span class="info">→ Route vers:</span>
+          <div class="tree">
+            <div class="tree-item">
+              <div class="node node-queue">
+                <span class="node-icon">📋</span>
+                Queue: <strong>t17_support_queue</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tree-item">
+          <div class="node node-digit">
+            <span class="node-icon">0️⃣</span>
+            Touche 0
+          </div>
+          <span class="info">→ Route vers:</span>
+          <div class="tree">
+            <div class="tree-item">
+              <div class="node node-action">
+                <span class="node-icon">👤</span>
+                Extension: <strong>1000</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invalid Action -->
+        <div class="tree-item">
+          <div class="node node-action">
+            <span class="node-icon">❌</span>
+            Choix invalide
+          </div>
+          <span class="info">→ Rejoue le menu</span>
+        </div>
+      </div>
+
+      <!-- DIDs associés -->
+      <div class="did-section">
+        <strong>📱 DIDs associés:</strong><br />
+        <span class="did-tag">1234</span>
+        <span class="did-tag">+22962908521</span>
+        <span class="did-tag">_X. (tous)</span>
+      </div>
+    </div>
+  </body>
+</html>

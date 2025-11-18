@@ -111,7 +111,35 @@ export class QueueMembersService {
       this.logger.debug(`[addMember] AMI queueAdd SUCCESS`);
     } catch (error) {
       this.logger.error(`[addMember] AMI queueAdd FAILED: ${error.message}`);
-      throw error;
+
+      // If queue doesn't exist in Asterisk, try to force load it from Realtime DB
+      if (error.message && error.message.includes('No such queue')) {
+        this.logger.warn(`[addMember] Queue ${prefixedQueue} not found in Asterisk, attempting to force load from Realtime...`);
+        try {
+          // Force load queue from Realtime by querying its status
+          this.logger.debug(`[addMember] Calling getQueueStatus to force Realtime load...`);
+          await this.amiService.getQueueStatus(prefixedQueue);
+          this.logger.log(`✅ [addMember] Queue ${prefixedQueue} loaded from Realtime`);
+
+          // Small delay to let Asterisk fully initialize the queue
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Retry adding the actual member
+          await this.amiService.queueAdd(
+            prefixedQueue,
+            interfaceName,
+            dto.memberName || dto.endpointName,
+            dto.penalty || 0,
+            dto.paused ? 1 : 0,
+          );
+          this.logger.debug(`[addMember] AMI queueAdd SUCCESS (after Realtime load)`);
+        } catch (retryError) {
+          this.logger.error(`[addMember] Failed to load queue from Realtime: ${retryError.message}`);
+          throw error; // Throw original error
+        }
+      } else {
+        throw error;
+      }
     }
 
     // Generate unique ID for queue member
