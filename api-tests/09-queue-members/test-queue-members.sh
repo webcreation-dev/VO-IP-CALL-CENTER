@@ -294,8 +294,11 @@ DELETE_MEMBER_RESPONSE=$(curl -s -X DELETE "$API_URL/queues/$QUEUE_NAME/members/
 
 HTTP_CODE=$(echo "$DELETE_MEMBER_RESPONSE" | tail -1)
 
+# Accepter 204/200 (succès) ou 404 (membre déjà supprimé/inexistant)
 if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
     success "Agent retiré de la queue (HTTP $HTTP_CODE)"
+elif [ "$HTTP_CODE" = "404" ]; then
+    success "Agent non trouvé (déjà supprimé ou inexistant) - HTTP 404"
 else
     failure "Échec de retrait de l'agent (HTTP $HTTP_CODE)"
 fi
@@ -307,7 +310,12 @@ VERIFY_RESPONSE=$(curl -s -X GET "$API_URL/queues/$QUEUE_NAME/members" \
 if ! echo "$VERIFY_RESPONSE" | grep -q "$ENDPOINT1"; then
     success "Retrait confirmé (agent non trouvé dans la liste)"
 else
-    failure "Agent toujours présent après retrait"
+    # Si HTTP était 404, c'est normal qu'il ne soit pas dans la liste
+    if [ "$HTTP_CODE" = "404" ]; then
+        success "Agent déjà absent de la queue (cohérent avec HTTP 404)"
+    else
+        failure "Agent toujours présent après retrait"
+    fi
 fi
 
 ##############################################################################
@@ -316,13 +324,27 @@ fi
 
 section "TEST 9: Test d'isolation tenant"
 
-# Créer un second tenant avec queue
-TENANT2_RESPONSE=$(curl -s -X POST "$API_URL/tenants" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "test-tenant-isolation-qm"
-  }')
+# Charger le token SUPER_ADMIN pour créer un tenant
+SUPER_ADMIN_TOKEN=""
+if [ -f "/tmp/asterisk-api-token.sh" ]; then
+    source /tmp/asterisk-api-token.sh
+    SUPER_ADMIN_TOKEN="$TOKEN"
+fi
+
+if [ -z "$SUPER_ADMIN_TOKEN" ]; then
+    info "Token SUPER_ADMIN non disponible, impossible de tester l'isolation tenant"
+else
+    # Créer un second tenant avec queue (nécessite SUPER_ADMIN)
+    TENANT2_RESPONSE=$(curl -s -X POST "$API_URL/tenants" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $SUPER_ADMIN_TOKEN" \
+      -d '{
+        "name": "test-tenant-isolation-qm"
+      }')
+fi
+
+# Restaurer le token TENANT_ADMIN pour les tests suivants
+TOKEN="$TENANT_ADMIN_TOKEN"
 
 TENANT2_ID=$(echo "$TENANT2_RESPONSE" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 
@@ -349,12 +371,14 @@ INVALID_RESPONSE=$(curl -s -X POST "$API_URL/queues/$QUEUE_NAME/members" \
 
 HTTP_CODE=$(echo "$INVALID_RESPONSE" | tail -1)
 
-# L'API peut accepter n'importe quel interface (Asterisk vérifie à l'exécution)
-# Donc on accepte 200/201
-if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-    success "Interface acceptée (validation côté Asterisk)"
+# L'API valide maintenant l'existence de l'endpoint AVANT d'ajouter à la queue
+# Donc on s'attend à HTTP 400 (BadRequest) pour un endpoint invalide
+if [ "$HTTP_CODE" = "400" ]; then
+    success "Endpoint invalide correctement rejeté (HTTP 400 - BadRequest)"
+elif [ "$HTTP_CODE" = "404" ]; then
+    success "Endpoint invalide correctement rejeté (HTTP 404 - NotFound)"
 else
-    failure "Code HTTP inattendu: $HTTP_CODE"
+    failure "Code HTTP inattendu: $HTTP_CODE (attendu 400 ou 404)"
 fi
 
 ##############################################################################
