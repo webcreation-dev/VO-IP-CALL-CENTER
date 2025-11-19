@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -60,6 +61,11 @@ export class QueueMembersService {
       this.logger.debug(`[addMember] Endpoint validation SUCCESS`);
     } catch (error) {
       this.logger.error(`[addMember] Endpoint validation FAILED: ${error.message}`);
+      if (error instanceof NotFoundException) {
+        throw new BadRequestException(
+          `Invalid endpoint: ${dto.endpointName} does not exist for tenant ${endpointTenantId}`
+        );
+      }
       throw error;
     }
 
@@ -294,13 +300,25 @@ export class QueueMembersService {
       where: { tenantId: effectiveTenantId, queueName: prefixedQueue, interface: interfaceName },
     });
 
-    if (member) {
-      await this.memberRepository.remove(member);
-      this.logger.log(`Removed member ${memberName} from queue ${queueName}`);
-    } else {
-      this.logger.warn(
-        `Member ${memberName} not found in database for queue ${queueName}`,
+    if (!member) {
+      throw new NotFoundException(
+        `Member ${memberName} not found in queue ${queueName}`
       );
+    }
+
+    await this.memberRepository.remove(member);
+    this.logger.log(`Removed member ${memberName} from queue ${queueName}`);
+
+    // Verify removal from AMI (best effort)
+    try {
+      const queueStatus = await this.amiService.getQueueStatus(prefixedQueue);
+      if (queueStatus?.members?.some((m: any) => m.interface === interfaceName)) {
+        this.logger.warn(
+          `⚠️ Member ${memberName} was removed from database but is still active in Asterisk. Queue may need to be reloaded.`
+        );
+      }
+    } catch (verifyError) {
+      this.logger.warn(`Could not verify removal from AMI: ${verifyError.message}`);
     }
   }
 
