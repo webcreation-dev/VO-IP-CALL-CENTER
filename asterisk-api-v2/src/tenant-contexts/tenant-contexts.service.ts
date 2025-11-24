@@ -167,27 +167,21 @@ export class TenantContextsService implements OnModuleInit {
 
     // Apply role preset if strategy is context-specific, then create dialplan
     if (roleStrategy === 'context-specific' && presetId) {
-      try {
-        // Apply roles first
-        await this.rolesService.applyPresetToContext(
-          tenantId,
-          savedContext.id,
-          presetId,
-          customRoles, // Pass custom roles if provided
-        );
-        const customLabel = customRoles ? ' (with customizations)' : '';
-        this.logger.log(`Applied role preset '${presetId}'${customLabel} to context ${contextName}`);
+      // Apply roles first - this may throw if role creation fails
+      const createdRoles = await this.rolesService.applyPresetToContext(
+        tenantId,
+        savedContext.id,
+        presetId,
+        customRoles, // Pass custom roles if provided
+      );
 
-        // Create dialplan AFTER roles are applied (will detect correct organization type)
-        await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
-      } catch (error) {
-        this.logger.error(
-          `Failed to apply role preset to context ${contextName}: ${error.message}`,
-        );
-        // Don't fail context creation if role preset fails
-        // Create flat dialplan as fallback
-        await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
-      }
+      const customLabel = customRoles ? ' (with customizations)' : '';
+      this.logger.log(
+        `Applied role preset '${presetId}'${customLabel} to context ${contextName}: ${createdRoles.length} role(s) created`,
+      );
+
+      // Create dialplan AFTER roles are applied (will detect correct organization type)
+      await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
     } else {
       // No role preset - create flat dialplan
       await this.createDefaultDialplan(tenantId, contextName, savedContext.id);
@@ -574,29 +568,22 @@ export class TenantContextsService implements OnModuleInit {
 
     // Handle role strategy and preset updates
     if (roleStrategy === 'context-specific' && presetId) {
-      try {
-        // First, delete existing context-specific roles
-        await this.rolesService.deleteContextRoles(context.tenantId, context.id);
+      // First, delete existing context-specific roles
+      await this.rolesService.deleteContextRoles(context.tenantId, context.id);
 
-        // Apply the new preset
-        await this.rolesService.applyPresetToContext(
-          context.tenantId,
-          context.id,
-          presetId,
-          customRoles, // Pass custom roles if provided
-        );
+      // Apply the new preset - this may throw if role creation fails
+      const createdRoles = await this.rolesService.applyPresetToContext(
+        context.tenantId,
+        context.id,
+        presetId,
+        customRoles, // Pass custom roles if provided
+      );
 
-        const customLabel = customRoles ? ' (with customizations)' : '';
-        this.logger.log(
-          `Updated role preset for context ${context.name} to '${presetId}'${customLabel}`,
-        );
-        rolesModified = true;
-      } catch (error) {
-        this.logger.error(
-          `Failed to update role preset for context ${context.name}: ${error.message}`,
-        );
-        // Don't fail the entire update if role preset update fails
-      }
+      const customLabel = customRoles ? ' (with customizations)' : '';
+      this.logger.log(
+        `Updated role preset for context ${context.name} to '${presetId}'${customLabel}: ${createdRoles.length} role(s) created`,
+      );
+      rolesModified = true;
     } else if (roleStrategy === 'use-tenant-roles') {
       try {
         // Delete context-specific roles when switching to tenant roles

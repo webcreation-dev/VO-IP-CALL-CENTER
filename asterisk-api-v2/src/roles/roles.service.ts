@@ -448,6 +448,7 @@ export class RolesService {
    * @param contextId - Context ID
    * @param presetId - Preset identifier
    * @param customRoles - Optional custom roles (overrides preset roles)
+   * @throws BadRequestException if no roles could be created
    */
   async applyPresetToContext(
     tenantId: number,
@@ -455,6 +456,10 @@ export class RolesService {
     presetId: string,
     customRoles?: CustomRoleDto[],
   ): Promise<EndpointRole[]> {
+    this.logger.log(
+      `Applying preset '${presetId}' to context ${contextId} (tenant ${tenantId})...`,
+    );
+
     const preset = await this.getPreset(presetId);
 
     if (!preset) {
@@ -474,25 +479,54 @@ export class RolesService {
 
     // Use custom roles if provided, otherwise use preset roles
     const rolesToCreate = customRoles || preset.roles;
+    this.logger.debug(
+      `Roles to create for context ${contextId}: ${rolesToCreate.map(r => `${r.name}(level=${r.level})`).join(', ')}`,
+    );
 
-    // Create all roles for this context
+    // Create all roles for this context, collecting errors
     const createdRoles: EndpointRole[] = [];
+    const errors: string[] = [];
 
     for (const roleData of rolesToCreate) {
       try {
+        this.logger.debug(
+          `Creating role '${roleData.name}' (level=${roleData.level}) for context ${contextId}...`,
+        );
         const role = await this.create(tenantId, roleData, contextId);
         createdRoles.push(role);
-      } catch (error) {
-        this.logger.error(
-          `Error creating role ${roleData.name} from preset for context ${contextId}: ${error.message}`,
+        this.logger.debug(
+          `✓ Created role '${role.name}' (ID=${role.id}) for context ${contextId}`,
         );
-        // Continue with other roles
+      } catch (error) {
+        const errorMsg = `${roleData.name}: ${error.message}`;
+        errors.push(errorMsg);
+        this.logger.error(
+          `✗ Failed to create role '${roleData.name}' for context ${contextId}: ${error.message}`,
+          error.stack,
+        );
       }
+    }
+
+    // CRITICAL: Validate that at least some roles were created
+    if (createdRoles.length === 0 && rolesToCreate.length > 0) {
+      const errorDetails = errors.length > 0
+        ? `Errors: ${errors.join('; ')}`
+        : 'Unknown error';
+      throw new BadRequestException(
+        `Failed to create any roles for context ${contextId}. ${errorDetails}`,
+      );
+    }
+
+    // Warn if partial failure occurred
+    if (errors.length > 0) {
+      this.logger.warn(
+        `Partial role creation for context ${contextId}: ${createdRoles.length}/${rolesToCreate.length} created. Failed: ${errors.join('; ')}`,
+      );
     }
 
     const customLabel = customRoles ? ' (with customizations)' : '';
     this.logger.log(
-      `Applied preset '${presetId}'${customLabel} to context ${contextId} (tenant ${tenantId}): created ${createdRoles.length} roles`,
+      `✓ Applied preset '${presetId}'${customLabel} to context ${contextId} (tenant ${tenantId}): created ${createdRoles.length}/${rolesToCreate.length} roles`,
     );
 
     return createdRoles;
