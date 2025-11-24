@@ -10,6 +10,8 @@ import { CallPermissionValidatorService } from '../services/call-permission-vali
 @Injectable()
 export class CallValidatorAriGateway implements OnModuleInit {
   private readonly logger = new Logger(CallValidatorAriGateway.name);
+  private static readonly ARI_TIMEOUT = 5000; // 5 seconds timeout for ARI operations
+  private static readonly PLAYBACK_TIMEOUT = 10000; // 10 seconds max for playback
 
   constructor(
     private readonly ariService: AriService,
@@ -18,6 +20,7 @@ export class CallValidatorAriGateway implements OnModuleInit {
 
   onModuleInit() {
     this.logger.log('Initializing Call Validator ARI Gateway');
+    // Note: Stasis app 'call-validator' is started centrally by AriService
     this.registerEventListeners();
   }
 
@@ -46,40 +49,50 @@ export class CallValidatorAriGateway implements OnModuleInit {
    * Handle call validation from Asterisk
    */
   private async handleCallValidation(event: any, channel: any) {
+    const channelId = channel.id;
+    let callerEndpoint: string | null = null;
+    let calledEndpoint: string | null = null;
+    let tenantId: number | null = null;
+
     try {
       // Extract information from channel variables
-      const calledEndpoint = await this.getChannelVar(
-        channel.id,
-        'CALLED_ENDPOINT',
-      );
-      const callerEndpoint = this.extractEndpointFromCallerNumber(
+      calledEndpoint = await this.getChannelVar(channelId, 'CALLED_ENDPOINT');
+      callerEndpoint = this.extractEndpointFromCallerNumber(
         channel.caller.number,
         channel.dialplan.context,
       );
 
       // Formatted logging box for debugging
-      this.logger.log('╔════════════════════════════════════════════════════════════════╗');
-      this.logger.log('║              ARI CALL VALIDATION REQUEST                      ║');
-      this.logger.log('╠════════════════════════════════════════════════════════════════╣');
-      this.logger.log(`║ Channel ID:        ${channel.id.padEnd(42)} ║`);
-      this.logger.log(`║ Unique ID:         ${(channel.uniqueid || channel.id).padEnd(42)} ║`);
-      this.logger.log(`║ Caller Number:     ${(channel.caller.number || 'N/A').padEnd(42)} ║`);
-      this.logger.log(`║ Caller Name:       ${(channel.caller.name || 'N/A').padEnd(42)} ║`);
-      this.logger.log(`║ Context:           ${(channel.dialplan.context || 'N/A').padEnd(42)} ║`);
-      this.logger.log(`║ Extension:         ${(channel.dialplan.exten || 'N/A').padEnd(42)} ║`);
-      this.logger.log(`║ Priority:          ${(String(channel.dialplan.priority) || 'N/A').padEnd(42)} ║`);
-      this.logger.log('╠════════════════════════════════════════════════════════════════╣');
-      this.logger.log(`║ Caller Endpoint:   ${(callerEndpoint || 'MISSING').padEnd(42)} ║`);
-      this.logger.log(`║ Called Endpoint:   ${(calledEndpoint || 'MISSING').padEnd(42)} ║`);
-      this.logger.log('╚════════════════════════════════════════════════════════════════╝');
+      this.logger.debug('╔════════════════════════════════════════════════════════════════╗');
+      this.logger.debug('║              ARI CALL VALIDATION REQUEST                      ║');
+      this.logger.debug('╠════════════════════════════════════════════════════════════════╣');
+      this.logger.debug(`║ Channel ID:        ${channelId.padEnd(42)} ║`);
+      this.logger.debug(`║ Caller Number:     ${(channel.caller.number || 'N/A').padEnd(42)} ║`);
+      this.logger.debug(`║ Context:           ${(channel.dialplan.context || 'N/A').padEnd(42)} ║`);
+      this.logger.debug(`║ Extension:         ${(channel.dialplan.exten || 'N/A').padEnd(42)} ║`);
+      this.logger.debug('╠════════════════════════════════════════════════════════════════╣');
+      this.logger.debug(`║ Caller Endpoint:   ${(callerEndpoint || 'MISSING').padEnd(42)} ║`);
+      this.logger.debug(`║ Called Endpoint:   ${(calledEndpoint || 'MISSING').padEnd(42)} ║`);
+      this.logger.debug('╚════════════════════════════════════════════════════════════════╝');
 
+      // Validate endpoint extraction
       if (!callerEndpoint || !calledEndpoint) {
         this.logger.warn(
-          `❌ Missing endpoint information: caller=${callerEndpoint}, called=${calledEndpoint}`,
+          `Missing endpoint information: caller=${callerEndpoint}, called=${calledEndpoint}`,
         );
         await this.denyCall(channel, 'missing_endpoint_info');
         return;
       }
+
+      // Validate endpoint format for calledEndpoint
+      if (!this.isValidEndpointFormat(calledEndpoint)) {
+        this.logger.warn(`Invalid called endpoint format: ${calledEndpoint}`);
+        await this.denyCall(channel, 'invalid_endpoint_format');
+        return;
+      }
+
+      // Extract tenant ID from endpoint
+      tenantId = this.extractTenantId(callerEndpoint);
 
       // Validate the call
       const result = await this.validatorService.validateCall(
@@ -87,105 +100,98 @@ export class CallValidatorAriGateway implements OnModuleInit {
         calledEndpoint,
       );
 
-      // Extract tenant ID from endpoint
-      const tenantId = this.extractTenantId(callerEndpoint);
-
       // Metadata for logging
       const metadata = {
-        channelId: channel.id,
-        uniqueid: channel.uniqueid || channel.id,
+        channelId,
+        uniqueid: channel.uniqueid || channelId,
         callerNumber: channel.caller.number,
         calledNumber: calledEndpoint,
       };
 
-      // Allow or deny based on result
       if (result.allowed) {
-        this.logger.log('╔════════════════════════════════════════════════════════════════╗');
-        this.logger.log('║                    ✅ CALL ALLOWED                             ║');
-        this.logger.log('╚════════════════════════════════════════════════════════════════╝');
+        this.logger.log(`CALL ALLOWED: ${callerEndpoint} -> ${calledEndpoint}`);
+        await this.allowCall(channel);
 
-        try {
-          await this.allowCall(channel);
-
-          // Log AFTER successful call control
-          await this.validatorService.logCallAttempt(
-            tenantId,
-            callerEndpoint,
-            calledEndpoint,
-            'allowed',
-            undefined,
-            metadata,
-          );
-        } catch (error) {
-          // If allowCall fails, log as system error
-          this.logger.error(`Failed to allow call: ${error.message}`);
-          await this.validatorService.logCallAttempt(
-            tenantId,
-            callerEndpoint,
-            calledEndpoint,
-            'denied',
-            'system_error',
-            { ...metadata, error: error.message },
-          );
-          throw error;
-        }
+        // Log asynchronously - pass pre-fetched endpoints to avoid extra DB queries
+        this.validatorService.logCallAttempt(
+          tenantId,
+          callerEndpoint,
+          calledEndpoint,
+          'allowed',
+          undefined,
+          metadata,
+          result.caller,
+          result.called,
+        ).catch(err => this.logger.error(`Audit log failed: ${err.message}`));
       } else {
-        this.logger.log('╔════════════════════════════════════════════════════════════════╗');
-        this.logger.log('║                    ❌ CALL DENIED                              ║');
-        this.logger.log('╠════════════════════════════════════════════════════════════════╣');
-        this.logger.log(`║ Reason: ${(result.reason || 'permission_denied').padEnd(52)} ║`);
-        this.logger.log('╚════════════════════════════════════════════════════════════════╝');
+        this.logger.log(`CALL DENIED: ${callerEndpoint} -> ${calledEndpoint} (${result.reason})`);
+        await this.denyCall(channel, result.reason || 'permission_denied');
 
-        try {
-          await this.denyCall(channel, result.reason || 'permission_denied');
-
-          // Log AFTER successful call denial
-          await this.validatorService.logCallAttempt(
-            tenantId,
-            callerEndpoint,
-            calledEndpoint,
-            'denied',
-            result.reason,
-            metadata,
-          );
-        } catch (error) {
-          // If denyCall fails, still try to log
-          this.logger.error(`Failed to deny call: ${error.message}`);
-          await this.validatorService.logCallAttempt(
-            tenantId,
-            callerEndpoint,
-            calledEndpoint,
-            'denied',
-            result.reason,
-            { ...metadata, denyError: error.message },
-          );
-          throw error;
-        }
+        // Log asynchronously - pass pre-fetched endpoints to avoid extra DB queries
+        this.validatorService.logCallAttempt(
+          tenantId,
+          callerEndpoint,
+          calledEndpoint,
+          'denied',
+          result.reason,
+          metadata,
+          result.caller,
+          result.called,
+        ).catch(err => this.logger.error(`Audit log failed: ${err.message}`));
       }
     } catch (error) {
-      this.logger.error('╔════════════════════════════════════════════════════════════════╗');
-      this.logger.error('║              ⚠️ ERROR IN CALL VALIDATION                       ║');
-      this.logger.error('╠════════════════════════════════════════════════════════════════╣');
-      this.logger.error(`║ Error: ${error.message.substring(0, 56).padEnd(56)} ║`);
-      this.logger.error('╚════════════════════════════════════════════════════════════════╝');
-      await this.denyCall(channel, 'system_error');
+      this.logger.error(`Call validation error: ${error.message}`, error.stack);
+
+      // Try to deny and hangup - don't throw, just log if it fails
+      try {
+        await this.denyCall(channel, 'system_error');
+      } catch (denyError) {
+        this.logger.error(`Failed to deny call after error: ${denyError.message}`);
+        await this.hangupChannel(channelId);
+      }
+
+      // Try to log the error asynchronously
+      if (tenantId && callerEndpoint && calledEndpoint) {
+        this.validatorService.logCallAttempt(
+          tenantId,
+          callerEndpoint,
+          calledEndpoint,
+          'denied',
+          'system_error',
+          { error: error.message },
+        ).catch(() => {}); // Ignore logging errors at this point
+      }
     }
   }
 
   /**
-   * Allow the call - continue in dialplan
+   * Validate endpoint format (t{tenantId}_{extension})
+   */
+  private isValidEndpointFormat(endpoint: string): boolean {
+    return /^t\d+_\w+$/.test(endpoint);
+  }
+
+  /**
+   * Allow the call - continue in dialplan with timeout
    */
   private async allowCall(channel: any) {
+    const channelId = channel.id;
+
     try {
-      await this.ariService.continueInDialplan(
-        channel.id,
-        channel.dialplan.context,
-        channel.dialplan.exten,
-        channel.dialplan.priority + 1,
+      await this.withTimeout(
+        this.ariService.continueInDialplan(
+          channelId,
+          channel.dialplan.context,
+          channel.dialplan.exten,
+          channel.dialplan.priority + 1,
+        ),
+        CallValidatorAriGateway.ARI_TIMEOUT,
+        'continueInDialplan',
       );
     } catch (error) {
       this.logger.error(`Error allowing call: ${error.message}`);
-      await this.hangupChannel(channel.id);
+      await this.hangupChannel(channelId);
+      throw error; // Re-throw to let caller know it failed
     }
   }
 
@@ -193,21 +199,86 @@ export class CallValidatorAriGateway implements OnModuleInit {
    * Deny the call - play error message and hangup
    */
   private async denyCall(channel: any, reason: string) {
+    const channelId = channel.id;
+
     try {
       const soundFile = this.getSoundFileForReason(reason);
 
-      // Play error message
-      await this.ariService.playback(channel.id, soundFile);
+      // Answer the channel first if not already answered
+      try {
+        await this.withTimeout(
+          this.ariService.answerChannel(channelId),
+          CallValidatorAriGateway.ARI_TIMEOUT,
+          'answerChannel',
+        );
+      } catch {
+        // Channel might already be answered, continue
+      }
 
-      // Wait for playback to finish
-      await this.sleep(3000);
+      // Play error message
+      const playback = await this.withTimeout(
+        this.ariService.playback(channelId, soundFile),
+        CallValidatorAriGateway.ARI_TIMEOUT,
+        'playback',
+      );
+
+      // Wait for playback to finish with timeout
+      if (playback?.id) {
+        await this.waitForPlaybackFinished(
+          playback.id,
+          CallValidatorAriGateway.PLAYBACK_TIMEOUT,
+        );
+      }
 
       // Hangup
-      await this.hangupChannel(channel.id);
+      await this.hangupChannel(channelId);
     } catch (error) {
       this.logger.error(`Error denying call: ${error.message}`);
-      await this.hangupChannel(channel.id);
+      await this.hangupChannel(channelId);
     }
+  }
+
+  /**
+   * Wait for a playback to finish with timeout
+   */
+  private waitForPlaybackFinished(playbackId: string, timeout: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.ariService.off('PlaybackFinished', handler);
+        this.logger.debug(`Playback ${playbackId} timed out after ${timeout}ms`);
+        resolve();
+      }, timeout);
+
+      const handler = (event: any) => {
+        if (event.playback?.id === playbackId) {
+          clearTimeout(timer);
+          this.ariService.off('PlaybackFinished', handler);
+          this.logger.debug(`Playback ${playbackId} finished`);
+          resolve();
+        }
+      };
+
+      this.ariService.on('PlaybackFinished', handler);
+    });
+  }
+
+  /**
+   * Execute a promise with timeout
+   */
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeout: number,
+    operation: string,
+  ): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Timeout: ${operation} took longer than ${timeout}ms`)),
+          timeout,
+        ),
+      ),
+    ]);
   }
 
   /**
@@ -281,12 +352,11 @@ export class CallValidatorAriGateway implements OnModuleInit {
       }
     }
 
-    // If we can't determine tenant, log warning and return unprefixed
-    // This will fail validation with proper error message
-    this.logger.warn(
+    // If we can't determine tenant, return null to trigger proper error handling
+    this.logger.error(
       `Unable to determine tenant for endpoint ${cleaned} (context: ${context || 'N/A'})`,
     );
-    return cleaned;
+    return null;
   }
 
   /**
@@ -306,20 +376,17 @@ export class CallValidatorAriGateway implements OnModuleInit {
   }
 
   /**
-   * Hangup a channel
+   * Hangup a channel with timeout
    */
   private async hangupChannel(channelId: string) {
     try {
-      await this.ariService.hangup(channelId);
+      await this.withTimeout(
+        this.ariService.hangup(channelId),
+        CallValidatorAriGateway.ARI_TIMEOUT,
+        'hangup',
+      );
     } catch (error) {
       this.logger.error(`Error hanging up channel ${channelId}: ${error.message}`);
     }
-  }
-
-  /**
-   * Sleep helper
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

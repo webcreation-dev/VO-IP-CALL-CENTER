@@ -10,6 +10,8 @@ export interface ValidationResult {
   reason?: string;
   callerRole?: any;
   calledRole?: any;
+  caller?: PsEndpoint | null;
+  called?: PsEndpoint | null;
 }
 
 /**
@@ -37,14 +39,9 @@ export class CallPermissionValidatorService {
     callerEndpointId: string,
     calledEndpointId: string,
   ): Promise<ValidationResult> {
-    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
-    this.logger.log('│           VALIDATING CALL PERMISSIONS                         │');
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-    this.logger.log(`│ Caller: ${callerEndpointId.padEnd(53)} │`);
-    this.logger.log(`│ Called: ${calledEndpointId.padEnd(53)} │`);
-    this.logger.log('└────────────────────────────────────────────────────────────────┘');
+    this.logger.debug(`Validating call: ${callerEndpointId} -> ${calledEndpointId}`);
 
-    // Fetch both endpoints with their roles
+    // Fetch both endpoints with their roles in parallel
     const [caller, called] = await Promise.all([
       this.endpointRepo.findOne({
         where: { id: callerEndpointId },
@@ -58,164 +55,137 @@ export class CallPermissionValidatorService {
 
     // If endpoints don't exist, deny
     if (!caller || !called) {
-      this.logger.warn('❌ Endpoint not found');
-      this.logger.warn(`   Caller exists: ${!!caller}`);
-      this.logger.warn(`   Called exists: ${!!called}`);
+      this.logger.warn(`Endpoint not found: caller=${!!caller}, called=${!!called}`);
       return {
         allowed: false,
         reason: 'endpoint_not_found',
+        caller,
+        called,
       };
     }
 
-    // CRITICAL: Validate tenant isolation
-    const tenantValidation = await this.validateEndpointTenantIsolation(
+    // Fetch all required contexts in a single query
+    const contextNames = [...new Set([caller.context, called.context])];
+    const contexts = await this.contextRepo.find({
+      where: contextNames.map(name => ({ name })),
+    });
+    const contextMap = new Map(contexts.map(c => [c.name, c]));
+
+    const callerContext = contextMap.get(caller.context);
+    const calledContext = contextMap.get(called.context);
+
+    // CRITICAL: Validate tenant isolation using cached contexts
+    const tenantValidation = this.validateEndpointTenantIsolationWithContexts(
       caller,
       called,
+      callerContext,
+      calledContext,
     );
     if (!tenantValidation.valid) {
-      this.logger.error(`❌ Tenant isolation validation failed: ${tenantValidation.reason}`);
+      this.logger.error(`Tenant isolation failed: ${tenantValidation.reason}`);
       return {
         allowed: false,
         reason: tenantValidation.reason,
+        caller,
+        called,
       };
     }
 
-    // Log endpoint information
-    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
-    this.logger.log('│ ENDPOINT INFORMATION                                           │');
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-    this.logger.log(`│ Caller Context:  ${(caller.context || 'N/A').padEnd(44)} │`);
-    this.logger.log(`│ Caller Role:     ${(caller.role?.name || 'NO ROLE').padEnd(44)} │`);
-    this.logger.log(`│ Caller Level:    ${(caller.role ? String(caller.role.level) : 'N/A').padEnd(44)} │`);
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-    this.logger.log(`│ Called Context:  ${(called.context || 'N/A').padEnd(44)} │`);
-    this.logger.log(`│ Called Role:     ${(called.role?.name || 'NO ROLE').padEnd(44)} │`);
-    this.logger.log(`│ Called Level:    ${(called.role ? String(called.role.level) : 'N/A').padEnd(44)} │`);
-    this.logger.log('└────────────────────────────────────────────────────────────────┘');
+    this.logger.debug(
+      `Endpoints: caller=${caller.id} (ctx:${caller.context}, role:${caller.role?.name || 'none'}), ` +
+      `called=${called.id} (ctx:${called.context}, role:${called.role?.name || 'none'})`,
+    );
 
     // Check inter-context permissions
     if (caller.context !== called.context) {
-      this.logger.log('⚠️  Inter-context call detected');
-      const interContextAllowed = await this.validateInterContext(
-        caller.context,
-        called.context,
+      const interContextAllowed = this.validateInterContextWithContexts(
+        callerContext,
+        calledContext,
       );
 
       if (!interContextAllowed) {
-        this.logger.warn(`❌ Inter-context call denied: ${caller.context} → ${called.context}`);
+        this.logger.warn(`Inter-context denied: ${caller.context} -> ${called.context}`);
         return {
           allowed: false,
           reason: 'inter_context_denied',
+          caller,
+          called,
         };
       }
-      this.logger.log(`✅ Inter-context call allowed: ${caller.context} → ${called.context}`);
-    } else {
-      this.logger.log('✓ Same context call');
     }
 
-    // Validate role-context consistency
-    // If endpoint has a role, ensure role belongs to the same context or is tenant-wide
+    // Validate role-context consistency using cached contexts
     if (caller.role && caller.role.contextId !== null) {
-      // Get caller's context ID
-      const callerContext = await this.contextRepo.findOne({
-        where: { name: caller.context },
-      });
-
       if (callerContext && caller.role.contextId !== callerContext.id) {
         this.logger.warn(
-          `❌ Role-context mismatch: endpoint ${caller.id} in context ${caller.context} (ID: ${callerContext.id}) has role from context ${caller.role.contextId}`,
+          `Role-context mismatch: ${caller.id} in context ${caller.context} has role from context ${caller.role.contextId}`,
         );
         return {
           allowed: false,
           reason: 'role_context_mismatch',
+          caller,
+          called,
         };
       }
     }
 
     if (called.role && called.role.contextId !== null) {
-      // Get called's context ID
-      const calledContext = await this.contextRepo.findOne({
-        where: { name: called.context },
-      });
-
       if (calledContext && called.role.contextId !== calledContext.id) {
         this.logger.warn(
-          `❌ Role-context mismatch: endpoint ${called.id} in context ${called.context} (ID: ${calledContext.id}) has role from context ${called.role.contextId}`,
+          `Role-context mismatch: ${called.id} in context ${called.context} has role from context ${called.role.contextId}`,
         );
         return {
           allowed: false,
           reason: 'role_context_mismatch',
+          caller,
+          called,
         };
       }
     }
 
     // If no roles defined, allow (backward compatible)
     if (!caller.role || !called.role) {
-      this.logger.log('✅ No roles defined - allowing call (backward compatible)');
+      this.logger.debug('No roles defined - allowing call (backward compatible)');
       return {
         allowed: true,
+        caller,
+        called,
       };
     }
 
     // Validate role permissions
-    this.logger.log('┌────────────────────────────────────────────────────────────────┐');
-    this.logger.log('│ ROLE PERMISSION EVALUATION                                     │');
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-    this.logger.log(`│ Caller Level: ${String(caller.role.level).padEnd(48)} │`);
-    this.logger.log(`│ Called Level: ${String(called.role.level).padEnd(48)} │`);
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-
-    if (caller.role.level === called.role.level) {
-      this.logger.log('│ Scenario: Same Level                                           │');
-      this.logger.log(`│ Permission: canCallSameLevel = ${String(caller.role.canCallSameLevel).padEnd(28)} │`);
-    } else if (caller.role.level > called.role.level) {
-      this.logger.log('│ Scenario: Higher → Lower                                       │');
-      this.logger.log(`│ Permission: canCallLowerLevel = ${String(caller.role.canCallLowerLevel).padEnd(27)} │`);
-    } else {
-      this.logger.log('│ Scenario: Lower → Higher                                       │');
-      this.logger.log(`│ Permission: canCallHigherLevel = ${String(caller.role.canCallHigherLevel).padEnd(26)} │`);
-    }
-
     const roleAllowed = this.validateRolePermissions(caller.role, called.role);
 
-    this.logger.log('├────────────────────────────────────────────────────────────────┤');
-    this.logger.log(`│ Result: ${(roleAllowed ? '✅ ALLOWED' : '❌ DENIED').padEnd(53)} │`);
-    this.logger.log('└────────────────────────────────────────────────────────────────┘');
+    this.logger.debug(
+      `Role check: caller.level=${caller.role.level}, called.level=${called.role.level}, allowed=${roleAllowed}`,
+    );
 
     return {
       allowed: roleAllowed,
       reason: roleAllowed ? undefined : 'role_permission_denied',
       callerRole: caller.role,
       calledRole: called.role,
+      caller,
+      called,
     };
   }
 
   /**
-   * Validate inter-context calling permissions
+   * Validate inter-context calling permissions using pre-fetched contexts
    */
-  private async validateInterContext(
-    sourceContext: string,
-    targetContext: string,
-  ): Promise<boolean> {
-    // Fetch both contexts in parallel
-    const [source, target] = await Promise.all([
-      this.contextRepo.findOne({
-        where: { name: sourceContext },
-      }),
-      this.contextRepo.findOne({
-        where: { name: targetContext },
-      }),
-    ]);
-
+  private validateInterContextWithContexts(
+    source: TenantContext | undefined,
+    target: TenantContext | undefined,
+  ): boolean {
     if (!source || !target) {
-      this.logger.warn(`❌ Context not found: source=${!!source}, target=${!!target}`);
+      this.logger.warn(`Context not found: source=${!!source}, target=${!!target}`);
       return false;
     }
 
     // CRITICAL: Validate tenant isolation - prevent cross-tenant calls
     if (source.tenantId !== target.tenantId) {
       this.logger.warn(
-        `🚨 SECURITY: Cross-tenant inter-context blocked: ${sourceContext} (tenant ${source.tenantId}) → ${targetContext} (tenant ${target.tenantId})`,
+        `SECURITY: Cross-tenant inter-context blocked: ${source.name} (tenant ${source.tenantId}) -> ${target.name} (tenant ${target.tenantId})`,
       );
       return false;
     }
@@ -225,12 +195,10 @@ export class CallPermissionValidatorService {
     const allowed =
       config.allowInterContext === true &&
       Array.isArray(config.allowedContexts) &&
-      config.allowedContexts.includes(targetContext);
+      config.allowedContexts.includes(target.name);
 
     if (!allowed) {
-      this.logger.debug(
-        `Inter-context denied by config: ${sourceContext} → ${targetContext}`,
-      );
+      this.logger.debug(`Inter-context denied by config: ${source.name} -> ${target.name}`);
     }
 
     return allowed;
@@ -252,20 +220,22 @@ export class CallPermissionValidatorService {
   }
 
   /**
-   * Validate endpoint-tenant isolation
+   * Validate endpoint-tenant isolation using pre-fetched contexts
    * Ensures both endpoints belong to same tenant and their contexts are valid
    */
-  private async validateEndpointTenantIsolation(
+  private validateEndpointTenantIsolationWithContexts(
     caller: PsEndpoint,
     called: PsEndpoint,
-  ): Promise<{ valid: boolean; reason?: string }> {
+    callerContext: TenantContext | undefined,
+    calledContext: TenantContext | undefined,
+  ): { valid: boolean; reason?: string } {
     // Extract tenant IDs from endpoint IDs (format: t{tenantId}_{extension})
     const callerTenantMatch = caller.id.match(/^t(\d+)_/);
     const calledTenantMatch = called.id.match(/^t(\d+)_/);
 
     if (!callerTenantMatch || !calledTenantMatch) {
       this.logger.error(
-        `🚨 SECURITY: Invalid endpoint ID format - caller: ${caller.id}, called: ${called.id}`,
+        `SECURITY: Invalid endpoint ID format - caller: ${caller.id}, called: ${called.id}`,
       );
       return { valid: false, reason: 'invalid_endpoint_format' };
     }
@@ -276,31 +246,22 @@ export class CallPermissionValidatorService {
     // CRITICAL: Validate both endpoints belong to same tenant
     if (callerTenantId !== calledTenantId) {
       this.logger.warn(
-        `🚨 SECURITY: Cross-tenant call blocked - caller: ${caller.id} (tenant ${callerTenantId}) → called: ${called.id} (tenant ${calledTenantId})`,
+        `SECURITY: Cross-tenant call blocked - caller: ${caller.id} (tenant ${callerTenantId}) -> called: ${called.id} (tenant ${calledTenantId})`,
       );
       return { valid: false, reason: 'cross_tenant_call_blocked' };
     }
 
-    // Validate that endpoint contexts exist and belong to correct tenant
-    const [callerContext, calledContext] = await Promise.all([
-      this.contextRepo.findOne({
-        where: { name: caller.context },
-      }),
-      this.contextRepo.findOne({
-        where: { name: called.context },
-      }),
-    ]);
-
+    // Validate contexts exist
     if (!callerContext) {
       this.logger.warn(
-        `🚨 SECURITY: Orphaned context detected - endpoint ${caller.id} references non-existent context: ${caller.context}`,
+        `SECURITY: Orphaned context - endpoint ${caller.id} references non-existent context: ${caller.context}`,
       );
       return { valid: false, reason: 'orphaned_caller_context' };
     }
 
     if (!calledContext) {
       this.logger.warn(
-        `🚨 SECURITY: Orphaned context detected - endpoint ${called.id} references non-existent context: ${called.context}`,
+        `SECURITY: Orphaned context - endpoint ${called.id} references non-existent context: ${called.context}`,
       );
       return { valid: false, reason: 'orphaned_called_context' };
     }
@@ -308,14 +269,14 @@ export class CallPermissionValidatorService {
     // CRITICAL: Validate endpoint contexts belong to correct tenant
     if (callerContext.tenantId !== callerTenantId) {
       this.logger.error(
-        `🚨 SECURITY: Context-tenant mismatch - endpoint ${caller.id} (tenant ${callerTenantId}) uses context ${caller.context} (tenant ${callerContext.tenantId})`,
+        `SECURITY: Context-tenant mismatch - endpoint ${caller.id} (tenant ${callerTenantId}) uses context ${caller.context} (tenant ${callerContext.tenantId})`,
       );
       return { valid: false, reason: 'caller_context_tenant_mismatch' };
     }
 
     if (calledContext.tenantId !== calledTenantId) {
       this.logger.error(
-        `🚨 SECURITY: Context-tenant mismatch - endpoint ${called.id} (tenant ${calledTenantId}) uses context ${called.context} (tenant ${calledContext.tenantId})`,
+        `SECURITY: Context-tenant mismatch - endpoint ${called.id} (tenant ${calledTenantId}) uses context ${called.context} (tenant ${calledContext.tenantId})`,
       );
       return { valid: false, reason: 'called_context_tenant_mismatch' };
     }
@@ -325,6 +286,14 @@ export class CallPermissionValidatorService {
 
   /**
    * Log a call attempt for audit
+   * @param tenantId The tenant ID
+   * @param callerEndpointId Caller endpoint ID
+   * @param calledEndpointId Called endpoint ID
+   * @param action Whether the call was allowed or denied
+   * @param denyReason Reason for denial if applicable
+   * @param metadata Additional metadata
+   * @param caller Optional pre-fetched caller endpoint (avoids extra DB query)
+   * @param called Optional pre-fetched called endpoint (avoids extra DB query)
    */
   async logCallAttempt(
     tenantId: number,
@@ -333,28 +302,37 @@ export class CallPermissionValidatorService {
     action: 'allowed' | 'denied',
     denyReason?: string,
     metadata?: Record<string, any>,
+    caller?: PsEndpoint | null,
+    called?: PsEndpoint | null,
   ): Promise<void> {
     try {
-      // Fetch roles for logging
-      const [caller, called] = await Promise.all([
-        this.endpointRepo.findOne({
-          where: { id: callerEndpointId },
-          relations: ['role'],
-        }),
-        this.endpointRepo.findOne({
-          where: { id: calledEndpointId },
-          relations: ['role'],
-        }),
-      ]);
+      // Only fetch endpoints if not provided
+      let callerData = caller;
+      let calledData = called;
+
+      if (!callerData || !calledData) {
+        const [fetchedCaller, fetchedCalled] = await Promise.all([
+          !callerData ? this.endpointRepo.findOne({
+            where: { id: callerEndpointId },
+            relations: ['role'],
+          }) : Promise.resolve(callerData),
+          !calledData ? this.endpointRepo.findOne({
+            where: { id: calledEndpointId },
+            relations: ['role'],
+          }) : Promise.resolve(calledData),
+        ]);
+        callerData = fetchedCaller;
+        calledData = fetchedCalled;
+      }
 
       const log = this.auditLogRepo.create({
         tenantId,
         callerEndpointId,
-        callerRoleId: caller?.roleId,
+        callerRoleId: callerData?.roleId,
         calledEndpointId,
-        calledRoleId: called?.roleId,
-        callerContext: caller?.context,
-        calledContext: called?.context,
+        calledRoleId: calledData?.roleId,
+        callerContext: callerData?.context,
+        calledContext: calledData?.context,
         action,
         denyReason,
         channelId: metadata?.channelId,

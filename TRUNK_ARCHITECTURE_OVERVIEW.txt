@@ -1,0 +1,485 @@
+================================================================================
+                    SIP TRUNK MANAGEMENT - ARCHITECTURE OVERVIEW
+================================================================================
+
+APPLICATION LAYERS:
+================================================================================
+
+PRESENTATION LAYER (Frontend)
+├── call-center/src/api/trunks.ts
+│   └── TrunksService (13 methods)
+│       ├── API Client methods (getAll, getById, create, update, delete)
+│       ├── Status methods (getRegistrationStatuses)
+│       ├── Tenant methods (associateTenant, dissociateTenant)
+│       ├── Routing methods (updateRouting, getRouting)
+│       └── Helper methods (validation, formatting, status mapping)
+│
+└── HTTP/REST API (Base: /registrations)
+    └── 12 Endpoints (detailed in TRUNK_QUICK_REFERENCE.md)
+
+================================================================================
+
+API LAYER (Backend - Controller)
+├── asterisk-api-v2/src/registrations/registrations.controller.ts (507 lines)
+├── Route Handlers:
+│   ├── @Post() - Create trunk
+│   ├── @Get() - List all trunks
+│   ├── @Get(':id') - Get single trunk
+│   ├── @Patch(':id') - Update trunk
+│   ├── @Delete(':id') - Delete trunk
+│   ├── @Post(':id/register') - Force registration
+│   ├── @Post(':id/associate-tenant') - Assign to tenant
+│   ├── @Delete(':id/dissociate-tenant') - Remove from tenant
+│   ├── @Patch(':id/routing') - Configure routing
+│   ├── @Get(':id/routing') - Get routing config
+│   ├── @Get('status/ami') - Get AMI statuses
+│   └── @Get('status/all') - Get all statuses (metadata)
+│
+└── Guard: @UseGuards(JwtAuthGuard)
+    └── All endpoints protected with JWT authentication
+
+================================================================================
+
+SERVICE LAYER (Business Logic)
+├── RegistrationsService (814 lines)
+│   ├── CRUD Operations
+│   │   ├── create(dto, tenantId?)
+│   │   ├── findAll(tenantId?)
+│   │   ├── findOne(name, tenantId?)
+│   │   ├── update(name, dto, tenantId?)
+│   │   └── remove(name, tenantId?)
+│   │
+│   ├── Status & Monitoring
+│   │   ├── getRegistrationStatus(id)
+│   │   ├── findAllWithStatus(tenantId?)
+│   │   ├── findOneWithStatus(name, tenantId?)
+│   │   └── getAllRegistrationStatusesFromAMI()
+│   │
+│   ├── Tenant Management
+│   │   ├── associateTenant(trunkId, tenantId)
+│   │   └── dissociateTenant(trunkId)
+│   │
+│   ├── Routing Management
+│   │   ├── updateRouting(name, dto, tenantId?)
+│   │   ├── getRouting(name, tenantId?)
+│   │   ├── createRoutingExtensions(trunk)
+│   │   └── removeRoutingExtensions(trunk)
+│   │
+│   ├── Validation & Helpers
+│   │   ├── validateDestination(type, destinationId, tenantId)
+│   │   ├── isRoutingToDestination(ext, type, destId, tenantId)
+│   │   ├── entityToInterface(entity)
+│   │   └── parseRegistrationStatus(regInfo)
+│   │
+│   └── Asterisk Integration
+│       ├── reloadWizardConfig()
+│       └── forceRegister(name, tenantId?)
+│
+├── ConfigFileService (636 lines)
+│   ├── File Operations
+│   │   ├── readConfigFile() - Read from Docker container
+│   │   └── writeConfigFile(registrations) - Write to Docker container
+│   │
+│   ├── Config Management
+│   │   ├── parseWizardConfig(content) - Parse ini format
+│   │   ├── generateWizardSection(registration) - Generate section
+│   │   ├── generateTrunkSection(trunk) - Generate full trunk config
+│   │   ├── generateFromDatabase() - KEY METHOD: Regenerate from DB
+│   │   └── generateFileHeader() - Generate file header
+│   │
+│   ├── File Synchronization
+│   │   ├── getAllRegistrations() - Read all from file
+│   │   ├── registrationExists(id) - Check existence
+│   │   ├── addRegistration(dto) - Add to file
+│   │   ├── updateRegistration(id, updates) - Update in file
+│   │   └── deleteRegistration(id) - Delete from file
+│   │
+│   ├── Locking & Backup
+│   │   ├── acquireLock() - Acquire file lock (5s timeout)
+│   │   ├── releaseLock() - Release file lock
+│   │   └── backupConfig() - Create backup
+│   │
+│   └── Dependencies
+│       ├── ConfigService (get ASTERISK_CONFIG_PATH)
+│       ├── TypeORM Repository<SipTrunk>
+│       └── Child process execution (docker cp)
+│
+└── Dependencies
+    ├── TypeORM Repositories
+    │   ├── Repository<SipTrunk>
+    │   ├── Repository<Queue>
+    │   └── Repository<Tenant>
+    │
+    ├── AmiService (Asterisk AMI integration)
+    │   └── executeCommand()
+    │   └── getPJSIPRegistrations()
+    │
+    └── ExtensionsService (Extensions/Dialplan management)
+        └── create(), remove(), getByContext()
+
+================================================================================
+
+DATA ACCESS LAYER (Database)
+├── TypeORM Entities
+│   └── SipTrunk (sip_trunk.entity.ts)
+│       ├── Repository: SipTrunkRepository (TypeORM)
+│       └── Operations: Find, Save, Remove
+│
+├── Database: PostgreSQL
+│   └── sip_trunks Table (25+ columns)
+│       ├── Primary Key: id (SERIAL)
+│       ├── Unique: name (VARCHAR 40)
+│       ├── Foreign Key: tenant_id (nullable)
+│       ├── SIP Config: remote_host, username, password, etc.
+│       ├── Routing Config: destination_type, destination_id, did_pattern
+│       └── Metadata: created_at, updated_at, enabled
+│
+└── Migrations (3 migrations)
+    ├── 1762588463699-InitialSchema.ts (Create table)
+    ├── 1762619657000-AddTrunkRoutingFields.ts (Add routing columns)
+    └── 1762776202000-MakeTrunkTenantOptional.ts (Make tenant_id nullable)
+
+================================================================================
+
+ASTERISK INTEGRATION LAYER
+├── AMI Service (Core Asterisk Integration)
+│   ├── getPJSIPRegistrations()
+│   │   ├── Execute: pjsip show registrations
+│   │   └── Parse output to RegistrationInfo[]
+│   │
+│   └── executeCommand(command)
+│       └── Execute arbitrary AMI commands
+│
+├── PJSIP Configuration (pjsip_wizard.conf)
+│   ├── Location: /etc/asterisk/pjsip_wizard.conf (in Docker)
+│   ├── Format: INI-style with nested keys
+│   ├── Regeneration: From database via ConfigFileService
+│   ├── Reload: module reload res_pjsip_wizard.conf (AMI)
+│   └── Backup: Automatic before each write
+│
+├── AMI Commands
+│   ├── pjsip show registrations (Get status)
+│   ├── module reload res_pjsip_wizard.conf (Reload config)
+│   └── pjsip send register {id} (Force registration)
+│
+└── Docker Integration
+    ├── docker cp (Copy files to/from container)
+    ├── docker exec (Execute commands in container)
+    └── asterisk container name: "asterisk"
+
+================================================================================
+
+DATA FLOW DIAGRAM
+================================================================================
+
+1. CREATE TRUNK FLOW:
+   
+   Frontend Request
+        ↓
+   POST /registrations (with body)
+        ↓
+   RegistrationsController.create()
+        ↓
+   RegistrationsService.create()
+        ├─ Validate tenant (if provided)
+        ├─ Check for duplicates
+        ├─ Create SipTrunk entity
+        └─ Save to database
+             ↓
+   ConfigFileService.generateFromDatabase()
+        ├─ Acquire file lock
+        ├─ Read all enabled trunks from DB
+        ├─ Generate pjsip_wizard.conf content
+        ├─ Write to Docker container
+        ├─ Create backup
+        └─ Release file lock
+             ↓
+   AmiService.executeCommand('module reload res_pjsip_wizard.conf')
+        ├─ Connect to AMI
+        ├─ Send reload command
+        └─ Wait 1 second
+             ↓
+   Return SipTrunkRegistration to client
+             ↓
+   Trunk is active in Asterisk
+
+================================================================================
+
+2. ASSOCIATE & ROUTING FLOW:
+
+   POST /registrations/:id/associate-tenant
+        ↓
+   RegistrationsService.associateTenant()
+        ├─ Load trunk
+        ├─ Verify not already associated
+        ├─ Update tenant_id
+        ├─ Save to DB
+        ├─ Regenerate config
+        └─ Reload Asterisk
+             ↓
+   PATCH /registrations/:id/routing
+        ↓
+   RegistrationsService.updateRouting()
+        ├─ Validate destination exists
+        ├─ Remove old routing extensions
+        ├─ Update routing fields
+        ├─ Save to DB
+        ├─ createRoutingExtensions()
+        │   ├─ Determine app/appdata
+        │   └─ ExtensionsService.create()
+        └─ Return result with created extensions
+             ↓
+   Incoming calls now route to destination
+
+================================================================================
+
+3. GET STATUS FLOW:
+
+   GET /registrations?with_status=true
+        ↓
+   RegistrationsController.findAll()
+        ↓
+   RegistrationsService.findAllWithStatus()
+        ├─ findAll() - Load from database
+        └─ For each trunk:
+             ├─ AmiService.getPJSIPRegistrations()
+             ├─ Match registration by ID
+             └─ Parse status
+                  ↓
+   Return array of (trunk + status)
+
+================================================================================
+
+MODULE DEPENDENCIES
+================================================================================
+
+RegistrationsModule imports:
+├── TypeOrmModule.forFeature([SipTrunk, Queue, Tenant])
+├── AmiModule (Asterisk integration)
+├── ExtensionsModule (Dialplan extensions)
+└── Exports: RegistrationsService
+
+Dependencies:
+├── ConfigFileService (Provided in module)
+├── RegistrationsService (Provided in module)
+├── JwtAuthGuard (From common/guards)
+└── Logger (NestJS built-in)
+
+================================================================================
+
+CONFIGURATION FILES MANAGED
+================================================================================
+
+pjsip_wizard.conf (Generated from Database)
+│
+├── Generated by: ConfigFileService.generateFromDatabase()
+├── Format: INI-style with nested keys
+├── Location: /etc/asterisk/pjsip_wizard.conf (in Docker)
+├── Backup: Created before each write
+├── Lock: Prevents concurrent writes (5s timeout)
+│
+└── Example section:
+    [operator_trunk]
+    type = wizard
+    sends_registrations = yes
+    sends_auth = yes
+    remote_hosts = 197.234.218.195:25060
+    outbound_auth/username = 62908521
+    outbound_auth/password = 167d458f-8
+    endpoint/transport = transport-udp
+    endpoint/context = from-trunk
+    ... (20+ more configuration options)
+
+================================================================================
+
+SECURITY MODEL
+================================================================================
+
+Authentication:
+├── JwtAuthGuard (applied globally)
+├── Required on all /registrations endpoints
+└── Provided via Authorization: Bearer {token} header
+
+Authorization:
+├── RolesGuard (applied globally)
+├── Checks user roles
+└── Tenant-based filtering (users can only see their trunks)
+
+Data Protection:
+├── Passwords stored in plaintext (SECURITY CONCERN)
+├── Passwords transmitted via HTTPS (expected)
+├── Passwords not masked in responses (SECURITY CONCERN)
+└── No encryption at rest (SECURITY CONCERN)
+
+Recommendations:
+├── Implement password encryption (AES-256)
+├── Mask passwords in API responses
+├── Use HTTPS only (enforce in production)
+└── Regular security audits
+
+================================================================================
+
+DEPLOYMENT CONSIDERATIONS
+================================================================================
+
+Requirements:
+├── NestJS Runtime (Node.js 16+)
+├── PostgreSQL Database
+├── Docker with asterisk container
+├── AMI access to Asterisk
+└── /etc/asterisk directory accessible in Docker
+
+Configuration:
+├── ASTERISK_CONFIG_PATH env var
+├── Docker container name: "asterisk"
+├── Database connection string
+├── JWT secret
+└── AMI credentials
+
+File Operations:
+├── Requires docker command available
+├── Requires read/write on /etc/asterisk
+├── Requires temporary directory for file transfers
+└── File operations use temp files for safety
+
+Monitoring:
+├── Monitor file lock operations (timeout logs)
+├── Monitor AMI command success/failure
+├── Monitor trunk registration status
+├── Monitor database consistency with Asterisk config
+
+================================================================================
+
+TESTING STRATEGY
+================================================================================
+
+Unit Tests:
+├── Service methods (business logic)
+├── Entity validation (database constraints)
+├── DTO validation (input validation)
+└── Helper methods (status parsing, conversion)
+
+Integration Tests:
+├── Controller endpoints (HTTP responses)
+├── Service to database (CRUD operations)
+├── Service to AMI (Asterisk commands)
+├── Service to config file (file operations)
+└── Multi-step workflows (create, associate, route)
+
+E2E Tests:
+├── Full workflow: create global trunk
+├── Full workflow: associate with tenant
+├── Full workflow: configure routing
+├── Full workflow: get status with AMI
+├── Error scenarios (validation, not found, conflicts)
+└── Concurrent operations (file locking)
+
+Mock/Stub Strategy:
+├── AmiService (mock executeCommand, getPJSIPRegistrations)
+├── ConfigFileService (mock file operations)
+├── ExtensionsService (mock create/remove)
+└── Database (use test database or transactions)
+
+================================================================================
+
+PERFORMANCE CHARACTERISTICS
+================================================================================
+
+Operation Timings (Estimated):
+├── Create trunk: 1-2 seconds (includes Asterisk reload)
+├── Update trunk: 1-2 seconds (includes Asterisk reload)
+├── Delete trunk: 1-2 seconds (includes Asterisk reload)
+├── Get status: 100-200ms (AMI query)
+├── Associate tenant: 1-2 seconds (regenerate + reload)
+├── Configure routing: 500ms-1s (extension creation)
+└── List all trunks: 50-100ms (database query)
+
+Scalability:
+├── Database: Can handle hundreds of trunks
+├── File operations: Atomic (all trunks at once)
+├── AMI queries: Per-trunk status lookups
+├── File size: Grows linearly with trunk count
+├── Lock timeout: 5 seconds (should be sufficient)
+
+Bottlenecks:
+├── Asterisk reload (1-2 seconds per operation)
+├── File I/O (copy to/from Docker)
+├── AMI communication (network dependent)
+├── Extension creation (dialplan updates)
+└── Database queries (should use indexes)
+
+Optimization Opportunities:
+├── Cache trunk list (with TTL)
+├── Batch AMI queries
+├── Use database indexes on tenant_id
+├── Lazy-load tenant relations
+├── Consider pagination for large lists
+
+================================================================================
+
+MONITORING & OBSERVABILITY
+================================================================================
+
+Logging:
+├── RegistrationsService logs create/update/delete operations
+├── ConfigFileService logs file operations
+├── AmiService logs command execution
+├── Logger: NestJS built-in (info, warn, error, debug)
+└── Recommended: Structure logs as JSON for parsing
+
+Metrics to Track:
+├── Trunk creation/update/deletion rate
+├── API response times
+├── Asterisk reload success/failure
+├── Registration status distribution
+├── File operation durations
+├── AMI command latency
+└── Database query times
+
+Health Checks:
+├── Database connectivity
+├── Asterisk connectivity (AMI)
+├── Docker access
+├── File system access
+└── Configuration consistency
+
+Alerts:
+├── Registration failures
+├── Asterisk reload failures
+├── File lock timeouts
+├── Database connection issues
+├── AMI communication failures
+└── Configuration inconsistencies
+
+================================================================================
+
+FUTURE ENHANCEMENTS
+================================================================================
+
+Short Term (Q1):
+├── Add password encryption (AES-256 at rest)
+├── Add password masking in responses
+├── Implement caching layer
+├── Add database indexes for performance
+└── Add comprehensive logging/metrics
+
+Medium Term (Q2):
+├── Add trunk health checks
+├── Implement failover trunks (primary/secondary)
+├── Add load balancing (round-robin)
+├── Implement rate limiting per trunk
+├── Add call recording integration
+└── Implement advanced routing rules
+
+Long Term (Q3+):
+├── Add trunk analytics/reporting
+├── Implement billing/usage tracking
+├── Add automatic trunk optimization
+├── Implement SLA monitoring
+├── Add WebRTC trunk support
+└── Implement multi-region support
+
+================================================================================
+
+END OF ARCHITECTURE OVERVIEW
+================================================================================

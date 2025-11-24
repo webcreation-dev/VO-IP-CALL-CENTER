@@ -9,6 +9,12 @@ export class AriService implements OnModuleInit, OnModuleDestroy {
   private client: ari.Client;
   private eventEmitter = new EventEmitter();
 
+  /**
+   * List of Stasis applications to start.
+   * All apps are started centrally here to ensure proper initialization order.
+   */
+  private readonly STASIS_APPS = ['ivr-app', 'call-validator'];
+
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
@@ -22,9 +28,13 @@ export class AriService implements OnModuleInit, OnModuleDestroy {
 
       this.client = await ari.connect(ariUrl, ariUser, ariPassword);
 
-      this.logger.log('✅ ARI Client connecté avec WebSocket');
+      this.logger.log('ARI Client connected via WebSocket');
 
-      // Transférer tous les événements vers l'EventEmitter
+      // Start all Stasis applications
+      await this.client.start(this.STASIS_APPS);
+      this.logger.log(`Stasis applications started: ${this.STASIS_APPS.join(', ')}`);
+
+      // Forward all ARI events to internal EventEmitter
       this.setupEventForwarding();
     } catch (error) {
       this.logger.error('❌ Erreur connexion ARI:', error);

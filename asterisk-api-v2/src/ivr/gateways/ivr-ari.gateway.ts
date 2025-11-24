@@ -12,15 +12,10 @@ export class IvrAriGateway implements OnModuleInit {
     private logger: CustomLoggerService,
   ) {}
 
-  async onModuleInit() {
-    // Démarrer l'application Stasis via le client ARI centralisé
-    const client = this.ariService.getClient();
-    client.start('ivr-app');
-
-    // Écouter les événements via AriService
+  onModuleInit() {
+    // Note: Stasis app 'ivr-app' is started centrally by AriService
     this.setupEventHandlers();
-    
-    this.logger.log('IVR ARI Gateway démarré');
+    this.logger.log('IVR ARI Gateway initialized');
   }
 
   private setupEventHandlers() {
