@@ -877,9 +877,9 @@ export class EndpointsService {
     }
 
     // Get SIP server configuration from environment
-    const sipServer = this.configService.get<string>('sip.server');
-    const wssPort = this.configService.get<number>('sip.wssPort');
-    const sipRealm = this.configService.get<string>('sip.realm');
+    const sipServer = this.configService.get<string>('sip.server') || 'localhost';
+    const wssPort = this.configService.get<number>('sip.wssPort') || 8089;
+    const sipRealm = this.configService.get<string>('sip.realm') || 'asterisk';
 
     // Build credentials DTO
     const credentials: EndpointCredentialsDto = {
