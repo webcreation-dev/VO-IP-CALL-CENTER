@@ -75,6 +75,16 @@ export interface EndpointDetails {
   };
 }
 
+export interface EndpointCredentials {
+  username: string;
+  password: string;
+  server: string;
+  port: number;
+  displayName: string;
+  realm: string;
+  endpointId: string;
+}
+
 class EndpointsService {
   // Get all endpoints
   async getEndpoints(filters?: { context?: string; transport?: string }): Promise<Endpoint[]> {
@@ -176,6 +186,19 @@ class EndpointsService {
     if (!response.data.success) {
       throw new Error('Failed to disconnect endpoint');
     }
+  }
+
+  // Get endpoint SIP credentials (Admin only)
+  async getEndpointCredentials(username: string): Promise<EndpointCredentials> {
+    const response = await apiClient.get<ApiResponse<EndpointCredentials>>(
+      `/endpoints/${username}/credentials`
+    );
+
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+
+    throw new Error('Failed to fetch endpoint credentials');
   }
 
   // Get device state color

@@ -72,4 +72,11 @@ export default () => ({
     version: process.env.SWAGGER_VERSION || '2.0',
     path: process.env.SWAGGER_PATH || 'api/docs',
   },
+
+  sip: {
+    server: process.env.PUBLIC_IP || 'localhost',
+    port: parseInt(process.env.SIP_PORT || '5060', 10),
+    wssPort: parseInt(process.env.WSS_PORT || '8089', 10),
+    realm: process.env.SIP_REALM || 'asterisk',
+  },
 });

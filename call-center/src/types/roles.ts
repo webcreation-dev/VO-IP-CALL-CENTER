@@ -46,6 +46,7 @@ export enum DenyReason {
 export interface EndpointRole {
   id: number;
   tenantId: number;
+  contextId: number | null;
   name: string;
   displayName: string;
   description: string | null;

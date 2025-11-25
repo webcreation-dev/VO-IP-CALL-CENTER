@@ -54,16 +54,22 @@ export class RolesController {
   @ApiOperation({ summary: 'Get all roles for tenant' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean })
   @ApiQuery({ name: 'tenantId', required: false, type: Number, description: 'Tenant ID (ADMIN only - optional)' })
+  @ApiQuery({ name: 'contextId', required: false, type: Number, description: 'Context ID (undefined = all, null = tenant-wide only, number = context-specific + tenant-wide)' })
   @ApiResponse({ status: 200, description: 'Roles retrieved successfully' })
   findAll(
     @CurrentTenant() userTenantId: number,
     @Query('activeOnly') activeOnly?: string,
     @Query('tenantId') queryTenantId?: string,
+    @Query('contextId') queryContextId?: string,
   ) {
     // ADMIN can specify tenant via query param, otherwise use their own tenant
     const tenantId = queryTenantId ? parseInt(queryTenantId, 10) : userTenantId;
     const active = activeOnly === 'true';
-    return this.rolesService.findAll(tenantId, active);
+    // Parse contextId: undefined = all, 'null' = tenant-wide only, number = context-specific + tenant-wide
+    const contextId = queryContextId !== undefined
+      ? (queryContextId === 'null' ? null : parseInt(queryContextId, 10))
+      : undefined;
+    return this.rolesService.findAll(tenantId, active, contextId);
   }
 
   // ========================================

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit, Trash2, Power, Eye } from 'lucide-react';
+import { Edit, Trash2, Power, Phone } from 'lucide-react';
 
 import {
   Table,
@@ -26,6 +26,7 @@ import { useToast } from '@/components/ui/use-toast';
 import type { Endpoint } from '@/api/endpoints';
 import endpointsService from '@/api/endpoints';
 import { RoleBadge } from '@/components/roles/RoleBadge';
+import { useEndpointSelectionStore } from '@modules/softphone';
 
 interface EndpointsListProps {
   endpoints: Endpoint[];
@@ -43,6 +44,9 @@ export default function EndpointsList({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const { toast } = useToast();
+
+  // Endpoint selection for softphone
+  const selectEndpoint = useEndpointSelectionStore((state) => state.selectEndpoint);
 
   // Get device state badge variant
   const getDeviceStateBadge = (state?: string) => {
@@ -84,6 +88,24 @@ export default function EndpointsList({
       variant: variantMap[color] || 'gray',
       label: status,
     };
+  };
+
+  // Handle connect to endpoint with softphone
+  const handleConnectEndpoint = async (endpoint: Endpoint) => {
+    try {
+      await selectEndpoint(endpoint);
+
+      toast({
+        title: 'Connexion au softphone',
+        description: `Connecté en tant que ${endpoint.callerid || endpoint.displayName}`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur de connexion',
+        description: error instanceof Error ? error.message : 'Impossible de se connecter',
+      });
+    }
   };
 
   // Handle delete endpoint
@@ -218,6 +240,14 @@ export default function EndpointsList({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleConnectEndpoint(endpoint)}
+                        title="Connecter au softphone"
+                      >
+                        <Phone className="h-4 w-4 text-primary" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

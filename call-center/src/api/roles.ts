@@ -23,12 +23,14 @@ class RolesService {
    * Get all roles for the current tenant
    * @param activeOnly - Filter only active roles
    * @param tenantId - Optional tenant ID (for ADMIN users)
+   * @param contextId - Optional context ID (undefined = all, null = tenant-wide only, number = context-specific + tenant-wide)
    */
-  async getRoles(activeOnly = false, tenantId?: number): Promise<EndpointRole[]> {
+  async getRoles(activeOnly = false, tenantId?: number, contextId?: number | null): Promise<EndpointRole[]> {
     const response = await apiClient.get<any>(this.basePath, {
       params: {
         activeOnly,
-        ...(tenantId && { tenantId }) // Add tenantId to params if provided
+        ...(tenantId !== undefined && { tenantId }), // Add tenantId to params if provided
+        ...(contextId !== undefined && { contextId: contextId === null ? 'null' : contextId }) // Add contextId if provided
       },
     });
     // Handle both direct array and wrapped response { data: [] }

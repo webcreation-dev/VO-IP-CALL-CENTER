@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 
 import { EndpointsService } from './endpoints.service';
-import { CreateEndpointDto, UpdateEndpointDto, EndpointFilterDto } from './dto';
+import { CreateEndpointDto, UpdateEndpointDto, EndpointFilterDto, EndpointCredentialsDto } from './dto';
 
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
@@ -338,5 +338,38 @@ export class EndpointsController {
     @Param('username') username: string,
   ) {
     return await this.endpointsService.forceDisconnect(tenantId, username);
+  }
+
+  /**
+   * Get endpoint SIP credentials (Admin only)
+   *
+   * Allows admins to retrieve SIP credentials for any endpoint to connect softphone
+   * SECURITY: Only accessible by SUPER_ADMIN and TENANT_ADMIN roles
+   */
+  @Get(':username/credentials')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN)
+  @ApiOperation({
+    summary: 'Get endpoint SIP credentials (Admin only)',
+    description:
+      'Retrieve SIP credentials for an endpoint. Used by admins to connect softphone as any agent. Enforces tenant isolation.',
+  })
+  @ApiParam({
+    name: 'username',
+    description: 'Endpoint username (without tenant prefix)',
+    example: '1000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Credentials retrieved successfully',
+    type: EndpointCredentialsDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
+  @ApiResponse({ status: 404, description: 'Endpoint not found' })
+  async getCredentials(
+    @CurrentTenant() tenantId: number,
+    @Param('username') username: string,
+  ) {
+    return await this.endpointsService.getEndpointCredentials(tenantId, username);
   }
 }

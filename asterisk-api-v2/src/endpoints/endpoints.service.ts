@@ -16,7 +16,9 @@ import { PsAor } from './entities/ps-aor.entity';
 import { CreateEndpointDto } from './dto/create-endpoint.dto';
 import { UpdateEndpointDto } from './dto/update-endpoint.dto';
 import { EndpointFilterDto } from './dto/endpoint-filter.dto';
+import { EndpointCredentialsDto } from './dto/endpoint-credentials.dto';
 
+import { ConfigService } from '@nestjs/config';
 import { AmiService } from '../core/asterisk/ami/ami.service';
 import { CacheService } from '../core/cache/cache.service';
 import { TenantsService } from '../tenants/tenants.service';
@@ -69,6 +71,7 @@ export class EndpointsService {
     private readonly dataSource: DataSource,
     private readonly amiService: AmiService,
     private readonly cacheService: CacheService,
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => TenantsService))
     private readonly tenantsService: TenantsService,
     @Inject(forwardRef(() => RolesService))
@@ -841,6 +844,59 @@ export class EndpointsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Get endpoint SIP credentials (Admin only)
+   *
+   * Retrieves SIP credentials for an endpoint to allow admins to connect softphone
+   * SECURITY: Tenant isolation enforced, only returns credentials for endpoints in same tenant
+   *
+   * @param tenantId - Current user's tenant ID
+   * @param displayName - Endpoint display name (without prefix)
+   * @returns Complete SIP configuration including credentials
+   * @throws NotFoundException if endpoint not found
+   */
+  async getEndpointCredentials(
+    tenantId: number,
+    displayName: string,
+  ): Promise<EndpointCredentialsDto> {
+    // Find endpoint (enforces tenant isolation)
+    const endpoint = await this.findOne(tenantId, displayName);
+    const prefixedId = endpoint.id;
+
+    // Get authentication credentials from ps_auths
+    const auth = await this.authRepository.findOne({
+      where: { id: prefixedId },
+    });
+
+    if (!auth) {
+      throw new NotFoundException(
+        `Authentication credentials not found for endpoint ${displayName}`,
+      );
+    }
+
+    // Get SIP server configuration from environment
+    const sipServer = this.configService.get<string>('sip.server');
+    const wssPort = this.configService.get<number>('sip.wssPort');
+    const sipRealm = this.configService.get<string>('sip.realm');
+
+    // Build credentials DTO
+    const credentials: EndpointCredentialsDto = {
+      username: auth.username,
+      password: auth.password,
+      server: sipServer,
+      port: wssPort,
+      displayName: endpoint.callerid || displayName,
+      realm: sipRealm,
+      endpointId: prefixedId,
+    };
+
+    this.logger.log(
+      `Retrieved credentials for endpoint ${displayName} (tenant ${tenantId})`,
+    );
+
+    return credentials;
   }
 
   /**

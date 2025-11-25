@@ -176,14 +176,18 @@ export default function EndpointFormModal({
     },
   });
 
-  // Get the current tenant ID from the form (for ADMIN users who can select tenant)
+  // Get the current tenant ID and context from the form
   const selectedTenantId = watch('tenantId');
+  const selectedContextName = watch('context');
 
-  // Load available roles (pass tenantId for ADMIN users)
+  // Find the context object to get its ID
+  const selectedContextId = contexts?.find(c => c.name === selectedContextName)?.id;
+
+  // Load available roles (filtered by tenant AND context)
   const { data: roles } = useQuery({
-    queryKey: ['roles', 'active', selectedTenantId],
-    queryFn: () => rolesService.getRoles(true, selectedTenantId), // activeOnly=true, tenantId
-    enabled: open && !!selectedTenantId, // Only load when modal is open AND tenant is selected
+    queryKey: ['roles', 'active', selectedTenantId, selectedContextId],
+    queryFn: () => rolesService.getRoles(true, selectedTenantId, selectedContextId), // activeOnly=true, tenantId, contextId
+    enabled: open && !!selectedTenantId && !!selectedContextName, // Only load when modal is open AND tenant and context are selected
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 

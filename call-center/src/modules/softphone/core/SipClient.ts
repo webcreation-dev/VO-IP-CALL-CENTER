@@ -1,0 +1,568 @@
+/**
+ * SipClient - JsSIP Wrapper
+ *
+ * Encapsulates JsSIP logic for WebRTC/SIP communication with Asterisk
+ * Based on the working implementation in webrtc.html
+ */
+
+import JsSIP from 'jssip';
+import type {
+  SipConfig,
+  CallInfo,
+  CallDirection,
+} from './types';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type JsSIPUA = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type JsSIPSession = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type JsSIPConfig = any;
+
+// ============================================================================
+// Event Emitter Pattern for React Integration
+// ============================================================================
+
+type EventCallback = (...args: any[]) => void;
+
+interface EventMap {
+  connectionStateChanged: (state: string) => void;
+  registered: () => void;
+  unregistered: (cause?: string) => void;
+  registrationFailed: (cause?: string) => void;
+  incomingCall: (call: CallInfo) => void;
+  callStateChanged: (call: CallInfo) => void;
+  callEnded: (callId: string, cause: string) => void;
+  error: (error: Error) => void;
+}
+
+// ============================================================================
+// SipClient Class
+// ============================================================================
+
+export class SipClient {
+  private ua: JsSIPUA | null = null;
+  private currentSession: JsSIPSession | null = null;
+  private remoteAudio: HTMLAudioElement;
+  private config: SipConfig | null = null;
+  private eventListeners: Map<string, EventCallback[]> = new Map();
+
+  constructor() {
+    // Create audio element for remote audio
+    this.remoteAudio = document.createElement('audio');
+    this.remoteAudio.autoplay = true;
+    this.remoteAudio.volume = 1.0;
+  }
+
+  // ==========================================================================
+  // Event Emitter Implementation
+  // ==========================================================================
+
+  on<K extends keyof EventMap>(event: K, callback: EventMap[K]): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(callback as EventCallback);
+  }
+
+  off<K extends keyof EventMap>(event: K, callback: EventMap[K]): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback as EventCallback);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  private emit<K extends keyof EventMap>(
+    event: K,
+    ...args: Parameters<EventMap[K]>
+  ): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.forEach((callback) => callback(...args));
+    }
+  }
+
+  // ==========================================================================
+  // Connection Management
+  // ==========================================================================
+
+  async connect(config: SipConfig): Promise<void> {
+    try {
+      this.config = config;
+
+      // Request microphone permissions first
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      // Stop the stream immediately (we just needed permissions)
+      stream.getTracks().forEach((track) => track.stop());
+
+      // Configure WebSocket
+      const wsUri = `wss://${config.server}:${config.port}/ws`;
+      const socket = new JsSIP.WebSocketInterface(wsUri);
+
+      // Configure User Agent
+      const uaConfig: JsSIPConfig = {
+        sockets: [socket],
+        uri: `sip:${config.username}@${config.server}`,
+        password: config.password,
+        display_name: config.displayName || config.username,
+        realm: config.realm || 'asterisk',
+        register: true,
+        session_timers: false,
+        pcConfig: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+          ],
+        },
+        connection_recovery_min_interval: 2,
+        connection_recovery_max_interval: 30,
+        register_expires: 600,
+      };
+
+      this.ua = new JsSIP.UA(uaConfig);
+
+      // Setup UA event handlers
+      this.setupUAEventHandlers();
+
+      // Start the UA
+      this.ua.start();
+
+      this.log('✅ SIP Client initialized');
+    } catch (error: any) {
+      this.log('❌ Connection failed: ' + error.message);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  disconnect(): void {
+    if (this.currentSession) {
+      this.currentSession.terminate();
+      this.currentSession = null;
+    }
+
+    if (this.ua) {
+      this.ua.stop();
+      this.ua = null;
+    }
+
+    this.emit('connectionStateChanged', 'disconnected');
+    this.log('🔴 Disconnected');
+  }
+
+  isConnected(): boolean {
+    return this.ua !== null && this.ua.isConnected();
+  }
+
+  isRegistered(): boolean {
+    return this.ua !== null && this.ua.isRegistered();
+  }
+
+  // ==========================================================================
+  // Call Operations
+  // ==========================================================================
+
+  async makeCall(number: string): Promise<void> {
+    if (!this.ua || !this.isRegistered()) {
+      throw new Error('Not connected or registered');
+    }
+
+    if (this.currentSession) {
+      throw new Error('A call is already in progress');
+    }
+
+    try {
+      const target = `sip:${number}@${this.config!.server}`;
+
+      const options = {
+        mediaConstraints: {
+          audio: true,
+          video: false,
+        },
+        pcConfig: {
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        },
+      };
+
+      this.log(`📞 Calling ${number}...`);
+      this.currentSession = this.ua.call(target, options);
+
+      if (this.currentSession) {
+        this.attachSessionHandlers(this.currentSession, 'outbound', number);
+      }
+    } catch (error: any) {
+      this.log('❌ Call failed: ' + error.message);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  answerCall(): void {
+    if (!this.currentSession) {
+      throw new Error('No incoming call to answer');
+    }
+
+    try {
+      this.log('✅ Answering call');
+      this.currentSession.answer({
+        mediaConstraints: {
+          audio: true,
+          video: false,
+        },
+        pcConfig: {
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        },
+      });
+    } catch (error: any) {
+      this.log('❌ Answer failed: ' + error.message);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  rejectCall(): void {
+    if (!this.currentSession) {
+      throw new Error('No incoming call to reject');
+    }
+
+    try {
+      this.log('❌ Rejecting call');
+      this.currentSession.terminate();
+      this.currentSession = null;
+    } catch (error: any) {
+      this.log('❌ Reject failed: ' + error.message);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  hangup(): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.log('📞 Hanging up');
+      this.currentSession.terminate();
+      this.currentSession = null;
+    } catch (error: any) {
+      this.log('❌ Hangup failed: ' + error.message);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  // ==========================================================================
+  // Call Controls
+  // ==========================================================================
+
+  mute(): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.currentSession.mute({ audio: true });
+      this.log('🔇 Muted');
+    } catch (error: any) {
+      this.log('❌ Mute failed: ' + error.message);
+    }
+  }
+
+  unmute(): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.currentSession.unmute({ audio: true });
+      this.log('🔊 Unmuted');
+    } catch (error: any) {
+      this.log('❌ Unmute failed: ' + error.message);
+    }
+  }
+
+  hold(): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.currentSession.hold();
+      this.log('⏸️ Call on hold');
+    } catch (error: any) {
+      this.log('❌ Hold failed: ' + error.message);
+    }
+  }
+
+  unhold(): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.currentSession.unhold();
+      this.log('▶️ Call resumed');
+    } catch (error: any) {
+      this.log('❌ Unhold failed: ' + error.message);
+    }
+  }
+
+  sendDTMF(digit: string): void {
+    if (!this.currentSession) {
+      return;
+    }
+
+    try {
+      this.currentSession.sendDTMF(digit);
+      this.log(`🔢 DTMF sent: ${digit}`);
+    } catch (error: any) {
+      this.log('❌ DTMF failed: ' + error.message);
+    }
+  }
+
+  // ==========================================================================
+  // UA Event Handlers
+  // ==========================================================================
+
+  private setupUAEventHandlers(): void {
+    if (!this.ua) return;
+
+    this.ua.on('connecting', () => {
+      this.log('🔵 Connecting...');
+      this.emit('connectionStateChanged', 'connecting');
+    });
+
+    this.ua.on('connected', () => {
+      this.log('✅ Connected');
+      this.emit('connectionStateChanged', 'connected');
+    });
+
+    this.ua.on('disconnected', () => {
+      this.log('🔴 Disconnected');
+      this.emit('connectionStateChanged', 'disconnected');
+    });
+
+    this.ua.on('registered', () => {
+      this.log('✅ Registered');
+      this.emit('registered');
+      this.emit('connectionStateChanged', 'registered');
+    });
+
+    this.ua.on('unregistered', (data: any) => {
+      const cause = data?.cause || 'Unknown';
+      this.log(`🔴 Unregistered: ${cause}`);
+      this.emit('unregistered', cause);
+    });
+
+    this.ua.on('registrationFailed', (data: any) => {
+      const cause = data?.cause || 'Unknown';
+      this.log(`❌ Registration failed: ${cause}`);
+      this.emit('registrationFailed', cause);
+      this.emit('error', new Error(`Registration failed: ${cause}`));
+    });
+
+    this.ua.on('newRTCSession', (data: any) => {
+      const { originator, session } = data;
+
+      if (originator === 'remote') {
+        // Incoming call
+        this.log('📞 Incoming call');
+        this.currentSession = session;
+
+        const remoteIdentity = session.remote_identity.display_name ||
+                               session.remote_identity.uri.user;
+
+        this.attachSessionHandlers(session, 'inbound', remoteIdentity);
+
+        // Emit incoming call event
+        const callInfo = this.createCallInfo(session, 'inbound', remoteIdentity);
+        this.emit('incomingCall', callInfo);
+      }
+    });
+
+    this.ua.on('newMessage', (data: any) => {
+      this.log('💬 New message received');
+    });
+  }
+
+  // ==========================================================================
+  // Session Event Handlers
+  // ==========================================================================
+
+  private attachSessionHandlers(
+    session: JsSIPSession,
+    direction: CallDirection,
+    remoteNumber: string
+  ): void {
+    this.log('🔧 Attaching session handlers');
+
+    // Handle PeerConnection
+    if (session.connection) {
+      this.setupPeerConnectionHandlers(session.connection);
+    }
+
+    session.on('peerconnection', (data: any) => {
+      this.setupPeerConnectionHandlers(data.peerconnection);
+    });
+
+    session.on('progress', () => {
+      this.log('📞 Call progressing...');
+      const callInfo = this.createCallInfo(session, direction, remoteNumber);
+      callInfo.state = 'dialing';
+      this.emit('callStateChanged', callInfo);
+    });
+
+    session.on('accepted', () => {
+      this.log('✅ Call accepted');
+      const callInfo = this.createCallInfo(session, direction, remoteNumber);
+      callInfo.state = 'in-call';
+      callInfo.answerTime = new Date();
+      this.emit('callStateChanged', callInfo);
+    });
+
+    session.on('confirmed', () => {
+      this.log('✅ Call confirmed');
+    });
+
+    session.on('ended', (data: any) => {
+      const cause = data?.cause || 'Normal clearing';
+      this.log(`📞 Call ended: ${cause}`);
+
+      const callId = session.id;
+      this.currentSession = null;
+      this.emit('callEnded', callId, cause);
+    });
+
+    session.on('failed', (data: any) => {
+      const cause = data?.cause || 'Unknown error';
+      this.log(`❌ Call failed: ${cause}`);
+
+      const callId = session.id;
+      this.currentSession = null;
+      this.emit('callEnded', callId, cause);
+      this.emit('error', new Error(`Call failed: ${cause}`));
+    });
+
+    session.on('hold', (data: any) => {
+      this.log('⏸️ Call on hold');
+      const callInfo = this.createCallInfo(session, direction, remoteNumber);
+      callInfo.state = 'holding';
+      callInfo.isOnHold = true;
+      this.emit('callStateChanged', callInfo);
+    });
+
+    session.on('unhold', (data: any) => {
+      this.log('▶️ Call resumed');
+      const callInfo = this.createCallInfo(session, direction, remoteNumber);
+      callInfo.state = 'in-call';
+      callInfo.isOnHold = false;
+      this.emit('callStateChanged', callInfo);
+    });
+
+    session.on('muted', (data: any) => {
+      this.log('🔇 Muted');
+    });
+
+    session.on('unmuted', (data: any) => {
+      this.log('🔊 Unmuted');
+    });
+  }
+
+  // ==========================================================================
+  // PeerConnection Handlers (WebRTC)
+  // ==========================================================================
+
+  private setupPeerConnectionHandlers(peerConnection: RTCPeerConnection): void {
+    this.log('🔵 Setting up RTCPeerConnection handlers');
+    this.log(`🔵 ICE Connection State: ${peerConnection.iceConnectionState}`);
+    this.log(`🔵 Signaling State: ${peerConnection.signalingState}`);
+
+    peerConnection.oniceconnectionstatechange = () => {
+      this.log(`🔵 ICE Connection State: ${peerConnection.iceConnectionState}`);
+      if (
+        peerConnection.iceConnectionState === 'connected' ||
+        peerConnection.iceConnectionState === 'completed'
+      ) {
+        this.log('✅ ICE Connected - Media should flow now');
+      }
+    };
+
+    peerConnection.ontrack = (event: RTCTrackEvent) => {
+      this.log(`🎵 Track received: ${event.track.kind}`);
+      this.log(`🎵 Track readyState: ${event.track.readyState}`);
+
+      if (event.streams && event.streams[0]) {
+        const stream = event.streams[0];
+        this.log(`🎵 Stream active: ${stream.active}`);
+
+        // Enable the track
+        event.track.enabled = true;
+
+        // Attach to audio element
+        this.remoteAudio.srcObject = stream;
+        this.remoteAudio.volume = 1.0;
+        this.remoteAudio.muted = false;
+
+        // Play
+        this.remoteAudio
+          .play()
+          .then(() => {
+            this.log('✅ Audio playback started');
+          })
+          .catch((err) => {
+            this.log('❌ Audio playback failed: ' + err.message);
+          });
+      }
+    };
+  }
+
+  // ==========================================================================
+  // Utility Methods
+  // ==========================================================================
+
+  private createCallInfo(
+    session: JsSIPSession,
+    direction: CallDirection,
+    remoteNumber: string
+  ): CallInfo {
+    return {
+      id: session.id,
+      direction,
+      remoteNumber,
+      remoteIdentity: session.remote_identity?.display_name || remoteNumber,
+      state: 'idle',
+      startTime: session.start_time || new Date(),
+      duration: 0,
+      isMuted: false,
+      isOnHold: false,
+      session,
+    };
+  }
+
+  private log(message: string): void {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[SipClient ${timestamp}] ${message}`);
+  }
+
+  // ==========================================================================
+  // Getters
+  // ==========================================================================
+
+  getCurrentSession(): JsSIPSession | null {
+    return this.currentSession;
+  }
+
+  getRemoteAudioElement(): HTMLAudioElement {
+    return this.remoteAudio;
+  }
+
+  getConfig(): SipConfig | null {
+    return this.config;
+  }
+}
