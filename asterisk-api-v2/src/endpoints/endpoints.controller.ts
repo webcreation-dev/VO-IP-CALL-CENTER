@@ -243,7 +243,7 @@ export class EndpointsController {
     @Param('username') username: string,
     @Body() dto: UpdateEndpointDto,
   ) {
-    const displayName = this.extractDisplayName(username);
+    const displayName = tenantId === null ? username : this.extractDisplayName(username);
     return await this.endpointsService.update(tenantId, displayName, dto);
   }
 
