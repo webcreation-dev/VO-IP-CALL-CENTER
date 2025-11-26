@@ -98,15 +98,4 @@ export class PsAor {
 
   @UpdateDateColumn({ name: 'updated_at', nullable: true })
   updatedAt: Date;
-
-  // ========== Soft Delete Support ==========
-
-  @Column({ name: 'deleted_at', type: 'timestamp with time zone', nullable: true })
-  deletedAt: Date | null;
-
-  @Column({ name: 'deleted_by', type: 'integer', nullable: true })
-  deletedBy: number | null;
-
-  @Column({ name: 'deletion_reason', type: 'text', nullable: true })
-  deletionReason: string | null;
 }

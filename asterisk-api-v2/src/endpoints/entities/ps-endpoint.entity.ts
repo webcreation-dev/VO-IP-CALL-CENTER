@@ -189,20 +189,6 @@ export class PsEndpoint {
   @UpdateDateColumn({ name: 'updated_at', nullable: true })
   updatedAt: Date;
 
-  // ========== Soft Delete Support ==========
-
-  // Soft delete timestamp (when record was marked as deleted)
-  @Column({ name: 'deleted_at', type: 'timestamp with time zone', nullable: true })
-  deletedAt: Date | null;
-
-  // User who deleted the record
-  @Column({ name: 'deleted_by', type: 'integer', nullable: true })
-  deletedBy: number | null;
-
-  // Reason for deletion (audit trail)
-  @Column({ name: 'deletion_reason', type: 'text', nullable: true })
-  deletionReason: string | null;
-
   // Virtual properties
   get interface(): string {
     return `PJSIP/${this.id}`;
