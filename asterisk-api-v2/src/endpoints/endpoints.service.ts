@@ -878,18 +878,23 @@ export class EndpointsService {
 
     // Get SIP server configuration from environment
     const sipServer = this.configService.get<string>('sip.server') || 'localhost';
+    const sipDomain = this.configService.get<string>('sip.domain') || sipServer;
     const wssPort = this.configService.get<number>('sip.wssPort') || 8089;
-    const sipRealm = this.configService.get<string>('sip.realm') || 'asterisk';
+    const sipRealm = this.configService.get<string>('sip.realm') || sipDomain;
 
     // Build credentials DTO
+    // - username: random hash for SIP authentication (Private Identity)
+    // - endpointId: prefixed endpoint ID for SIP URI (Public Identity)
+    // - domain: SIP domain for constructing SIP URI
     const credentials: EndpointCredentialsDto = {
-      username: auth.username,
+      username: auth.username,  // Random hash for authorization_user (Private Identity)
       password: auth.password,
-      server: sipServer,
+      server: sipServer,        // IP address for WebSocket connection
+      domain: sipDomain,        // Domain for SIP URI (e.g., pishon.kabou.bj)
       port: wssPort,
       displayName: endpoint.callerid || displayName,
-      realm: sipRealm,
-      endpointId: prefixedId,
+      realm: sipRealm,          // SIP realm for authentication
+      endpointId: prefixedId,   // Endpoint ID for SIP URI (Public Identity)
     };
 
     this.logger.log(

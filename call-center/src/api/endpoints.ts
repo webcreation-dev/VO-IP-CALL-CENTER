@@ -79,6 +79,7 @@ export interface EndpointCredentials {
   username: string;
   password: string;
   server: string;
+  domain: string;
   port: number;
   displayName: string;
   realm: string;

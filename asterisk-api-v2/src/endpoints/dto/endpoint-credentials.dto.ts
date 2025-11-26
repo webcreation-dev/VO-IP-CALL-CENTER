@@ -18,10 +18,16 @@ export class EndpointCredentialsDto {
   password: string;
 
   @ApiProperty({
-    description: 'SIP server address',
-    example: 'pbx.example.com',
+    description: 'SIP server IP address (for WebSocket connection)',
+    example: '161.97.106.134',
   })
   server: string;
+
+  @ApiProperty({
+    description: 'SIP domain (for SIP URI)',
+    example: 'pishon.kabou.bj',
+  })
+  domain: string;
 
   @ApiProperty({
     description: 'WebSocket port for WebRTC',
@@ -36,8 +42,8 @@ export class EndpointCredentialsDto {
   displayName: string;
 
   @ApiProperty({
-    description: 'SIP realm/domain',
-    example: 'asterisk',
+    description: 'SIP realm for authentication',
+    example: 'pishon.kabou.bj',
   })
   realm: string;
 

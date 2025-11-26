@@ -13,12 +13,14 @@ type JsSIPSession = any;
 // ============================================================================
 
 export interface SipConfig {
-  server: string;       // e.g., "pishon.kabou.bj"
-  port: number;         // e.g., 8089
-  username: string;     // SIP authentication username
+  server: string;       // IP address for WebSocket (e.g., "161.97.106.134")
+  domain: string;       // SIP domain for URI (e.g., "pishon.kabou.bj")
+  port: number;         // WebSocket port (e.g., 8089)
+  username: string;     // SIP auth username - Private Identity (random hash)
   password: string;     // SIP password
   displayName?: string; // Display name for outgoing calls
-  realm?: string;       // SIP realm (default: asterisk)
+  realm?: string;       // SIP realm for authentication (e.g., "pishon.kabou.bj")
+  endpointId: string;   // Endpoint ID for SIP URI - Public Identity (e.g., "t24_1000")
 }
 
 export interface SipCredentials {

@@ -40,9 +40,9 @@ export const useEndpointSelectionStore = create<EndpointSelectionState>((set, ge
 
     try {
       // Fetch credentials from backend
-      const credentials = await endpointsService.getEndpointCredentials(
-        endpoint.displayName
-      );
+      // Use displayName if available, otherwise fallback to id
+      const username = endpoint.displayName || endpoint.id;
+      const credentials = await endpointsService.getEndpointCredentials(username);
 
       set({
         selectedEndpoint: endpoint,
@@ -83,11 +83,13 @@ export const useEndpointSelectionStore = create<EndpointSelectionState>((set, ge
 
     return {
       server: credentials.server,
+      domain: credentials.domain,
       port: credentials.port,
       username: credentials.username,
       password: credentials.password,
       displayName: credentials.displayName,
       realm: credentials.realm,
+      endpointId: credentials.endpointId,
     };
   },
 }));

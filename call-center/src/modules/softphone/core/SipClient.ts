@@ -93,6 +93,24 @@ export class SipClient {
     try {
       this.config = config;
 
+      // ========================================================================
+      // DEBUG: Log received SIP configuration
+      // ========================================================================
+      console.log('╔═══════════════════════════════════════════════════════════════╗');
+      console.log('║           🔍 SIP CLIENT DEBUG - CONFIGURATION                 ║');
+      console.log('╚═══════════════════════════════════════════════════════════════╝');
+      console.log('📋 Received SIP Config:', {
+        server: config.server,
+        domain: config.domain,
+        port: config.port,
+        username: config.username,
+        endpointId: config.endpointId,
+        password: config.password ? `***${config.password.substring(config.password.length - 4)}` : '(empty)',
+        displayName: config.displayName,
+        realm: config.realm,
+      });
+      console.log('');
+
       // Request microphone permissions first
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -103,15 +121,32 @@ export class SipClient {
 
       // Configure WebSocket
       const wsUri = `wss://${config.server}:${config.port}/ws`;
+
+      // ========================================================================
+      // DEBUG: Log WebSocket URI
+      // ========================================================================
+      console.log('╔═══════════════════════════════════════════════════════════════╗');
+      console.log('║           🌐 SIP CLIENT DEBUG - WEBSOCKET                     ║');
+      console.log('╚═══════════════════════════════════════════════════════════════╝');
+      console.log('🔗 WebSocket URI:', wsUri);
+      console.log('');
+
       const socket = new JsSIP.WebSocketInterface(wsUri);
 
-      // Configure User Agent
+      // Configure User Agent with separate Public Identity and Private Identity
+      // - Public Identity (SIP URI): sip:endpointId@domain (e.g., sip:t24_1000@pishon.kabou.bj)
+      // - Private Identity (auth): username hash for authorization_user
+      const sipDomain = config.domain || config.server;
+      const sipUri = `sip:${config.endpointId}@${sipDomain}`;  // Public Identity
+      const realm = config.realm || sipDomain;
+
       const uaConfig: JsSIPConfig = {
         sockets: [socket],
-        uri: `sip:${config.username}@${config.server}`,
+        uri: sipUri,                                    // Public Identity (sip:t24_1000@pishon.kabou.bj)
+        authorization_user: config.username,            // Private Identity (random hash for auth)
         password: config.password,
-        display_name: config.displayName || config.username,
-        realm: config.realm || 'asterisk',
+        display_name: config.displayName || config.endpointId,
+        realm: realm,
         register: true,
         session_timers: false,
         pcConfig: {
@@ -124,6 +159,32 @@ export class SipClient {
         register_expires: 600,
       };
 
+      // ========================================================================
+      // DEBUG: Log JsSIP User Agent Configuration
+      // ========================================================================
+      console.log('╔═══════════════════════════════════════════════════════════════╗');
+      console.log('║           📞 SIP CLIENT DEBUG - JSSIP CONFIG                  ║');
+      console.log('╚═══════════════════════════════════════════════════════════════╝');
+      console.log('🔧 JsSIP UA Config:', {
+        uri: sipUri,
+        authorization_user: config.username,
+        password: config.password ? `***${config.password.substring(config.password.length - 4)}` : '(empty)',
+        display_name: config.displayName || config.endpointId,
+        realm: realm,
+        register: true,
+        register_expires: 600,
+      });
+      console.log('');
+      console.log('📝 Expected SIP REGISTER Message Format:');
+      console.log('   From: <sip:' + config.endpointId + '@' + sipDomain + '>');
+      console.log('   To:   <sip:' + config.endpointId + '@' + sipDomain + '>');
+      console.log('   Authorization: Digest username="' + config.username + '", realm="' + realm + '"');
+      console.log('');
+      console.log('╔═══════════════════════════════════════════════════════════════╗');
+      console.log('║           ⚙️  STARTING JSSIP USER AGENT                       ║');
+      console.log('╚═══════════════════════════════════════════════════════════════╝');
+      console.log('');
+
       this.ua = new JsSIP.UA(uaConfig);
 
       // Setup UA event handlers
@@ -134,6 +195,13 @@ export class SipClient {
 
       this.log('✅ SIP Client initialized');
     } catch (error: any) {
+      console.log('');
+      console.log('╔═══════════════════════════════════════════════════════════════╗');
+      console.log('║           ❌ SIP CLIENT DEBUG - ERROR                         ║');
+      console.log('╚═══════════════════════════════════════════════════════════════╝');
+      console.error('💥 Connection Error:', error);
+      console.log('');
+
       this.log('❌ Connection failed: ' + error.message);
       this.emit('error', error);
       throw error;
@@ -177,7 +245,9 @@ export class SipClient {
     }
 
     try {
-      const target = `sip:${number}@${this.config!.server}`;
+      // Use domain for SIP URI, not the server IP
+      const sipDomain = this.config!.domain || this.config!.server;
+      const target = `sip:${number}@${sipDomain}`;
 
       const options = {
         mediaConstraints: {
