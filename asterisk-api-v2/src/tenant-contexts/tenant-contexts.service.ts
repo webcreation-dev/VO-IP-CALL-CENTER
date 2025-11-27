@@ -79,6 +79,8 @@ export class TenantContextsService implements OnModuleInit {
           
           if (context.isPrimary) {
             content += `; PRIMARY CONTEXT\n`;
+          } else {
+            content += `; SECONDARY CONTEXT\n`;
           }
           
           content += '\n';
