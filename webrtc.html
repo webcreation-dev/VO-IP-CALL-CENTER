@@ -88,18 +88,25 @@
   
       <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
         <strong>ℹ️ Demo CallCenter - Tests WebRTC</strong><br />
-        <strong>Serveur:</strong> <code>pishon.kabou.bj:8089</code><br />
-        <em>Utilisez les boutons "Demo Agent" pour charger les configurations</em>
+        <strong>Serveur LOCAL:</strong> <code>localhost:8089</code> | <strong>VPS:</strong> <code>pishon.kabou.bj:8089</code><br />
+        <em>Utilisez les boutons pour charger les configurations</em>
       </div>
 
       <div class="section">
         <h3>Configuration du serveur</h3>
         <div style="margin-bottom: 15px;">
-          <strong>🎯 Demo CallCenter (VPS):</strong><br />
-          <button onclick="loadConfig('demo1')" style="background-color: #28a745; margin: 3px;">👤 Agent 1 (Support)</button>
-          <button onclick="loadConfig('demo2')" style="background-color: #28a745; margin: 3px;">👤 Agent 2 (Support)</button>
-          <button onclick="loadConfig('demo3')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 3 (Ventes)</button>
-          <button onclick="loadConfig('demo4')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 4 (Ventes)</button>
+          <strong>🏠 Demo CallCenter (LOCAL):</strong><br />
+          <button onclick="loadConfig('local1')" style="background-color: #28a745; margin: 3px;">👤 Agent 1 (Support)</button>
+          <button onclick="loadConfig('local2')" style="background-color: #28a745; margin: 3px;">👤 Agent 2 (Support)</button>
+          <button onclick="loadConfig('local3')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 3 (Ventes)</button>
+          <button onclick="loadConfig('local4')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 4 (Ventes)</button>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>🌐 Demo CallCenter (VPS):</strong><br />
+          <button onclick="loadConfig('demo1')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 1 (Support)</button>
+          <button onclick="loadConfig('demo2')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 2 (Support)</button>
+          <button onclick="loadConfig('demo3')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 3 (Ventes)</button>
+          <button onclick="loadConfig('demo4')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 4 (Ventes)</button>
         </div>
         <div style="margin-bottom: 15px;">
           <strong>🔧 Autres configs:</strong>
@@ -794,7 +801,32 @@
           const DEMO_TENANT_ID = 70;  // Modifier selon le tenant créé
 
           const configs = {
-            // Demo CallCenter - 4 agents
+            // Demo CallCenter LOCAL - 4 agents
+            'local1': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1000`,
+              password: 'demo1001'
+            },
+            'local2': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1001`,
+              password: 'demo1002'
+            },
+            'local3': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1002`,
+              password: 'demo1003'
+            },
+            'local4': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1003`,
+              password: 'demo1004'
+            },
+            // Demo CallCenter VPS - 4 agents
             'demo1': {
               server: 'pishon.kabou.bj',
               port: '8089',
