@@ -211,17 +211,17 @@ export class TenantsService {
       }
 
       // 5. Add context to Asterisk AFTER transaction commit
-      try {
-        await this.asteriskConfigService.addContext(contextName);
-        this.logger.log(`Added context ${contextName} to Asterisk`);
-      } catch (asteriskError) {
-        // Log error but don't rollback - data is already committed
-        this.logger.error(
-          `Failed to add context ${contextName} to Asterisk: ${asteriskError.message}. Tenant created but context not in Asterisk.`,
-          asteriskError.stack,
-        );
-        // You might want to implement a cleanup strategy here
-      }
+      // try {
+      //   await this.asteriskConfigService.addContext(contextName);
+      //   this.logger.log(`Added context ${contextName} to Asterisk`);
+      // } catch (asteriskError) {
+      //   // Log error but don't rollback - data is already committed
+      //   this.logger.error(
+      //     `Failed to add context ${contextName} to Asterisk: ${asteriskError.message}. Tenant created but context not in Asterisk.`,
+      //     asteriskError.stack,
+      //   );
+      //   // You might want to implement a cleanup strategy here
+      // }
 
 
       // 4. Invalidate cache after successful commit
