@@ -87,19 +87,23 @@
       <h1>🎙️ Client SIP WebRTC pour Asterisk</h1>
   
       <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
-        <strong>ℹ️ Configuration WebRTC Tenant 12 (IVR TEST)</strong><br />
-        <strong>Endpoint t12_1000:</strong> User: <code>63a77c75ab4b2dd080d6db29e0f239fa</code> | Password: <code>webrtc200</code><br />
-        <strong>Serveur:</strong> <code>pishon.kabou.bj:8089</code> ou <code>161.97.106.134:8089</code><br />
-        <em>Cliquez sur "Endpoint IVR Test" pour charger la config automatiquement</em>
+        <strong>ℹ️ Demo CallCenter - Tests WebRTC</strong><br />
+        <strong>Serveur:</strong> <code>pishon.kabou.bj:8089</code><br />
+        <em>Utilisez les boutons "Demo Agent" pour charger les configurations</em>
       </div>
 
       <div class="section">
         <h3>Configuration du serveur</h3>
         <div style="margin-bottom: 15px;">
-          <strong>Configuration rapide:</strong>
-          <button onclick="loadConfig('ivr')" style="background-color: #28a745; margin-right: 5px;">🎯 Endpoint IVR Test</button>
-          <button onclick="loadConfig(206)" style="background-color: #17a2b8; margin-right: 5px;">👤 Endpoint 206 (old)</button>
-          <button onclick="loadConfig(202)" style="background-color: #6c757d;">👤 Endpoint 202 (old)</button>
+          <strong>🎯 Demo CallCenter (VPS):</strong><br />
+          <button onclick="loadConfig('demo1')" style="background-color: #28a745; margin: 3px;">👤 Agent 1 (Support)</button>
+          <button onclick="loadConfig('demo2')" style="background-color: #28a745; margin: 3px;">👤 Agent 2 (Support)</button>
+          <button onclick="loadConfig('demo3')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 3 (Ventes)</button>
+          <button onclick="loadConfig('demo4')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 4 (Ventes)</button>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>🔧 Autres configs:</strong>
+          <button onclick="loadConfig('ivr')" style="background-color: #6c757d; margin: 3px;">Endpoint IVR Test</button>
         </div>
         <div class="input-group">
           <label>Adresse du serveur Asterisk:</label>
@@ -785,24 +789,42 @@
         }
   
         function loadConfig(endpoint) {
+          // NOTE: Mettre à jour DEMO_TENANT_ID après avoir lancé setup-demo.sh
+          // Le tenant ID est affiché dans les logs du script
+          const DEMO_TENANT_ID = 70;  // Modifier selon le tenant créé
+
           const configs = {
+            // Demo CallCenter - 4 agents
+            'demo1': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1000`,
+              password: 'demo1001'
+            },
+            'demo2': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1001`,
+              password: 'demo1002'
+            },
+            'demo3': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1002`,
+              password: 'demo1003'
+            },
+            'demo4': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1003`,
+              password: 'demo1004'
+            },
+            // Ancienne config IVR test
             'ivr': {
               server: 'pishon.kabou.bj',
               port: '8089',
               user: '63a77c75ab4b2dd080d6db29e0f239fa',
               password: 'webrtc200'
-            },
-            206: {
-              server: 'localhost',
-              port: '8089',
-              user: '206',
-              password: 'test123'
-            },
-            202: {
-              server: 'localhost',
-              port: '8089',
-              user: '202',
-              password: 'webrtc202'
             }
           };
 
