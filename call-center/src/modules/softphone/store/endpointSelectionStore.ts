@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { useMemo } from 'react';
 import type { Endpoint, EndpointCredentials } from '@/api/endpoints';
 import endpointsService from '@/api/endpoints';
 import type { SipConfig } from '../core/types';
@@ -96,9 +97,27 @@ export const useEndpointSelectionStore = create<EndpointSelectionState>((set, ge
 
 /**
  * Helper hook to get the current SIP config
+ * Uses useMemo to avoid creating new object on every render (prevents infinite loop)
  */
 export function useSelectedEndpointConfig(): SipConfig | null {
-  return useEndpointSelectionStore((state) => state.getSipConfig());
+  const credentials = useEndpointSelectionStore((state) => state.credentials);
+
+  return useMemo(() => {
+    if (!credentials) {
+      return null;
+    }
+
+    return {
+      server: credentials.server,
+      domain: credentials.domain,
+      port: credentials.port,
+      username: credentials.username,
+      password: credentials.password,
+      displayName: credentials.displayName,
+      realm: credentials.realm,
+      endpointId: credentials.endpointId,
+    };
+  }, [credentials]);
 }
 
 /**

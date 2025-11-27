@@ -50,6 +50,7 @@ export function useSoftphone() {
     toggleMute: store.toggleMute,
     toggleHold: store.toggleHold,
     sendDTMF: store.sendDTMF,
+    blindTransfer: store.blindTransfer,
 
     // Actions - Audio
     updateAudioSettings: store.updateAudioSettings,
@@ -68,15 +69,35 @@ export function useSoftphone() {
  * Hook for auto-connecting with provided credentials
  */
 export function useAutoConnect(sipConfig: SipConfig | null, enabled = true) {
-  const { connect, isConnected } = useSoftphone();
+  const connectionStatus = useSoftphoneStore((state) => state.connection.status);
+  const connect = useSoftphoneStore((state) => state.connect);
+  const hasConnectedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (enabled && sipConfig && !isConnected) {
+    // Only connect once when conditions are met
+    // Prevent re-connecting if already connected/registered or if we've already tried
+    const shouldConnect =
+      enabled &&
+      sipConfig &&
+      !hasConnectedRef.current &&
+      connectionStatus === 'disconnected';
+
+    if (shouldConnect) {
+      hasConnectedRef.current = true;
       connect(sipConfig).catch((error) => {
         console.error('Auto-connect failed:', error);
+        // Reset flag on failure to allow retry
+        hasConnectedRef.current = false;
       });
     }
-  }, [enabled, sipConfig, isConnected, connect]);
+  }, [enabled, sipConfig, connectionStatus, connect]);
+
+  // Reset the ref when disabled or config changes
+  React.useEffect(() => {
+    if (!enabled || !sipConfig) {
+      hasConnectedRef.current = false;
+    }
+  }, [enabled, sipConfig]);
 }
 
 // Re-export React for the useEffect above

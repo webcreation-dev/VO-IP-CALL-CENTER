@@ -19,6 +19,9 @@ import { Button } from '@/components/ui/button';
 import { Power, PowerOff } from 'lucide-react';
 import { useEndpointSelectionStore, useSelectedEndpointConfig } from '../store/endpointSelectionStore';
 
+// Get clearSelection from store for disconnect button
+const useClearSelection = () => useEndpointSelectionStore((state) => state.clearSelection);
+
 interface SoftphoneWidgetProps {
   layout?: 'widget' | 'fullpage';
   theme?: 'light' | 'dark' | 'admin';
@@ -51,12 +54,14 @@ export function SoftphoneWidget({
     toggleMute,
     toggleHold,
     sendDTMF,
+    blindTransfer,
     setMinimized,
     setPosition,
   } = useSoftphone();
 
   // Get endpoint selection config (for admin mode)
   const selectedEndpointConfig = useSelectedEndpointConfig();
+  const clearSelection = useClearSelection();
 
   // Use endpoint config if available, otherwise use provided sipConfig
   const effectiveConfig = selectedEndpointConfig || sipConfig;
@@ -101,6 +106,7 @@ export function SoftphoneWidget({
           onToggleMute={toggleMute}
           onToggleHold={toggleHold}
           onSendDTMF={sendDTMF}
+          onTransfer={blindTransfer}
         />
       );
     }
@@ -122,7 +128,10 @@ export function SoftphoneWidget({
 
         {isConnected && (
           <Button
-            onClick={disconnect}
+            onClick={() => {
+              disconnect();
+              clearSelection(); // Clear endpoint selection to prevent auto-reconnect
+            }}
             variant="outline"
             className="w-full"
           >

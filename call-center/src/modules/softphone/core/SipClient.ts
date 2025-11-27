@@ -105,7 +105,8 @@ export class SipClient {
         port: config.port,
         username: config.username,
         endpointId: config.endpointId,
-        password: config.password ? `***${config.password.substring(config.password.length - 4)}` : '(empty)',
+        password: config.password ? `${config.password.substring(0, 3)}***${config.password.substring(config.password.length - 3)}` : '(empty)',
+        passwordLength: config.password?.length || 0,
         displayName: config.displayName,
         realm: config.realm,
       });
@@ -119,8 +120,9 @@ export class SipClient {
       // Stop the stream immediately (we just needed permissions)
       stream.getTracks().forEach((track) => track.stop());
 
-      // Configure WebSocket
-      const wsUri = `wss://${config.server}:${config.port}/ws`;
+      // Configure WebSocket - Use domain for SSL certificate validity
+      // SSL certificates are issued for domain names, not IP addresses
+      const wsUri = `wss://${config.domain}:${config.port}/ws`;
 
       // ========================================================================
       // DEBUG: Log WebSocket URI
@@ -133,20 +135,20 @@ export class SipClient {
 
       const socket = new JsSIP.WebSocketInterface(wsUri);
 
-      // Configure User Agent with separate Public Identity and Private Identity
-      // - Public Identity (SIP URI): sip:endpointId@domain (e.g., sip:t24_1000@pishon.kabou.bj)
-      // - Private Identity (auth): username hash for authorization_user
+      // Configure User Agent - Match working OMAI/sipML5 softphone configuration
+      // Uses dual identity: Public Identity (endpoint ID in URI) + Private Identity (hash for auth)
+      // Based on captured working SIP REGISTER:
+      //   From: "Boris"<sip:t24_1000@pishon.kabou.bj>
+      //   Authorization: Digest username="c427673b525e7eb9496ed64cafc6315c",realm="asterisk"
       const sipDomain = config.domain || config.server;
-      const sipUri = `sip:${config.endpointId}@${sipDomain}`;  // Public Identity
-      const realm = config.realm || sipDomain;
+      const sipUri = `sip:${config.endpointId}@${sipDomain}`;  // Public Identity: sip:t24_1000@pishon.kabou.bj
 
       const uaConfig: JsSIPConfig = {
         sockets: [socket],
-        uri: sipUri,                                    // Public Identity (sip:t24_1000@pishon.kabou.bj)
-        authorization_user: config.username,            // Private Identity (random hash for auth)
+        uri: sipUri,                                    // Public Identity (endpoint ID)
+        authorization_user: config.username,            // Private Identity (hash for Digest auth)
         password: config.password,
         display_name: config.displayName || config.endpointId,
-        realm: realm,
         register: true,
         session_timers: false,
         pcConfig: {
@@ -154,9 +156,11 @@ export class SipClient {
             { urls: 'stun:stun.l.google.com:19302' },
           ],
         },
-        connection_recovery_min_interval: 2,
-        connection_recovery_max_interval: 30,
+        // Increase reconnection intervals to avoid excessive retries
+        connection_recovery_min_interval: 4,
+        connection_recovery_max_interval: 60,
         register_expires: 600,
+        // DO NOT specify realm - JsSIP will use "asterisk" from 401 challenge automatically
       };
 
       // ========================================================================
@@ -170,15 +174,15 @@ export class SipClient {
         authorization_user: config.username,
         password: config.password ? `***${config.password.substring(config.password.length - 4)}` : '(empty)',
         display_name: config.displayName || config.endpointId,
-        realm: realm,
         register: true,
         register_expires: 600,
+        connection_recovery_min_interval: 4,
+        connection_recovery_max_interval: 60,
       });
       console.log('');
-      console.log('📝 Expected SIP REGISTER Message Format:');
-      console.log('   From: <sip:' + config.endpointId + '@' + sipDomain + '>');
-      console.log('   To:   <sip:' + config.endpointId + '@' + sipDomain + '>');
-      console.log('   Authorization: Digest username="' + config.username + '", realm="' + realm + '"');
+      console.log('📝 Expected SIP REGISTER Message Format (like OMAI/sipML5):');
+      console.log('   From/To: "' + (config.displayName || config.endpointId) + '"<' + sipUri + '>');
+      console.log('   Authorization: Digest username="' + config.username + '",realm="asterisk",...');
       console.log('');
       console.log('╔═══════════════════════════════════════════════════════════════╗');
       console.log('║           ⚙️  STARTING JSSIP USER AGENT                       ║');

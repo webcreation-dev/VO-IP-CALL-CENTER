@@ -34,18 +34,22 @@ export default function App() {
 function LoginForm({ onLogin }: { onLogin: (config: SipConfig) => void }) {
   const [formData, setFormData] = useState({
     server: 'pishon.kabou.bj',
+    domain: 'pishon.kabou.bj',
     port: '8089',
     username: '',
     password: '',
+    endpointId: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onLogin({
       server: formData.server,
+      domain: formData.domain,
       port: parseInt(formData.port),
       username: formData.username,
       password: formData.password,
+      endpointId: formData.endpointId || formData.username, // Fallback to username if not provided
     });
   };
 

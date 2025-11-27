@@ -79,6 +79,7 @@ export interface CallInfo {
   isMuted: boolean;
   isOnHold: boolean;
   session?: JsSIPSession;        // JsSIP session object
+  channelName?: string;          // Asterisk channel name (e.g., "PJSIP/t24_1000-00000001") for AMI/ARI operations
 }
 
 // ============================================================================
@@ -154,6 +155,7 @@ export interface SoftphoneState {
   toggleMute: () => void;
   toggleHold: () => void;
   sendDTMF: (digit: string) => void;
+  blindTransfer: (extension: string, context?: string) => Promise<void>;
 
   updateAudioSettings: (settings: Partial<AudioSettings>) => void;
   refreshDevices: () => Promise<void>;

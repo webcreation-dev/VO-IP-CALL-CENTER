@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SipClient } from '../core/SipClient';
 import { AudioManager } from '../core/AudioManager';
+import callsService, { ChannelState } from '@/api/calls';
 import type {
   SipConfig,
   CallInfo,
@@ -21,11 +22,13 @@ import type {
 // Singleton instances
 let sipClient: SipClient | null = null;
 let audioManager: AudioManager | null = null;
+let eventListenersAttached = false;
 
 // Get or create SipClient instance
 function getSipClient(): SipClient {
   if (!sipClient) {
     sipClient = new SipClient();
+    eventListenersAttached = false; // Reset flag when new client is created
   }
   return sipClient;
 }
@@ -86,8 +89,18 @@ export const useSoftphoneStore = create<SoftphoneStoreState>()(
         try {
           const client = getSipClient();
 
-          // Setup event listeners
-          client.on('connectionStateChanged', (status: string) => {
+          // Prevent connecting if already connected or connecting
+          const currentStatus = get().connection.status;
+          if (currentStatus === 'connecting' || currentStatus === 'connected' || currentStatus === 'registered') {
+            console.log('[SoftphoneStore] Already connected or connecting, skipping connect()');
+            return;
+          }
+
+          // Only setup event listeners once to prevent duplicate handlers
+          if (!eventListenersAttached) {
+            eventListenersAttached = true;
+
+            client.on('connectionStateChanged', (status: string) => {
             set({
               connection: {
                 ...get().connection,
@@ -222,6 +235,7 @@ export const useSoftphoneStore = create<SoftphoneStoreState>()(
               },
             });
           });
+          } // End of eventListenersAttached check
 
           // Connect
           set({
@@ -364,6 +378,59 @@ export const useSoftphoneStore = create<SoftphoneStoreState>()(
       sendDTMF: (digit: string) => {
         const client = getSipClient();
         client.sendDTMF(digit);
+      },
+
+      blindTransfer: async (extension: string, context: string = 'from-internal') => {
+        const { currentCall, connection } = get();
+
+        if (!currentCall) {
+          throw new Error('Aucun appel actif à transférer');
+        }
+
+        // Get the channel name - either from the call info or fetch from API
+        let channelName = currentCall.channelName;
+
+        if (!channelName) {
+          // Fetch active channel from API using the endpoint ID
+          const sipConfig = connection.sipConfig;
+          if (!sipConfig?.endpointId) {
+            throw new Error('Configuration SIP non disponible');
+          }
+
+          try {
+            const channels = await callsService.getAllChannels();
+            // Find the channel that matches our endpoint
+            const activeChannel = channels.find(
+              (ch) =>
+                ch.name.includes(sipConfig.endpointId) &&
+                (ch.state === ChannelState.UP || ch.state === ChannelState.RINGING)
+            );
+
+            if (!activeChannel) {
+              throw new Error('Canal actif non trouvé');
+            }
+
+            channelName = activeChannel.name;
+
+            // Store channelName for future use
+            set({
+              currentCall: { ...currentCall, channelName },
+            });
+          } catch (error) {
+            console.error('Failed to fetch channel:', error);
+            throw new Error('Impossible de récupérer le canal actif');
+          }
+        }
+
+        // Perform the blind transfer
+        await callsService.blindTransfer({
+          channelName,
+          extension,
+          context,
+        });
+
+        // The call will be terminated by Asterisk after successful transfer
+        // The callEnded event will clean up the state
       },
 
       // =======================================================================

@@ -262,7 +262,7 @@ export default function EndpointFormModal({
           tenantId: data.tenantId,
           displayName: data.displayName,
           password: data.password,
-          callerid: data.callerid,
+          callerid: data.callerid, // Just the name, we'll update with full format after creation
           context: data.context || defaultContext,
           transport: data.transport,
           codecs: data.codecs,
@@ -274,6 +274,15 @@ export default function EndpointFormModal({
         };
 
         const response: EndpointCreateResponse = await endpointsService.createEndpoint(createData);
+
+        // Form the complete callerId with the generated number
+        if (data.callerid && response.agentNumber) {
+          const fullCallerId = `"${data.callerid}" <${response.agentNumber}>`;
+          // Update the endpoint with the complete callerId
+          await endpointsService.updateEndpoint(response.endpoint.id, {
+            callerid: fullCallerId,
+          });
+        }
 
         // Store credentials and show dialog
         setCredentials({
@@ -365,6 +374,63 @@ export default function EndpointFormModal({
               </div>
             )}
 
+            {/* Context */}
+            <div className="space-y-2">
+              <Label htmlFor="context">Contexte</Label>
+              <Select
+                value={watch('context')}
+                onValueChange={(value) => setValue('context', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un contexte" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contexts?.map((context: TenantContext) => (
+                    <SelectItem key={context.id} value={context.name}>
+                      {contextsService.getDisplayName(context)}
+                      {context.isPrimary && ' (Défaut)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.context && (
+                <p className="text-sm text-destructive">{errors.context.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Contexte dialplan pour cet endpoint
+              </p>
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="roleId">Rôle (optionnel)</Label>
+              <Select
+                value={watch('roleId')?.toString() || 'none'}
+                onValueChange={(value) => {
+                  setValue('roleId', value === 'none' ? undefined : parseInt(value));
+                }}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Aucun rôle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Aucun rôle</SelectItem>
+                  {Array.isArray(roles) && roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.displayName} - Niveau {role.level}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.roleId && (
+                <p className="text-sm text-destructive">{errors.roleId.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Définit les permissions d'appel basées sur la hiérarchie
+              </p>
+            </div>
+
             {/* Display Name (Optional) */}
             <div className="space-y-2">
               <Label htmlFor="displayName">
@@ -399,49 +465,19 @@ export default function EndpointFormModal({
               )}
             </div>
 
-            {/* Caller ID */}
+            {/* Caller ID (Nom Prénom) */}
             <div className="space-y-2">
-              <Label htmlFor="callerid">Caller ID</Label>
+              <Label htmlFor="callerid">Nom de l'appelant</Label>
               <Input
                 id="callerid"
                 {...register('callerid')}
-                placeholder="Jean Dupont <101>"
+                placeholder="Jean Dupont"
               />
               {errors.callerid && (
                 <p className="text-sm text-destructive">{errors.callerid.message}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Format: "Nom Prénom &lt;numéro&gt;"
-              </p>
-            </div>
-
-            {/* Role Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="roleId">Rôle (optionnel)</Label>
-              <Select
-                value={watch('roleId')?.toString() || 'none'}
-                onValueChange={(value) => {
-                  setValue('roleId', value === 'none' ? undefined : parseInt(value));
-                }}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Aucun rôle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Aucun rôle</SelectItem>
-                  {Array.isArray(roles) && roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.displayName} - Niveau {role.level}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.roleId && (
-                <p className="text-sm text-destructive">{errors.roleId.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Définit les permissions d'appel basées sur la hiérarchie
+                Le numéro sera ajouté automatiquement lors de la création
               </p>
             </div>
           </div>
@@ -451,33 +487,6 @@ export default function EndpointFormModal({
             <h3 className="text-sm font-semibold text-foreground">
               Configuration SIP
             </h3>
-
-            {/* Context */}
-            <div className="space-y-2">
-              <Label htmlFor="context">Contexte</Label>
-              <Select
-                value={watch('context')}
-                onValueChange={(value) => setValue('context', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un contexte" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contexts?.map((context: TenantContext) => (
-                    <SelectItem key={context.id} value={context.name}>
-                      {contextsService.getDisplayName(context)}
-                      {context.isPrimary && ' (Défaut)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.context && (
-                <p className="text-sm text-destructive">{errors.context.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Contexte dialplan pour cet endpoint
-              </p>
-            </div>
 
             {/* Transport */}
             <div className="space-y-2">
