@@ -28,12 +28,10 @@ async function bootstrap() {
   // Security - Helmet
   app.use(helmet());
 
-  // CORS
-  const corsOrigin = configService.get('security.corsOrigin');
+  // CORS - Allow all origins
   app.enableCors({
-    origin: corsOrigin,
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
   });
 
   // Global validation pipe

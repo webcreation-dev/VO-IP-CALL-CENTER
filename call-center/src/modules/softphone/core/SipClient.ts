@@ -219,6 +219,13 @@ export class SipClient {
     }
 
     if (this.ua) {
+      // Désenregistrer explicitement avant de stopper pour éviter
+      // que JsSIP ne tente de se ré-enregistrer
+      try {
+        this.ua.unregister({ all: true });
+      } catch (e) {
+        // Ignorer si déjà désenregistré
+      }
       this.ua.stop();
       this.ua = null;
     }
