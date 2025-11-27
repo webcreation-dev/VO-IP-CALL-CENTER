@@ -248,41 +248,9 @@ export class QueuesController {
 
   // ========================================
   // QUEUE MEMBERS MANAGEMENT
-  // NOTE: Member management routes moved to QueueMembersController
-  // to avoid route conflicts and use proper DTOs
+  // All member management routes are handled by QueueMembersController
+  // at /queues/:queueName/members/* to use proper Realtime-aware logic
   // ========================================
-
-  @Delete(':name/members/:memberId')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR)
-  @ApiOperation({
-    summary: 'Remove member from queue',
-    description: 'Remove an agent/endpoint from the queue'
-  })
-  @ApiParam({ name: 'name', description: 'Queue name', example: 't1_support' })
-  @ApiParam({ name: 'memberId', description: 'Member interface (e.g., PJSIP/t1_101 or just t1_101)', example: 't1_101' })
-  @ApiResponse({
-    status: 200,
-    description: 'Member removed successfully',
-    schema: {
-      example: {
-        success: true,
-        data: {
-          queue: 't1_support',
-          interface: 'PJSIP/t1_101',
-          removed: true
-        },
-        timestamp: '2025-11-04T16:00:00.000Z'
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Invalid request or AMI not connected' })
-  @ApiResponse({ status: 404, description: 'Queue or member not found' })
-  async removeMember(
-    @Param('name') queueName: string,
-    @Param('memberId') memberId: string
-  ) {
-    return await this.queuesService.removeMember(null, queueName, memberId);
-  }
 
   @Patch(':name/members/:memberId/pause')
   @Roles(UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN, UserRole.SUPERVISOR, UserRole.AGENT)

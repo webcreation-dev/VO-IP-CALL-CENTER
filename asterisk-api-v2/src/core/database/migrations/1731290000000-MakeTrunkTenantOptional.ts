@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MakeTrunkTenantOptional1762776202000 implements MigrationInterface {
-  name = 'MakeTrunkTenantOptional1762776202000';
+export class MakeTrunkTenantOptional1731290000000 implements MigrationInterface {
+  name = 'MakeTrunkTenantOptional1731290000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Drop the existing foreign key constraint

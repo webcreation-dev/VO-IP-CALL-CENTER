@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class CreateMohClassesTable1762623800000 implements MigrationInterface {
-    name = 'CreateMohClassesTable1762623800000'
+export class CreateMohClassesTable1731280000000 implements MigrationInterface {
+    name = 'CreateMohClassesTable1731280000000'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Create enum types for MoH class

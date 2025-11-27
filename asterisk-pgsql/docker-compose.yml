@@ -14,22 +14,22 @@ services:
       - "./odbc.ini:/etc/odbc.ini"
       - "./odbcinst.ini:/etc/odbcinst.ini"
       - "./log/supervisor:/var/log/supervisor"
-    #ports:
-    #  - "5038:5038" # AMI
-    #  - "5060:5060/udp"
-    #  - "5060:5060/tcp"
-    #  - "5061:5061/udp"
-    #  - "5061:5061/tcp"
-    #  - "8088:8088" # HTTP
-    #  - "8089:8089" # HTTPS / WSS
-    #  - "10000-10200:10000-10200/udp" # RTP
+      - "./config/asterisk-dynamic:/etc/asterisk/dynamic"
+    ports:
+      - "5038:5038" # AMI
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5061:5061/udp"
+      - "5061:5061/tcp"
+      - "8088:8088" # HTTP
+      - "8089:8089" # HTTPS / WSS
+      - "10000-10200:10000-10200/udp" # RTP
     depends_on:
       api-db:
         condition: service_healthy
     restart: always
-    #networks:
-    #  - asterisk-network
-    network_mode: host
+    networks:
+      - asterisk-network
 
   # ============================================
   # DATABASE UNIFIÉE (Asterisk + API)

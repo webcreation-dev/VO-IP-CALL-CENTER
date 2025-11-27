@@ -1,4 +1,4 @@
-#!/bin/bash
+d#!/bin/bash
 
 ##############################################################################
 # Script principal d'exécution de TOUS les tests

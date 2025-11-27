@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddTrunkRoutingFields1762619657000 implements MigrationInterface {
-    name = 'AddTrunkRoutingFields1762619657000'
+export class AddTrunkRoutingFields1731260000000 implements MigrationInterface {
+    name = 'AddTrunkRoutingFields1731260000000'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Add routing configuration columns to sip_trunks table

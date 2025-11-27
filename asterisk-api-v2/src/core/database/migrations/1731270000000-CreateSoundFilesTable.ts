@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class CreateSoundFilesTable1762622706000 implements MigrationInterface {
-    name = 'CreateSoundFilesTable1762622706000'
+export class CreateSoundFilesTable1731270000000 implements MigrationInterface {
+    name = 'CreateSoundFilesTable1731270000000'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Create enum type for sound file category

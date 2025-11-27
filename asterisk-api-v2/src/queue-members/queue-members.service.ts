@@ -276,11 +276,22 @@ export class QueueMembersService {
     queueName: string,
     memberName: string,
   ): Promise<void> {
-    // TEST MODE: use default tenantId if null
-    const effectiveTenantId = tenantId ?? 1;
-    const prefixedQueue = TenantPrefixUtil.hasPrefix(queueName)
-      ? queueName
-      : TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    // Extract tenant ID from prefixed queue name if not provided
+    let effectiveTenantId = tenantId;
+    let prefixedQueue = queueName;
+
+    if (TenantPrefixUtil.hasPrefix(queueName)) {
+      const parsed = TenantPrefixUtil.removePrefix(queueName);
+      if (effectiveTenantId === null) {
+        effectiveTenantId = parsed.tenantId;
+      }
+      prefixedQueue = queueName; // Already prefixed
+    } else {
+      // Need to add prefix
+      effectiveTenantId = tenantId ?? 1;
+      prefixedQueue = TenantPrefixUtil.addPrefix(effectiveTenantId, queueName);
+    }
+
     const prefixedEndpoint = TenantPrefixUtil.hasPrefix(memberName)
       ? memberName
       : TenantPrefixUtil.addPrefix(effectiveTenantId, memberName);

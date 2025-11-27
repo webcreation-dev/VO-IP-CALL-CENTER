@@ -12,8 +12,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * 3. Restore capability for accidentally deleted records
  * 4. Clean Asterisk configuration via database views
  */
-export class AddSoftDeleteColumns1762866000000 implements MigrationInterface {
-  name = 'AddSoftDeleteColumns1762866000000';
+export class AddSoftDeleteColumns1731300000000 implements MigrationInterface {
+  name = 'AddSoftDeleteColumns1731300000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Tables to add soft delete support
