@@ -129,63 +129,8 @@ export class AudioManager {
   // ==========================================================================
 
   private setupDefaultRingtone(): void {
-    // Generate a simple ringtone using Web Audio API
-    try {
-      const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
-
-      oscillator.frequency.value = 440; // A4 note
-      oscillator.type = 'sine';
-
-      // Create a simple ring pattern
-      const duration = 2;
-      const pattern = [
-        { time: 0.0, value: 0.3 },
-        { time: 0.1, value: 0.3 },
-        { time: 0.2, value: 0 },
-        { time: 0.3, value: 0.3 },
-        { time: 0.4, value: 0.3 },
-        { time: 0.5, value: 0 },
-        { time: duration, value: 0 },
-      ];
-
-      pattern.forEach((point) => {
-        gainNode.gain.setValueAtTime(point.value, context.currentTime + point.time);
-      });
-
-      // Create a data URL for the audio
-      const sampleRate = context.sampleRate;
-      const channels = 1;
-      const buffer = context.createBuffer(channels, duration * sampleRate, sampleRate);
-      const data = buffer.getChannelData(0);
-
-      for (let i = 0; i < data.length; i++) {
-        const t = i / sampleRate;
-        const freq = 440;
-        data[i] = Math.sin(2 * Math.PI * freq * t) * 0.3;
-
-        // Apply envelope
-        if (t < 0.2) {
-          data[i] *= 1;
-        } else if (t < 0.5) {
-          data[i] = 0;
-        } else if (t < 0.7) {
-          data[i] *= 1;
-        } else {
-          data[i] = 0;
-        }
-      }
-
-      // Note: For simplicity, we'll use a default ringtone URL instead
-      // You can add your own ringtone file to public/assets/sounds/
-      this.ringtoneAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-    } catch (error) {
-      console.error('Failed to setup default ringtone:', error);
-    }
+    // Use the ringtone file from assets
+    this.ringtoneAudio.src = '/assets/sounds/ringtone.mp3';
   }
 
   private setupDefaultRingback(): void {

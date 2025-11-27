@@ -461,6 +461,36 @@ CREATE INDEX IF NOT EXISTS idx_cdr_calldate ON cdr(calldate);
 CREATE INDEX IF NOT EXISTS idx_cdr_uniqueid ON cdr(uniqueid);
 CREATE INDEX IF NOT EXISTS idx_cdr_tenant_calldate ON cdr(tenant_id, calldate);
 
+-- Fonction pour extraire automatiquement tenant_id du canal ou contexte
+CREATE OR REPLACE FUNCTION extract_tenant_id_from_cdr()
+RETURNS TRIGGER AS $$
+DECLARE
+    extracted_id INTEGER;
+BEGIN
+    -- Essayer d'extraire depuis le channel (PJSIP/t1_1001-00000001)
+    IF NEW.channel IS NOT NULL AND NEW.channel ~ '^PJSIP/t[0-9]+_' THEN
+        extracted_id := (regexp_match(NEW.channel, '^PJSIP/t([0-9]+)_'))[1]::INTEGER;
+    -- Sinon essayer depuis dcontext (t1_default)
+    ELSIF NEW.dcontext IS NOT NULL AND NEW.dcontext ~ '^t[0-9]+_' THEN
+        extracted_id := (regexp_match(NEW.dcontext, '^t([0-9]+)_'))[1]::INTEGER;
+    END IF;
+
+    -- Assigner seulement si tenant_id n'est pas déjà défini
+    IF NEW.tenant_id IS NULL AND extracted_id IS NOT NULL THEN
+        NEW.tenant_id := extracted_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger pour extraire tenant_id automatiquement lors de l'insertion d'un CDR
+DROP TRIGGER IF EXISTS cdr_extract_tenant_id ON cdr;
+CREATE TRIGGER cdr_extract_tenant_id
+    BEFORE INSERT ON cdr
+    FOR EACH ROW
+    EXECUTE FUNCTION extract_tenant_id_from_cdr();
+
 -- ============================================
 -- SECTION 10: SYSTÈME IVR
 -- ============================================

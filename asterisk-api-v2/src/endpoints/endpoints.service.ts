@@ -392,7 +392,9 @@ export class EndpointsService {
     const skip = (page - 1) * limit;
 
     // Query database
-    const query = this.endpointRepository.createQueryBuilder('endpoint');
+    const query = this.endpointRepository.createQueryBuilder('endpoint')
+      .leftJoin('endpoint.role', 'role')
+      .addSelect(['role.id', 'role.displayName', 'role.level', 'role.canCallSameLevel', 'role.canCallLowerLevel', 'role.canCallHigherLevel']);
 
     // Filter by tenant (unless admin)
     if (tenantId !== null) {

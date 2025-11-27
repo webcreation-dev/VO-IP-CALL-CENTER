@@ -279,7 +279,8 @@ export default function EndpointFormModal({
         if (data.callerid && response.agentNumber) {
           const fullCallerId = `"${data.callerid}" <${response.agentNumber}>`;
           // Update the endpoint with the complete callerId
-          await endpointsService.updateEndpoint(response.endpoint.id, {
+          // response.id car EndpointCreateResponse étend directement Endpoint
+          await endpointsService.updateEndpoint(response.id, {
             callerid: fullCallerId,
           });
         }
