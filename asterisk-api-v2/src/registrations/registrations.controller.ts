@@ -139,13 +139,29 @@ export class RegistrationsController {
       ],
     },
   })
+  // async findAll(@Query('with_status') withStatus?: string) {
+  //   const shouldIncludeStatus = withStatus === 'true' || withStatus === '1';
+  //   if (shouldIncludeStatus) {
+  //     return this.registrationsService.findAllWithStatus();
+  //   }
+  //   return this.registrationsService.findAll();
+  // }
+
   async findAll(@Query('with_status') withStatus?: string) {
     const shouldIncludeStatus = withStatus === 'true' || withStatus === '1';
-    if (shouldIncludeStatus) {
-      return this.registrationsService.findAllWithStatus();
-    }
-    return this.registrationsService.findAll();
+  
+    const data = shouldIncludeStatus
+      ? await this.registrationsService.findAllWithStatus()
+      : await this.registrationsService.findAll();
+  
+    // On retire outbound_auth
+    const sanitized = data.map(({ outbound_auth, ...rest }) => rest);
+  
+    // On renvoie ça, sans modifier le type d'origine
+    return sanitized as any;
   }
+  
+  
 
   /**
    * Get a single SIP trunk registration
