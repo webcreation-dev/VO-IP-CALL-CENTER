@@ -27,6 +27,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: ['pishon.kabou.bj'],
     // SSL handled by Nginx reverse proxy
   },
 })
