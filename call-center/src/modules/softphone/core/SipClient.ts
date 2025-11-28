@@ -154,6 +154,12 @@ export class SipClient {
         pcConfig: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            {
+              urls: 'turn:pishon.kabou.bj:3478',
+              username: 'webrtcuser',
+              credential: 'secretpassword',
+            },
           ],
         },
         // Increase reconnection intervals to avoid excessive retries
@@ -266,7 +272,15 @@ export class SipClient {
           video: false,
         },
         pcConfig: {
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            {
+              urls: 'turn:pishon.kabou.bj:3478',
+              username: 'webrtcuser',
+              credential: 'secretpassword',
+            },
+          ],
         },
       };
 
@@ -296,7 +310,15 @@ export class SipClient {
           video: false,
         },
         pcConfig: {
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            {
+              urls: 'turn:pishon.kabou.bj:3478',
+              username: 'webrtcuser',
+              credential: 'secretpassword',
+            },
+          ],
         },
       });
     } catch (error: any) {
