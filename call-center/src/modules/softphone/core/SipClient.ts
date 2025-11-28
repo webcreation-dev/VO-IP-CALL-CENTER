@@ -610,6 +610,41 @@ export class SipClient {
     this.log(`🔵 ICE Connection State: ${peerConnection.iceConnectionState}`);
     this.log(`🔵 Signaling State: ${peerConnection.signalingState}`);
 
+    // DEBUG: Log ICE configuration being used
+    const config = peerConnection.getConfiguration();
+    console.log('╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║           🧊 ICE CONFIGURATION DEBUG                          ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
+    console.log('🔧 ICE Servers:', JSON.stringify(config.iceServers, null, 2));
+    console.log('🔧 ICE Transport Policy:', config.iceTransportPolicy);
+    console.log('🔧 ICE Candidate Pool Size:', config.iceCandidatePoolSize);
+
+    // Track ICE gathering time
+    const iceStartTime = Date.now();
+
+    // Log ICE gathering state changes
+    peerConnection.onicegatheringstatechange = () => {
+      const elapsed = ((Date.now() - iceStartTime) / 1000).toFixed(2);
+      this.log(`🧊 ICE Gathering State: ${peerConnection.iceGatheringState} (${elapsed}s)`);
+      if (peerConnection.iceGatheringState === 'complete') {
+        console.log(`✅ ICE Gathering completed in ${elapsed} seconds`);
+      }
+    };
+
+    // Log each ICE candidate as it's discovered
+    peerConnection.onicecandidate = (event) => {
+      const elapsed = ((Date.now() - iceStartTime) / 1000).toFixed(2);
+      if (event.candidate) {
+        const candidateStr = event.candidate.candidate;
+        const type = candidateStr.includes('typ relay') ? '🟢 RELAY' :
+                     candidateStr.includes('typ srflx') ? '🟡 SRFLX' :
+                     candidateStr.includes('typ host') ? '🔵 HOST' : '⚪ OTHER';
+        console.log(`🧊 [${elapsed}s] ICE Candidate ${type}:`, candidateStr);
+      } else {
+        console.log(`🧊 [${elapsed}s] ICE Candidate gathering finished (null candidate)`);
+      }
+    };
+
     peerConnection.oniceconnectionstatechange = () => {
       this.log(`🔵 ICE Connection State: ${peerConnection.iceConnectionState}`);
       if (
