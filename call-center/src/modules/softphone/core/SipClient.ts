@@ -153,15 +153,21 @@ export class SipClient {
         session_timers: false,
         pcConfig: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:pishon.kabou.bj:3478' },
+            // TURN first - provides relay candidates immediately
             {
-              urls: 'turn:pishon.kabou.bj:3478',
+              urls: [
+                'turn:pishon.kabou.bj:3478?transport=udp',
+                'turn:pishon.kabou.bj:3478?transport=tcp',
+              ],
               username: 'webrtcuser',
               credential: 'secretpassword',
             },
+            // STUN as fallback for direct connection
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            { urls: 'stun:stun.l.google.com:19302' },
           ],
-          iceCandidatePoolSize: 10, // Pre-allocate candidates to speed up ICE gathering
+          iceCandidatePoolSize: 10,
+          iceTransportPolicy: 'relay', // Force TURN only - skip STUN timeout
         },
         // Increase reconnection intervals to avoid excessive retries
         connection_recovery_min_interval: 4,
@@ -274,15 +280,21 @@ export class SipClient {
         },
         pcConfig: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:pishon.kabou.bj:3478' },
+            // TURN first - provides relay candidates immediately
             {
-              urls: 'turn:pishon.kabou.bj:3478',
+              urls: [
+                'turn:pishon.kabou.bj:3478?transport=udp',
+                'turn:pishon.kabou.bj:3478?transport=tcp',
+              ],
               username: 'webrtcuser',
               credential: 'secretpassword',
             },
+            // STUN as fallback for direct connection
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            { urls: 'stun:stun.l.google.com:19302' },
           ],
           iceCandidatePoolSize: 10,
+          iceTransportPolicy: 'relay', // Force TURN only - skip STUN timeout
         },
         rtcOfferConstraints: {
           iceRestart: true,
@@ -316,15 +328,21 @@ export class SipClient {
         },
         pcConfig: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:pishon.kabou.bj:3478' },
+            // TURN first - provides relay candidates immediately
             {
-              urls: 'turn:pishon.kabou.bj:3478',
+              urls: [
+                'turn:pishon.kabou.bj:3478?transport=udp',
+                'turn:pishon.kabou.bj:3478?transport=tcp',
+              ],
               username: 'webrtcuser',
               credential: 'secretpassword',
             },
+            // STUN as fallback for direct connection
+            { urls: 'stun:pishon.kabou.bj:3478' },
+            { urls: 'stun:stun.l.google.com:19302' },
           ],
           iceCandidatePoolSize: 10,
+          iceTransportPolicy: 'relay', // Force TURN only - skip STUN timeout
         },
       });
     } catch (error: any) {
