@@ -299,6 +299,15 @@ export class SipClient {
         rtcOfferConstraints: {
           iceRestart: true,
         },
+        // Stop ICE gathering as soon as we have a relay candidate
+        eventHandlers: {
+          icecandidate: (event: any) => {
+            if (event.candidate && event.candidate.type === 'relay') {
+              console.log('🟢 Candidat RELAY reçu, arrêt du gathering ICE');
+              event.ready();
+            }
+          },
+        },
       };
 
       this.log(`📞 Calling ${number}...`);
@@ -343,6 +352,15 @@ export class SipClient {
           ],
           iceCandidatePoolSize: 10,
           iceTransportPolicy: 'relay', // Force TURN only - skip STUN timeout
+        },
+        // Stop ICE gathering as soon as we have a relay candidate
+        eventHandlers: {
+          icecandidate: (event: any) => {
+            if (event.candidate && event.candidate.type === 'relay') {
+              console.log('🟢 Candidat RELAY reçu, arrêt du gathering ICE');
+              event.ready();
+            }
+          },
         },
       });
     } catch (error: any) {
