@@ -130,6 +130,15 @@
           <input type="text" id="sipUser" value="63a77c75ab4b2dd080d6db29e0f239fa" placeholder="Username" />
         </div>
         <div class="input-group">
+          <label>Auth User (Private Identity):</label>
+          <input
+            type="text"
+            id="sipAuthUser"
+            value=""
+            placeholder="Auth username (laisser vide si identique au SIP User)"
+          />
+        </div>
+        <div class="input-group">
           <label>Mot de passe:</label>
           <input
             type="password"
@@ -341,16 +350,18 @@
           const server = document.getElementById('serverAddr').value;
           const port = document.getElementById('serverPort').value;
           const user = document.getElementById('sipUser').value;
+          const authUser = document.getElementById('sipAuthUser').value || user;  // Fallback au user si vide
           const pass = document.getElementById('sipPass').value;
-  
+
           if (!server || !port || !user || !pass) {
             showError('Remplissez tous les champs');
             return;
           }
-  
+
           log('🚀 Démarrage connexion SIP');
           log('🚀 Serveur: ' + server + ':' + port);
-          log('🚀 Utilisateur: ' + user);
+          log('🚀 Public Identity (user): ' + user);
+          log('🚀 Private Identity (authUser): ' + authUser);
   
           navigator.mediaDevices
             .getUserMedia({ audio: true, video: false })
@@ -370,7 +381,9 @@
             const configuration = {
               sockets: [socket],
               uri: `sip:${user}@${server}`,
+              authorization_user: authUser,  // Private Identity pour l'authentification
               password: pass,
+              realm: 'asterisk',             // Realm explicite
               register: true,
               display_name: user,
               session_timers: false,
@@ -802,53 +815,63 @@
 
           const configs = {
             // Demo CallCenter LOCAL - 4 agents
+            // Pour local, le user et authUser sont identiques (pas de hash)
             'local1': {
               server: 'localhost',
               port: '8089',
               user: `t${DEMO_TENANT_ID}_1000`,
+              authUser: `t${DEMO_TENANT_ID}_1000`,  // Même que user pour local
               password: 'demo1001'
             },
             'local2': {
               server: 'localhost',
               port: '8089',
               user: `t${DEMO_TENANT_ID}_1001`,
+              authUser: `t${DEMO_TENANT_ID}_1001`,
               password: 'demo1002'
             },
             'local3': {
               server: 'localhost',
               port: '8089',
               user: `t${DEMO_TENANT_ID}_1002`,
+              authUser: `t${DEMO_TENANT_ID}_1002`,
               password: 'demo1003'
             },
             'local4': {
               server: 'localhost',
               port: '8089',
               user: `t${DEMO_TENANT_ID}_1003`,
+              authUser: `t${DEMO_TENANT_ID}_1003`,
               password: 'demo1004'
             },
-            // Demo CallCenter VPS - 4 agents (usernames hashés par l'API)
+            // Demo CallCenter VPS - 4 agents
+            // user = Public Identity (endpoint ID), authUser = Private Identity (pour l'auth)
             'demo1': {
               server: 'pishon.kabou.bj',
               port: '8089',
-              user: '0705fbb1bb39729c4702d86df29d5888',  // t28_1000
+              user: 't28_1000',                              // Public Identity
+              authUser: '0705fbb1bb39729c4702d86df29d5888',  // Private Identity (auth)
               password: 'demo1001'
             },
             'demo2': {
               server: 'pishon.kabou.bj',
               port: '8089',
-              user: 'ca57437b6c87f351e245719b89b3287b',  // t28_1001
+              user: 't28_1001',
+              authUser: 'ca57437b6c87f351e245719b89b3287b',
               password: 'demo1002'
             },
             'demo3': {
               server: 'pishon.kabou.bj',
               port: '8089',
-              user: '949eb7d6c7216e06a1747151c3e6fc80',  // t28_1002
+              user: 't28_1002',
+              authUser: '949eb7d6c7216e06a1747151c3e6fc80',
               password: 'demo1003'
             },
             'demo4': {
               server: 'pishon.kabou.bj',
               port: '8089',
-              user: 'b1e9fc6ac4cb8b4d13548cf35f7b26e4',  // t28_1003
+              user: 't28_1003',
+              authUser: 'b1e9fc6ac4cb8b4d13548cf35f7b26e4',
               password: 'demo1004'
             },
             // Ancienne config IVR test
@@ -865,11 +888,13 @@
             document.getElementById('serverAddr').value = config.server;
             document.getElementById('serverPort').value = config.port;
             document.getElementById('sipUser').value = config.user;
+            document.getElementById('sipAuthUser').value = config.authUser || config.user;  // authUser ou fallback
             document.getElementById('sipPass').value = config.password;
-// docker logs -f asterisk | grep -i "ws\|websocket\|8089"
+
             log(`✅ Configuration chargée pour l'endpoint ${endpoint}`);
             log(`📋 Server: wss://${config.server}:${config.port}`);
-            log(`👤 User: ${config.user}`);
+            log(`👤 Public Identity (user): ${config.user}`);
+            log(`🔐 Private Identity (authUser): ${config.authUser || config.user}`);
           }
         }
 
