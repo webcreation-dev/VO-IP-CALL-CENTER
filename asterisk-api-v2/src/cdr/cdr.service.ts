@@ -26,8 +26,8 @@ export class CdrService {
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.cdrRepository
-      .createQueryBuilder('cdr')
-      .where('cdr.tenantId = :tenantId', { tenantId });
+      .createQueryBuilder('cdr');
+      // .where('cdr.tenantId = :tenantId', { tenantId });
 
     // Apply filters
     if (filter.src) {
