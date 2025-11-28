@@ -13,7 +13,7 @@ export class AriService implements OnModuleInit, OnModuleDestroy {
    * List of Stasis applications to start.
    * All apps are started centrally here to ensure proper initialization order.
    */
-  private readonly STASIS_APPS = ['ivr-app', 'call-validator'];
+  private readonly STASIS_APPS = ['ivr-app', 'call-validator', 'directory-app'];
 
   constructor(private configService: ConfigService) {}
 

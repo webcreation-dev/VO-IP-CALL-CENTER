@@ -49,6 +49,7 @@ import { IvrModule } from './ivr/ivr.module';
 import { RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { SoundsModule } from './sounds/sounds.module';
+import { DirectoryAppModule } from './directory-app/directory-app.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { SoundsModule } from './sounds/sounds.module';
     RolesModule,
     PermissionsModule,
     SoundsModule,
+    DirectoryAppModule,
   ],
   controllers: [AppController],
   providers: [
