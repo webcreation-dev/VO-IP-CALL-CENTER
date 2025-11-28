@@ -1,0 +1,908 @@
+<script>
+    JsSIP.debug.enable('JsSIP:*');
+  </script>
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <title>WebRTC Client Asterisk - Corrigé</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          max-width: 600px;
+          margin: 50px auto;
+          padding: 20px;
+        }
+        h1 {
+          color: #333;
+        }
+        .section {
+          border: 1px solid #ddd;
+          padding: 15px;
+          margin: 15px 0;
+          border-radius: 4px;
+        }
+        #status {
+          padding: 10px;
+          background-color: #f0f0f0;
+          border-left: 4px solid #999;
+          border-radius: 4px;
+          font-weight: bold;
+        }
+        .input-group {
+          margin: 10px 0;
+        }
+        label {
+          display: block;
+          margin-bottom: 5px;
+          font-weight: bold;
+        }
+        input[type='text'],
+        input[type='password'] {
+          width: 100%;
+          padding: 8px;
+          box-sizing: border-box;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+        }
+        button {
+          padding: 10px 20px;
+          margin: 5px 5px 5px 0;
+          cursor: pointer;
+          background-color: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          font-size: 14px;
+        }
+        button:hover {
+          background-color: #0056b3;
+        }
+        button:disabled {
+          background-color: #ccc;
+          cursor: not-allowed;
+        }
+        .error {
+          color: #d32f2f;
+          margin-top: 10px;
+        }
+        .success {
+          color: #388e3c;
+          margin-top: 10px;
+        }
+        .info-box {
+          background-color: #fff3e0;
+          border-left: 4px solid #ff9800;
+          padding: 10px;
+          margin: 10px 0;
+          border-radius: 4px;
+          font-size: 13px;
+        }
+        audio {
+          margin-top: 10px;
+          width: 100%;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>🎙️ Client SIP WebRTC pour Asterisk</h1>
+  
+      <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
+        <strong>ℹ️ Demo CallCenter - Tests WebRTC</strong><br />
+        <strong>Serveur LOCAL:</strong> <code>localhost:8089</code> | <strong>VPS:</strong> <code>pishon.kabou.bj:8089</code><br />
+        <em>Utilisez les boutons pour charger les configurations</em>
+      </div>
+
+      <div class="section">
+        <h3>Configuration du serveur</h3>
+        <div style="margin-bottom: 15px;">
+          <strong>🏠 Demo CallCenter (LOCAL):</strong><br />
+          <button onclick="loadConfig('local1')" style="background-color: #28a745; margin: 3px;">👤 Agent 1 (Support)</button>
+          <button onclick="loadConfig('local2')" style="background-color: #28a745; margin: 3px;">👤 Agent 2 (Support)</button>
+          <button onclick="loadConfig('local3')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 3 (Ventes)</button>
+          <button onclick="loadConfig('local4')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 4 (Ventes)</button>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>🌐 Demo CallCenter (VPS):</strong><br />
+          <button onclick="loadConfig('demo1')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 1 (Support)</button>
+          <button onclick="loadConfig('demo2')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 2 (Support)</button>
+          <button onclick="loadConfig('demo3')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 3 (Ventes)</button>
+          <button onclick="loadConfig('demo4')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 4 (Ventes)</button>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>🔧 Autres configs:</strong>
+          <button onclick="loadConfig('ivr')" style="background-color: #6c757d; margin: 3px;">Endpoint IVR Test</button>
+        </div>
+        <div class="input-group">
+          <label>Adresse du serveur Asterisk:</label>
+          <input
+            type="text"
+            id="serverAddr"
+            value="pishon.kabou.bj"
+            placeholder="IP ou domaine"
+          />
+        </div>
+        <div class="input-group">
+          <label>Port WebSocket (wss):</label>
+          <input type="text" id="serverPort" value="8089" placeholder="8089" />
+        </div>
+        <div class="input-group">
+          <label>Votre numéro SIP (username):</label>
+          <input type="text" id="sipUser" value="63a77c75ab4b2dd080d6db29e0f239fa" placeholder="Username" />
+        </div>
+        <div class="input-group">
+          <label>Auth User (Private Identity):</label>
+          <input
+            type="text"
+            id="sipAuthUser"
+            value=""
+            placeholder="Auth username (laisser vide si identique au SIP User)"
+          />
+        </div>
+        <div class="input-group">
+          <label>Mot de passe:</label>
+          <input
+            type="password"
+            id="sipPass"
+            value="webrtc200"
+            placeholder="Mot de passe"
+          />
+        </div>
+      </div>
+  
+      <div class="section">
+        <h3>Connexion</h3>
+        <div id="status">🔴 Déconnecté</div>
+        <button id="connectBtn" onclick="connect()">Se connecter</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>
+          Se déconnecter
+        </button>
+        <div id="errorMsg" class="error"></div>
+      </div>
+  
+      <div class="section">
+        <h3>Appels</h3>
+        <div class="input-group">
+          <label>Numéro à appeler:</label>
+          <input type="text" id="callNumber" placeholder="Ex: 202" />
+        </div>
+        <button id="callBtn" onclick="makeCall()" disabled>Appeler</button>
+        <button id="hangupBtn" onclick="hangUp()" disabled>Raccrocher</button>
+        <div id="successMsg" class="success"></div>
+      </div>
+  
+      <audio id="remoteAudio" autoplay></audio>
+  
+      <div class="section">
+        <h3>🐛 Logs de Debug</h3>
+        <div
+          id="debugLogs"
+          style="
+            background-color: #000;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 300px;
+            overflow-y: auto;
+            border-radius: 4px;
+          "
+        ></div>
+        <button
+          onclick="document.getElementById('debugLogs').innerHTML = ''; log('🗑️ Logs effacés');"
+        >
+          Effacer les logs
+        </button>
+      </div>
+  
+      <script src="./jssip-3.10.0.min.js"></script>
+  
+      <div class="info-box">
+        <strong>ℹ️ Note:</strong> Cette application se connecte directement au
+        serveur Asterisk via WebSocket et WebRTC.<br />
+        Assurez-vous que Asterisk accepte les connexions WebSocket sur le port
+        8089.
+      </div>
+  
+      <script>
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        const statusDiv = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const callBtn = document.getElementById('callBtn');
+        const hangupBtn = document.getElementById('hangupBtn');
+  
+        let ua = null;
+        let currentSession = null;
+        let ringtoneAudio = null;
+  
+        function setupPeerConnectionHandlers(peerconnection) {
+          log('🔵 Configuration des handlers sur RTCPeerConnection');
+          log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
+          log('🔵 Signaling State: ' + peerconnection.signalingState);
+  
+          peerconnection.oniceconnectionstatechange = () => {
+            log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
+            if (peerconnection.iceConnectionState === 'connected' || peerconnection.iceConnectionState === 'completed') {
+              log('✅ ICE Connected - Le flux devrait passer maintenant');
+            }
+          };
+  
+          peerconnection.ontrack = event => {
+            log(`🎵 Track reçu: ${event.track.kind}`);
+            log(`🎵 Track readyState: ${event.track.readyState}`);
+            log(`🎵 Track ID: ${event.track.id}`);
+  
+            if (event.streams && event.streams[0]) {
+              const stream = event.streams[0];
+              log(`🎵 Stream actif: ${stream.active}`);
+  
+              event.track.enabled = true;
+  
+              const audioEl = document.getElementById('remoteAudio');
+              audioEl.srcObject = stream;
+              audioEl.volume = 1.0;
+              audioEl.muted = false;
+  
+              audioEl
+                .play()
+                .then(() => {
+                  log('✅ Audio play() réussi');
+                })
+                .catch(err => {
+                  log('❌ Audio play() échoué: ' + err.message);
+                });
+            }
+          };
+        }
+  
+        function attachMediaHandlers(session) {
+          log('🔧 Attachement des handlers média');
+  
+          if (session.connection) {
+            log('✨ RTCPeerConnection disponible immédiatement');
+            setupPeerConnectionHandlers(session.connection);
+          }
+  
+          session.on('peerconnection', data => {
+            log('🔵 Événement peerconnection déclenché');
+            setupPeerConnectionHandlers(data.peerconnection);
+          });
+  
+          session.on('progress', () => {
+            log('📞 Session en progression');
+          });
+  
+          session.on('accepted', () => {
+            log('✅ Appel accepté et établi');
+            statusDiv.textContent = `📞 En appel`;
+            stopRingtone();
+            hideIncomingCallUI();
+          });
+  
+          session.on('confirmed', () => {
+            log('✅ Appel confirmé');
+            stopRingtone();
+          });
+  
+          session.on('ended', () => {
+            log('📞 Session terminée');
+            statusDiv.textContent = '🟢 Enregistré';
+            currentSession = null;
+            stopRingtone();
+            hideIncomingCallUI();
+            updateUI();
+          });
+  
+          session.on('failed', data => {
+            log('❌ Session échouée: ' + data.cause);
+            showError("L'appel a échoué: " + data.cause);
+            statusDiv.textContent = '🟢 Enregistré';
+            currentSession = null;
+            stopRingtone();
+            hideIncomingCallUI();
+            updateUI();
+          });
+        }
+  
+        function log(msg) {
+          const timestamp = new Date().toLocaleTimeString();
+          const fullMsg = `[${timestamp}] ${msg}`;
+          console.log('[SIP] ' + fullMsg);
+  
+          const debugDiv = document.getElementById('debugLogs');
+          if (debugDiv) {
+            const logLine = document.createElement('div');
+            logLine.textContent = fullMsg;
+            debugDiv.appendChild(logLine);
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+          }
+        }
+  
+        function showError(msg) {
+          errorMsg.textContent = '❌ ' + msg;
+          console.error(msg);
+        }
+  
+        function showSuccess(msg) {
+          successMsg.textContent = '✅ ' + msg;
+          console.log(msg);
+        }
+  
+        function updateUI() {
+          const isRegistered = ua && ua.isRegistered();
+          const isConnected = ua && ua.isConnected();
+  
+          connectBtn.disabled = isConnected;
+          disconnectBtn.disabled = !isConnected;
+          callBtn.disabled = !isRegistered || currentSession;
+          hangupBtn.disabled = !isRegistered || !currentSession;
+  
+          if (!isConnected) {
+            statusDiv.textContent = '🔴 Déconnecté';
+          }
+        }
+  
+        function connect() {
+          errorMsg.textContent = '';
+          successMsg.textContent = '';
+  
+          const server = document.getElementById('serverAddr').value;
+          const port = document.getElementById('serverPort').value;
+          const user = document.getElementById('sipUser').value;
+          const authUser = document.getElementById('sipAuthUser').value || user;  // Fallback au user si vide
+          const pass = document.getElementById('sipPass').value;
+
+          if (!server || !port || !user || !pass) {
+            showError('Remplissez tous les champs');
+            return;
+          }
+
+          log('🚀 Démarrage connexion SIP');
+          log('🚀 Serveur: ' + server + ':' + port);
+          log('🚀 Public Identity (user): ' + user);
+          log('🚀 Private Identity (authUser): ' + authUser);
+  
+          navigator.mediaDevices
+            .getUserMedia({ audio: true, video: false })
+            .then(stream => {
+              log('✅ Permissions microphone OK');
+              stream.getTracks().forEach(track => track.stop());
+            })
+            .catch(err => {
+              log('❌ Permissions microphone: ' + err.message);
+            });
+  
+          try {
+            const socket = new JsSIP.WebSocketInterface(
+              `wss://${server}:${port}/ws`
+            );
+  
+            const configuration = {
+              sockets: [socket],
+              uri: `sip:${user}@${server}`,
+              authorization_user: authUser,  // Private Identity pour l'authentification
+              password: pass,
+              realm: 'asterisk',             // Realm explicite
+              register: true,
+              display_name: user,
+              session_timers: false,
+              pcConfig: {
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+              },
+            };
+  
+            ua = new JsSIP.UA(configuration);
+  
+            ua.on('connecting', () => {
+              log('Connexion en cours...');
+              statusDiv.textContent = '🟡 Connexion...';
+              updateUI();
+            });
+  
+            ua.on('connected', () => {
+              log('✅ WebSocket connecté');
+              updateUI();
+            });
+  
+            ua.on('disconnected', () => {
+              log('❌ Déconnecté');
+              showError('Déconnecté du serveur');
+              ua = null;
+              updateUI();
+            });
+  
+            ua.on('registered', (e) => {
+              log('✅ Enregistré avec succès');
+              log('   Response: ' + (e && e.response ? e.response.status_code : 'N/A'));
+              log('   URI: ' + ua.configuration.uri.toString());
+              log('   Contact: ' + (e && e.response ? e.response.getHeader('Contact') : 'N/A'));
+              showSuccess('Enregistré - Prêt à recevoir des appels');
+              statusDiv.textContent = '🟢 Enregistré';
+              updateUI();
+            });
+  
+            ua.on('unregistered', (e) => {
+              log('❌ Désenregistré');
+              log('   Cause: ' + (e ? e.cause : 'N/A'));
+              showError('Désenregistré');
+              ua = null;
+              updateUI();
+            });
+  
+            ua.on('registrationFailed', (e) => {
+              log('❌ Échec enregistrement');
+              log('   ===== DÉTAILS ÉCHEC REGISTRATION =====');
+              log('   Cause: ' + e.cause);
+              if (e.response) {
+                log('   Status code: ' + e.response.status_code);
+                log('   Reason phrase: ' + e.response.reason_phrase);
+                log('   Headers: ' + JSON.stringify(e.response.headers, null, 2));
+              }
+              log('   ======================================');
+              showError('Échec: ' + e.cause);
+              ua = null;
+              updateUI();
+            });
+  
+            ua.on('newRTCSession', data => {
+              log('🔔 EVENT newRTCSession DÉCLENCHÉ !');
+  
+              const session = data.session;
+              log(`📞 Nouvelle session RTC: ${session.direction}`);
+              log(`   Remote Identity: ${session.remote_identity.uri.user}`);
+              log(`   Session ID: ${session.id}`);
+  
+              if (currentSession) {
+                log('⚠️ Session en cours, rejet');
+                session.terminate({
+                  status_code: 486,
+                  reason_phrase: 'Busy Here',
+                });
+                return;
+              }
+  
+              currentSession = session;
+  
+              if (session.direction === 'incoming') {
+                const callerNumber = session.remote_identity.uri.user;
+                log(`📞 APPEL ENTRANT de ${callerNumber}`);
+                log(`   Affichage de l'UI d'appel entrant...`);
+  
+                statusDiv.textContent = `📞 Appel de ${callerNumber}`;
+                statusDiv.style.backgroundColor = '#fff3cd';
+                statusDiv.style.borderLeft = '4px solid #ffc107';
+  
+                // AUTO-ANSWER DÉSACTIVÉ - Utilisez l'UI
+                // log(`🤖 AUTO-ANSWER activé pour test`);
+                // setTimeout(() => {
+                //   session.answer({
+                //     mediaConstraints: { audio: true, video: false }
+                //   });
+                //   log('✅ Appel répondu automatiquement');
+                // }, 1000);
+  
+                playRingtone();
+                showIncomingCallUI(callerNumber);
+                log(`   ✅ UI d'appel entrant affichée`);
+              }
+  
+              attachMediaHandlers(session);
+              updateUI();
+            });
+  
+            ua.start();
+          } catch (e) {
+            showError('Erreur: ' + e.message);
+            ua = null;
+            updateUI();
+          }
+        }
+  
+        function disconnect() {
+          if (ua) {
+            ua.stop();
+          }
+        }
+  
+        function makeCall() {
+          const target = document.getElementById('callNumber').value;
+  
+          log('═══════════════════════════════════════════');
+          log('🚀 DÉBUT makeCall()');
+          log('   Target brut: "' + target + '"');
+          log('   Target length: ' + target.length);
+          log('   UA existe: ' + !!ua);
+          log('   UA registered: ' + (ua ? ua.isRegistered() : 'N/A'));
+          log('   UA connected: ' + (ua ? ua.isConnected() : 'N/A'));
+  
+          if (!target || !ua) {
+            log('❌ VALIDATION ÉCHOUÉE');
+            log('   Target vide: ' + !target);
+            log('   UA manquant: ' + !ua);
+            showError('Entrez un numéro');
+            return;
+          }
+  
+          if (currentSession) {
+            log('❌ Session déjà en cours');
+            showError('Appel déjà en cours');
+            return;
+          }
+  
+          // Construction de l'URI SIP
+          const sipUri = `sip:${target}@${ua.configuration.uri.host}`;
+          log('📞 URI SIP construit: ' + sipUri);
+          log('   Host depuis config: ' + ua.configuration.uri.host);
+          log('   User local: ' + ua.configuration.uri.user);
+  
+          const eventHandlers = {
+            progress: function (e) {
+              log('📞 EVENT: progress');
+              log('   Cause: ' + (e ? e.cause : 'N/A'));
+              playRingbackTone();
+              statusDiv.textContent = `📞 Appel de ${target}...`;
+            },
+            failed: function (e) {
+              log('❌ EVENT: failed');
+              log('   ===== DÉTAILS ÉCHEC =====');
+              log('   Cause: ' + e.cause);
+              log('   Originator: ' + e.originator);
+              if (e.message) {
+                log('   Message status: ' + e.message.status_code);
+                log('   Message reason: ' + e.message.reason_phrase);
+                log('   Message complet: ' + JSON.stringify(e.message, null, 2));
+              }
+              log('   =========================');
+              showError('Échec: ' + e.cause);
+              stopRingtone();
+              currentSession = null;
+              updateUI();
+            },
+            ended: function (e) {
+              log('📞 EVENT: ended');
+              log('   Cause: ' + (e ? e.cause : 'N/A'));
+              log('   Originator: ' + (e ? e.originator : 'N/A'));
+              stopRingtone();
+              currentSession = null;
+              updateUI();
+            },
+            confirmed: function () {
+              log('✅ EVENT: confirmed - Appel établi');
+              stopRingtone();
+            },
+            accepted: function () {
+              log('✅ EVENT: accepted - Appel accepté');
+              stopRingtone();
+            },
+            peerconnection: function (e) {
+              log('🔵 EVENT: peerconnection');
+              log('   PeerConnection state: ' + e.peerconnection.connectionState);
+            },
+            sending: function (e) {
+              log('📤 EVENT: sending');
+              log('   Request: ' + e.request.method);
+            },
+            icecandidate: function (e) {
+              log('🧊 EVENT: icecandidate');
+              if (e.candidate) {
+                log('   Candidate: ' + e.candidate.candidate);
+              } else {
+                log('   Fin des candidats ICE');
+              }
+            },
+          };
+  
+          const options = {
+            eventHandlers: eventHandlers,
+            mediaConstraints: { audio: true, video: false },
+          };
+  
+          log('📞 Options d\'appel préparées');
+          log('   Media constraints: audio=true, video=false');
+  
+          try {
+            log('🔄 Appel de ua.call()...');
+            const session = ua.call(sipUri, options);
+  
+            if (session) {
+              log('✅ Session créée avec succès');
+              log('   Session ID: ' + session.id);
+              log('   Session direction: ' + session.direction);
+              log('   Session status: ' + session.status);
+              currentSession = session;
+              attachMediaHandlers(session);
+              updateUI();
+            } else {
+              log('❌ ua.call() a retourné null/undefined');
+            }
+          } catch (err) {
+            log('❌ EXCEPTION dans makeCall()');
+            log('   Message: ' + err.message);
+            log('   Stack: ' + err.stack);
+            showError('Erreur: ' + err.message);
+          }
+  
+          log('🏁 FIN makeCall()');
+          log('═══════════════════════════════════════════');
+        }
+  
+        function hangUp() {
+          if (currentSession) {
+            currentSession.terminate();
+          }
+          stopRingtone();
+          hideIncomingCallUI();
+        }
+  
+        function playRingtone() {
+          try {
+            log('🔔 Sonnerie ENTRANT');
+            const audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+  
+            let ringtoneInterval = setInterval(() => {
+              const osc1 = audioContext.createOscillator();
+              const gain1 = audioContext.createGain();
+              osc1.connect(gain1);
+              gain1.connect(audioContext.destination);
+              osc1.frequency.value = 440;
+              gain1.gain.value = 0.3;
+              osc1.start();
+              setTimeout(() => osc1.stop(), 400);
+  
+              setTimeout(() => {
+                const osc2 = audioContext.createOscillator();
+                const gain2 = audioContext.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioContext.destination);
+                osc2.frequency.value = 440;
+                gain2.gain.value = 0.3;
+                osc2.start();
+                setTimeout(() => osc2.stop(), 400);
+              }, 600);
+            }, 4000);
+  
+            ringtoneAudio = { audioContext, interval: ringtoneInterval };
+          } catch (err) {
+            log('⚠️ Sonnerie impossible: ' + err.message);
+          }
+        }
+  
+        function playRingbackTone() {
+          try {
+            log('📞 Tonalité SORTANT');
+            const audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+  
+            let ringbackInterval = setInterval(() => {
+              const osc = audioContext.createOscillator();
+              const gain = audioContext.createGain();
+              osc.connect(gain);
+              gain.connect(audioContext.destination);
+              osc.frequency.value = 440;
+              gain.gain.value = 0.2;
+              osc.start();
+              setTimeout(() => osc.stop(), 1500);
+            }, 4000);
+  
+            ringtoneAudio = { audioContext, interval: ringbackInterval };
+          } catch (err) {
+            log('⚠️ Tonalité impossible: ' + err.message);
+          }
+        }
+  
+        function stopRingtone() {
+          if (ringtoneAudio) {
+            try {
+              if (ringtoneAudio.oscillator) {
+                ringtoneAudio.oscillator.stop();
+              }
+              if (ringtoneAudio.interval) {
+                clearInterval(ringtoneAudio.interval);
+              }
+              if (ringtoneAudio.audioContext) {
+                ringtoneAudio.audioContext.close();
+              }
+            } catch (err) {
+              log('⚠️ Arrêt sonnerie: ' + err.message);
+            }
+            ringtoneAudio = null;
+          }
+        }
+  
+        function showIncomingCallUI(callerNumber) {
+          let incomingDiv = document.getElementById('incomingCallDiv');
+          if (!incomingDiv) {
+            incomingDiv = document.createElement('div');
+            incomingDiv.id = 'incomingCallDiv';
+            incomingDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 1000;
+        text-align: center;
+        min-width: 300px;
+      `;
+            document.body.appendChild(incomingDiv);
+          }
+  
+          incomingDiv.innerHTML = `
+      <h2 style="margin-top: 0; color: #007bff;">📞 Appel entrant</h2>
+      <p style="font-size: 24px; font-weight: bold; margin: 20px 0;">${callerNumber}</p>
+      <button id="answerBtn" style="
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        margin: 10px;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+      ">✅ Répondre</button>
+      <button id="rejectBtn" style="
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        margin: 10px;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: bold;
+      ">❌ Rejeter</button>
+    `;
+  
+          // Ajouter les event listeners APRÈS avoir créé les boutons
+          document
+            .getElementById('answerBtn')
+            .addEventListener('click', answerCall);
+          document
+            .getElementById('rejectBtn')
+            .addEventListener('click', rejectCall);
+  
+          incomingDiv.style.display = 'block';
+        }
+        function hideIncomingCallUI() {
+          const incomingDiv = document.getElementById('incomingCallDiv');
+          if (incomingDiv) {
+            incomingDiv.style.display = 'none';
+          }
+          statusDiv.style.backgroundColor = '';
+          statusDiv.style.borderLeft = '';
+        }
+  
+        function answerCall() {
+          log("✅ RÉPONSE à l'appel");
+          stopRingtone();
+          hideIncomingCallUI();
+  
+          if (currentSession) {
+            currentSession.answer({
+              mediaConstraints: { audio: true, video: false },
+            });
+            log('📞 Réponse envoyée à Asterisk');
+            statusDiv.textContent = '📞 En communication';
+          }
+        }
+  
+        function rejectCall() {
+          log("❌ REJET de l'appel");
+          stopRingtone();
+          hideIncomingCallUI();
+  
+          if (currentSession) {
+            currentSession.terminate({
+              status_code: 486,
+              reason_phrase: 'Busy Here',
+            });
+            currentSession = null;
+            statusDiv.textContent = '🟢 Enregistré';
+            updateUI();
+          }
+        }
+  
+        function loadConfig(endpoint) {
+          // NOTE: Mettre à jour DEMO_TENANT_ID après avoir lancé setup-demo.sh
+          // Le tenant ID est affiché dans les logs du script
+          const DEMO_TENANT_ID = 28;  // VPS prod: 28, Local: 70
+
+          const configs = {
+            // Demo CallCenter LOCAL - 4 agents
+            // Pour local, le user et authUser sont identiques (pas de hash)
+            'local1': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1000`,
+              authUser: `t${DEMO_TENANT_ID}_1000`,  // Même que user pour local
+              password: 'demo1001'
+            },
+            'local2': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1001`,
+              authUser: `t${DEMO_TENANT_ID}_1001`,
+              password: 'demo1002'
+            },
+            'local3': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1002`,
+              authUser: `t${DEMO_TENANT_ID}_1002`,
+              password: 'demo1003'
+            },
+            'local4': {
+              server: 'localhost',
+              port: '8089',
+              user: `t${DEMO_TENANT_ID}_1003`,
+              authUser: `t${DEMO_TENANT_ID}_1003`,
+              password: 'demo1004'
+            },
+            // Demo CallCenter VPS - 4 agents
+            // user = Public Identity (endpoint ID), authUser = Private Identity (pour l'auth)
+            'demo1': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: 't28_1000',                              // Public Identity
+              authUser: '0705fbb1bb39729c4702d86df29d5888',  // Private Identity (auth)
+              password: 'demo1001'
+            },
+            'demo2': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: 't28_1001',
+              authUser: 'ca57437b6c87f351e245719b89b3287b',
+              password: 'demo1002'
+            },
+            'demo3': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: 't28_1002',
+              authUser: '949eb7d6c7216e06a1747151c3e6fc80',
+              password: 'demo1003'
+            },
+            'demo4': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: 't28_1003',
+              authUser: 'b1e9fc6ac4cb8b4d13548cf35f7b26e4',
+              password: 'demo1004'
+            },
+            // Ancienne config IVR test
+            'ivr': {
+              server: 'pishon.kabou.bj',
+              port: '8089',
+              user: '63a77c75ab4b2dd080d6db29e0f239fa',
+              password: 'webrtc200'
+            }
+          };
+
+          const config = configs[endpoint];
+          if (config) {
+            document.getElementById('serverAddr').value = config.server;
+            document.getElementById('serverPort').value = config.port;
+            document.getElementById('sipUser').value = config.user;
+            document.getElementById('sipAuthUser').value = config.authUser || config.user;  // authUser ou fallback
+            document.getElementById('sipPass').value = config.password;
+
+            log(`✅ Configuration chargée pour l'endpoint ${endpoint}`);
+            log(`📋 Server: wss://${config.server}:${config.port}`);
+            log(`👤 Public Identity (user): ${config.user}`);
+            log(`🔐 Private Identity (authUser): ${config.authUser || config.user}`);
+          }
+        }
+
+        window.onbeforeunload = () => {
+          if (ua) {
+            ua.stop();
+          }
+        };
+      </script>
+    </body>
+  </html>
