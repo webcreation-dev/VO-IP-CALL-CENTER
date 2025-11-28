@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -58,6 +60,12 @@ import { SoundsModule } from './sounds/sounds.module';
       validationOptions: {
         abortEarly: false,
       },
+    }),
+
+    // Serve static files (webrtc.html, etc.)
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/static',  // Accessible via /static/webrtc.html
     }),
 
     // Core infrastructure modules
