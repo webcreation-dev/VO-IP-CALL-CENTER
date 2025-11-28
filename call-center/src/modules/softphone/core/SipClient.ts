@@ -161,6 +161,7 @@ export class SipClient {
               credential: 'secretpassword',
             },
           ],
+          iceCandidatePoolSize: 10, // Pre-allocate candidates to speed up ICE gathering
         },
         // Increase reconnection intervals to avoid excessive retries
         connection_recovery_min_interval: 4,
@@ -281,6 +282,10 @@ export class SipClient {
               credential: 'secretpassword',
             },
           ],
+          iceCandidatePoolSize: 10,
+        },
+        rtcOfferConstraints: {
+          iceRestart: true,
         },
       };
 
@@ -319,6 +324,7 @@ export class SipClient {
               credential: 'secretpassword',
             },
           ],
+          iceCandidatePoolSize: 10,
         },
       });
     } catch (error: any) {
