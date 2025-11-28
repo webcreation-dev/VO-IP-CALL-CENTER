@@ -522,22 +522,50 @@ if [ -n "$IVR_MENU_ID" ]; then
 fi
 
 ##############################################################################
-# ÉTAPE 11: Extensions dialplan (OPTIONNEL)
-# NOTE: Les extensions dialplan personnalisées ne sont pas créées car l'API
-# /extensions ne supporte pas le tenantId via query param pour SUPER_ADMIN.
-# Les appels fonctionnent via:
-#   - Queues: Queue(t{id}_support) / Queue(t{id}_ventes)
-#   - IVR: Via le DID mapping configuré
-#   - Endpoints: Appels directs entre endpoints du même tenant
+# ÉTAPE 11: Extensions dialplan pour les queues
+# Création des extensions 5001 (Support) et 5002 (Ventes) directement en base
 ##############################################################################
 
-header "ÉTAPE 11: Extensions dialplan (INFO)"
+header "ÉTAPE 11: Extensions dialplan pour queues"
 
-info "Les extensions personnalisées (5001, 5002, etc.) ne sont pas créées"
-info "Les appels fonctionnent via les queues et l'IVR configurés"
+step "Création des extensions 5001 (Support) et 5002 (Ventes)..."
+
+# Déterminer l'hôte PostgreSQL (local ou docker)
+if command -v psql &> /dev/null; then
+    # psql disponible localement
+    PGPASSWORD='ApiSecurePass2025!' psql -h localhost -U asterisk_api -d asterisk_api_db -c "
+    INSERT INTO extensions (tenant_id, context, exten, priority, app, appdata, created_at, updated_at) VALUES
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 1, 'Answer', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 2, 'Queue', '${QUEUE_SUPPORT},t,,,60', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 3, 'Hangup', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 1, 'Answer', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 2, 'Queue', '${QUEUE_VENTES},t,,,60', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 3, 'Hangup', '', NOW(), NOW())
+    ON CONFLICT DO NOTHING;
+    " 2>/dev/null && success "Extensions 5001/5002 créées" || info "Extensions peut-être déjà existantes"
+elif docker ps | grep -q asterisk-api-postgres; then
+    # Utiliser docker
+    docker exec asterisk-api-postgres psql -U api_user -d asterisk_api -c "
+    INSERT INTO extensions (tenant_id, context, exten, priority, app, appdata, created_at, updated_at) VALUES
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 1, 'Answer', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 2, 'Queue', '${QUEUE_SUPPORT},t,,,60', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5001', 3, 'Hangup', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 1, 'Answer', '', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 2, 'Queue', '${QUEUE_VENTES},t,,,60', NOW(), NOW()),
+    ($TENANT_ID, '$CONTEXT_NAME', '5002', 3, 'Hangup', '', NOW(), NOW())
+    ON CONFLICT DO NOTHING;
+    " 2>/dev/null && success "Extensions 5001/5002 créées" || info "Extensions peut-être déjà existantes"
+else
+    info "Impossible de créer les extensions (psql/docker non disponible)"
+    info "Créez-les manuellement avec:"
+    info "  5001 → Queue(${QUEUE_SUPPORT})"
+    info "  5002 → Queue(${QUEUE_VENTES})"
+fi
+
 info ""
-info "Pour appeler un agent: composer son numéro (ex: t${TENANT_ID}_1000)"
-info "Pour tester les queues: les agents sont déjà assignés"
+info "Pour appeler la queue Support: composer 5001"
+info "Pour appeler la queue Ventes: composer 5002"
+info "Pour appeler un agent: composer son numéro (ex: 1000, 1001...)"
 info "Pour tester l'IVR: appeler le DID +22954150000 (en prod)"
 
 ##############################################################################
