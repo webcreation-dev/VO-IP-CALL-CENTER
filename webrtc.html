@@ -84,34 +84,34 @@
       </style>
     </head>
     <body>
-      <h1>🎙️ Client SIP WebRTC pour Asterisk</h1>
+      <h1> Softphone WebRTC Asterisk</h1>
   
-      <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
+      <!-- <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
         <strong>ℹ️ Demo CallCenter - Tests WebRTC</strong><br />
         <strong>Serveur LOCAL:</strong> <code>localhost:8089</code> | <strong>VPS:</strong> <code>pishon.kabou.bj:8089</code><br />
         <em>Utilisez les boutons pour charger les configurations</em>
-      </div>
+      </div> -->
 
       <div class="section">
-        <h3>Configuration du serveur</h3>
-        <div style="margin-bottom: 15px;">
+        <h3>Contacts de Test</h3>
+        <!-- <div style="margin-bottom: 15px;">
           <strong>🏠 Demo CallCenter (LOCAL):</strong><br />
           <button onclick="loadConfig('local1')" style="background-color: #28a745; margin: 3px;">👤 Agent 1 (Support)</button>
           <button onclick="loadConfig('local2')" style="background-color: #28a745; margin: 3px;">👤 Agent 2 (Support)</button>
           <button onclick="loadConfig('local3')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 3 (Ventes)</button>
           <button onclick="loadConfig('local4')" style="background-color: #17a2b8; margin: 3px;">👤 Agent 4 (Ventes)</button>
-        </div>
+        </div> -->
         <div style="margin-bottom: 15px;">
-          <strong>🌐 Demo CallCenter (VPS):</strong><br />
+          <!-- <strong>🌐 Demo  CallCenter (VPS):</strong><br /> -->
           <button onclick="loadConfig('demo1')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 1 (Support)</button>
           <button onclick="loadConfig('demo2')" style="background-color: #6f42c1; margin: 3px;">👤 Agent 2 (Support)</button>
           <button onclick="loadConfig('demo3')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 3 (Ventes)</button>
           <button onclick="loadConfig('demo4')" style="background-color: #fd7e14; margin: 3px;">👤 Agent 4 (Ventes)</button>
         </div>
-        <div style="margin-bottom: 15px;">
+        <!-- <div style="margin-bottom: 15px;">
           <strong>🔧 Autres configs:</strong>
           <button onclick="loadConfig('ivr')" style="background-color: #6c757d; margin: 3px;">Endpoint IVR Test</button>
-        </div>
+        </div> -->
         <div class="input-group">
           <label>Adresse du serveur Asterisk:</label>
           <input
@@ -151,7 +151,7 @@
   
       <div class="section">
         <h3>Connexion</h3>
-        <div id="status">🔴 Déconnecté</div>
+        <div id="status"> Déconnecté</div>
         <button id="connectBtn" onclick="connect()">Se connecter</button>
         <button id="disconnectBtn" onclick="disconnect()" disabled>
           Se déconnecter
@@ -172,7 +172,7 @@
   
       <audio id="remoteAudio" autoplay></audio>
   
-      <div class="section">
+      <!-- <div class="section">
         <h3>🐛 Logs de Debug</h3>
         <div
           id="debugLogs"
@@ -192,16 +192,16 @@
         >
           Effacer les logs
         </button>
-      </div>
+      </div> -->
   
       <script src="./jssip-3.10.0.min.js"></script>
   
-      <div class="info-box">
+      <!-- <div class="info-box">
         <strong>ℹ️ Note:</strong> Cette application se connecte directement au
         serveur Asterisk via WebSocket et WebRTC.<br />
         Assurez-vous que Asterisk accepte les connexions WebSocket sur le port
         8089.
-      </div>
+      </div> -->
   
       <script>
         const errorMsg = document.getElementById('errorMsg');
