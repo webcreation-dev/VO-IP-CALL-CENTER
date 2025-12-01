@@ -81,9 +81,71 @@
           margin-top: 10px;
           width: 100%;
         }
+        .hidden {
+          display: none !important;
+        }
+        .login-container {
+          max-width: 400px;
+          margin: 100px auto;
+          padding: 30px;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          background: white;
+        }
+        #loginView {
+          text-align: center;
+        }
+        #loginView h1 {
+          color: #007bff;
+          margin-bottom: 30px;
+        }
+        .user-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 15px;
+          background-color: #f8f9fa;
+          border-bottom: 1px solid #ddd;
+          margin-bottom: 20px;
+          border-radius: 4px;
+        }
+        .logout-btn {
+          background-color: #dc3545;
+          padding: 8px 15px;
+          font-size: 13px;
+        }
+        .logout-btn:hover {
+          background-color: #c82333;
+        }
       </style>
     </head>
     <body>
+      <!-- Vue Login (visible par défaut) -->
+      <div id="loginView">
+        <h1>🔐 Connexion - Softphone WebRTC</h1>
+        <div class="login-container">
+          <div class="input-group">
+            <label>Email:</label>
+            <input type="email" id="loginEmail" placeholder="admin@asterisk.local" />
+          </div>
+          <div class="input-group">
+            <label>Mot de passe:</label>
+            <input type="password" id="loginPassword" placeholder="Mot de passe" />
+          </div>
+          <button onclick="login()">Se connecter</button>
+          <div id="loginError" class="error"></div>
+        </div>
+      </div>
+
+      <!-- Vue WebRTC (cachée par défaut) -->
+      <div id="webrtcView" class="hidden">
+        <!-- En-tête avec info utilisateur et déconnexion -->
+        <div class="user-header">
+          <span id="userInfo"></span>
+          <button onclick="logout()" class="logout-btn">Se déconnecter</button>
+        </div>
+
       <h1> Softphone WebRTC Asterisk</h1>
   
       <!-- <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
@@ -215,7 +277,117 @@
         let ua = null;
         let currentSession = null;
         let ringtoneAudio = null;
-  
+
+        // ====== FONCTIONS D'AUTHENTIFICATION ======
+
+        // Au chargement de la page, vérifier si déjà authentifié
+        window.addEventListener('DOMContentLoaded', () => {
+          const token = localStorage.getItem('authToken');
+          const user = localStorage.getItem('userInfo');
+
+          if (token && user) {
+            // Déjà authentifié, afficher l'interface WebRTC
+            showWebRTCInterface(JSON.parse(user));
+          }
+        });
+
+        async function login() {
+          const email = document.getElementById('loginEmail').value;
+          const password = document.getElementById('loginPassword').value;
+          const errorDiv = document.getElementById('loginError');
+
+          // Validation
+          if (!email || !password) {
+            errorDiv.textContent = '⚠️ Veuillez remplir tous les champs';
+            return;
+          }
+
+          errorDiv.textContent = '';
+
+          try {
+            const response = await fetch('http://localhost:3001/api/v1/auth/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.data) {
+              // Sauvegarder le token et les infos utilisateur
+              localStorage.setItem('authToken', data.data.accessToken);
+              localStorage.setItem('userInfo', JSON.stringify(data.data.user));
+
+              // Afficher l'interface WebRTC
+              showWebRTCInterface(data.data.user);
+            } else {
+              // Erreur d'authentification
+              errorDiv.textContent = `❌ ${data.message || 'Identifiants invalides'}`;
+            }
+          } catch (error) {
+            console.error('Erreur de connexion:', error);
+            errorDiv.textContent = '❌ Erreur de connexion au serveur';
+          }
+        }
+
+        function showWebRTCInterface(user) {
+          // Cacher la vue login
+          document.getElementById('loginView').classList.add('hidden');
+
+          // Afficher la vue WebRTC
+          document.getElementById('webrtcView').classList.remove('hidden');
+
+          // Afficher les infos utilisateur
+          const userInfo = `👤 ${user.firstName} ${user.lastName} (${user.role})`;
+          document.getElementById('userInfo').textContent = userInfo;
+        }
+
+        function logout() {
+          // Déconnecter la session WebRTC si active
+          if (ua) {
+            ua.stop();
+            ua = null;
+          }
+
+          if (currentSession) {
+            currentSession.terminate();
+            currentSession = null;
+          }
+
+          // Supprimer les données d'authentification
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userInfo');
+
+          // Retourner à la vue login
+          document.getElementById('webrtcView').classList.add('hidden');
+          document.getElementById('loginView').classList.remove('hidden');
+
+          // Réinitialiser le formulaire
+          document.getElementById('loginEmail').value = '';
+          document.getElementById('loginPassword').value = '';
+          document.getElementById('loginError').textContent = '';
+
+          // Réinitialiser l'interface WebRTC
+          statusDiv.textContent = '🔴 Déconnecté';
+          updateUI();
+        }
+
+        // Support pour la touche Entrée dans le formulaire de login
+        window.addEventListener('DOMContentLoaded', () => {
+          const loginPasswordInput = document.getElementById('loginPassword');
+          if (loginPasswordInput) {
+            loginPasswordInput.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter') {
+                login();
+              }
+            });
+          }
+        });
+
+        // ====== FIN FONCTIONS D'AUTHENTIFICATION ======
+
         function setupPeerConnectionHandlers(peerconnection) {
           log('🔵 Configuration des handlers sur RTCPeerConnection');
           log('🔵 ICE Connection State: ' + peerconnection.iceConnectionState);
@@ -904,5 +1076,6 @@
           }
         };
       </script>
+      </div><!-- Fin de webrtcView -->
     </body>
   </html>
