@@ -110,7 +110,7 @@ export class CallValidatorAriGateway implements OnModuleInit {
 
       if (result.allowed) {
         this.logger.log(`CALL ALLOWED: ${callerEndpoint} -> ${calledEndpoint}`);
-        await this.allowCall(channel);
+        await this.allowCall(channel, calledEndpoint);
 
         // Log asynchronously - pass pre-fetched endpoints to avoid extra DB queries
         this.validatorService.logCallAttempt(
@@ -174,17 +174,11 @@ export class CallValidatorAriGateway implements OnModuleInit {
   /**
    * Allow the call - dial directly via ARI instead of returning to dialplan
    */
-  private async allowCall(channel: any) {
+  private async allowCall(channel: any, calledEndpoint: string) {
     const channelId = channel.id;
 
     try {
-      // Get the called endpoint from channel variable
-      const calledEndpoint = await this.getChannelVar(channelId, 'CALLED_ENDPOINT');
-
-      if (!calledEndpoint) {
-        throw new Error('CALLED_ENDPOINT variable not found');
-      }
-
+      // Use the calledEndpoint passed as parameter (no need to fetch again)
       this.logger.debug(`Dialing ${calledEndpoint} directly via ARI`);
 
       // Dial the called endpoint directly via ARI
