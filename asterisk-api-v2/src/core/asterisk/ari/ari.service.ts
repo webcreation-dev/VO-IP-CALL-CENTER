@@ -232,6 +232,22 @@ export class AriService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Initiate an outgoing call from a channel
+   * @param channelId The channel to originate the call from
+   * @param endpoint The endpoint to dial (e.g., "PJSIP/t28_1000")
+   * @param timeout Dial timeout in seconds (default: 30)
+   */
+  async dial(channelId: string, endpoint: string, timeout: number = 30): Promise<void> {
+    try {
+      await this.client.channels.dial({ channelId, endpoint, timeout });
+      this.logger.log(`Dialing ${endpoint} from channel ${channelId}`);
+    } catch (error) {
+      this.logger.error(`Erreur dial ${endpoint} from ${channelId}:`, error);
+      throw error;
+    }
+  }
+
   // ========================================
   // PLAYBACK OPERATIONS
   // ========================================

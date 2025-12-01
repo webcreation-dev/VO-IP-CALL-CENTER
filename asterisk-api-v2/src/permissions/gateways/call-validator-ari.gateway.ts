@@ -172,21 +172,26 @@ export class CallValidatorAriGateway implements OnModuleInit {
   }
 
   /**
-   * Allow the call - continue in dialplan with timeout
+   * Allow the call - dial directly via ARI instead of returning to dialplan
    */
   private async allowCall(channel: any) {
     const channelId = channel.id;
 
     try {
+      // Get the called endpoint from channel variable
+      const calledEndpoint = await this.getChannelVar(channelId, 'CALLED_ENDPOINT');
+
+      if (!calledEndpoint) {
+        throw new Error('CALLED_ENDPOINT variable not found');
+      }
+
+      this.logger.debug(`Dialing ${calledEndpoint} directly via ARI`);
+
+      // Dial the called endpoint directly via ARI
       await this.withTimeout(
-        this.ariService.continueInDialplan(
-          channelId,
-          channel.dialplan.context,
-          channel.dialplan.exten,
-          channel.dialplan.priority + 1,
-        ),
+        this.ariService.dial(channelId, `PJSIP/${calledEndpoint}`, 20),
         CallValidatorAriGateway.ARI_TIMEOUT,
-        'continueInDialplan',
+        'dial',
       );
     } catch (error) {
       this.logger.error(`Error allowing call: ${error.message}`);
