@@ -178,6 +178,18 @@ export class CallValidatorAriGateway implements OnModuleInit {
     const channelId = channel.id;
 
     try {
+      // Answer the channel first to keep it active
+      try {
+        await this.withTimeout(
+          this.ariService.answerChannel(channelId),
+          CallValidatorAriGateway.ARI_TIMEOUT,
+          'answerChannel',
+        );
+      } catch (answerError) {
+        // Channel might already be answered, continue
+        this.logger.debug(`Answer attempt: ${answerError.message}`);
+      }
+
       // Use the calledEndpoint passed as parameter (no need to fetch again)
       this.logger.debug(`Dialing ${calledEndpoint} directly via ARI`);
 
