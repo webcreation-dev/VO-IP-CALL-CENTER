@@ -55,6 +55,19 @@ export class CallValidatorAriGateway implements OnModuleInit {
     let tenantId: number | null = null;
 
     try {
+      // Answer the channel IMMEDIATELY to keep it alive during validation
+      try {
+        await this.withTimeout(
+          this.ariService.answerChannel(channelId),
+          CallValidatorAriGateway.ARI_TIMEOUT,
+          'answerChannel',
+        );
+        this.logger.debug(`Channel ${channelId} answered for validation`);
+      } catch (answerError) {
+        this.logger.warn(`Failed to answer channel ${channelId}: ${answerError.message}`);
+        // If we can't answer, the channel might already be gone - let it fail in next steps
+      }
+
       // Extract information from channel variables
       calledEndpoint = await this.getChannelVar(channelId, 'CALLED_ENDPOINT');
       callerEndpoint = this.extractEndpointFromCallerNumber(
@@ -173,24 +186,13 @@ export class CallValidatorAriGateway implements OnModuleInit {
 
   /**
    * Allow the call - dial directly via ARI instead of returning to dialplan
+   * Note: Channel is already answered in handleCallValidation()
    */
   private async allowCall(channel: any, calledEndpoint: string) {
     const channelId = channel.id;
 
     try {
-      // Answer the channel first to keep it active
-      try {
-        await this.withTimeout(
-          this.ariService.answerChannel(channelId),
-          CallValidatorAriGateway.ARI_TIMEOUT,
-          'answerChannel',
-        );
-      } catch (answerError) {
-        // Channel might already be answered, continue
-        this.logger.debug(`Answer attempt: ${answerError.message}`);
-      }
-
-      // Use the calledEndpoint passed as parameter (no need to fetch again)
+      // Channel is already answered in handleCallValidation()
       this.logger.debug(`Dialing ${calledEndpoint} directly via ARI`);
 
       // Dial the called endpoint directly via ARI
